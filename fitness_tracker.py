@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Fitness Tracker - Aplikace pro sledování cvičení s progresivními cíli
-Verze s dark theme
+Verze s opravenými detaily a náskokem/skluzem
 """
 
 import sys
@@ -733,6 +733,12 @@ class FitnessTrackerApp(QMainWindow):
         calc_label.setStyleSheet("font-size: 11px; color: #a0a0a0; padding: 2px; font-style: italic;")
         goals_layout.addWidget(calc_label)
         
+        # NOVÉ: Label pro náskok/skluz
+        performance_label = QLabel()
+        performance_label.setObjectName(f"performance_label_{exercise_type}")
+        performance_label.setStyleSheet("font-size: 14px; font-weight: bold; padding: 5px;")
+        goals_layout.addWidget(performance_label)
+        
         year_goal_label = QLabel()
         year_goal_label.setObjectName(f"year_goal_label_{exercise_type}")
         year_goal_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #32c766; padding: 5px;")
@@ -780,7 +786,18 @@ class FitnessTrackerApp(QMainWindow):
         table.setObjectName(f"table_{exercise_type}")
         table.setColumnCount(5)
         table.setHorizontalHeaderLabels(["Datum", "Výkon", "Cíl", "Splněno", "Akce"])
-        table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        
+        # OPRAVA: Nastavení výšky řádků
+        table.verticalHeader().setDefaultSectionSize(35)
+        table.verticalHeader().setMinimumSectionSize(35)
+        
+        header = table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(3, QHeaderView.Stretch)
+        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        
         layout.addWidget(table)
         
         self.update_exercise_tab(exercise_type)
@@ -932,7 +949,21 @@ class FitnessTrackerApp(QMainWindow):
             calc_text = self.get_goal_calculation_text(exercise_type, today_str)
             calc_label.setText(calc_text)
         
+        # NOVÉ: Výpočet náskopu/skluzu
         total_performed, total_yearly_goal, goal_to_date = self.calculate_yearly_progress(exercise_type, current_year)
+        difference = total_performed - goal_to_date
+        
+        performance_label = self.findChild(QLabel, f"performance_label_{exercise_type}")
+        if performance_label:
+            if difference > 0:
+                performance_label.setText(f"📈 Náskok: +{difference:,} {exercise_type} nad plán")
+                performance_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #32c766; padding: 5px;")
+            elif difference < 0:
+                performance_label.setText(f"📉 Skluz: {difference:,} {exercise_type} pod plán")
+                performance_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #ff6b6b; padding: 5px;")
+            else:
+                performance_label.setText(f"✅ Přesně podle plánu")
+                performance_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #14919b; padding: 5px;")
         
         year_goal_label = self.findChild(QLabel, f"year_goal_label_{exercise_type}")
         if year_goal_label:
@@ -990,7 +1021,10 @@ class FitnessTrackerApp(QMainWindow):
                     status_item.setBackground(QColor(200, 50, 50))
                 table.setItem(row, 3, status_item)
                 
-                edit_btn = QPushButton("✏️ Upravit")
+                # OPRAVA: Menší tlačítko
+                edit_btn = QPushButton("✏️")
+                edit_btn.setMaximumSize(30, 30)
+                edit_btn.setToolTip("Upravit záznam")
                 edit_btn.clicked.connect(lambda checked, d=date_str, e=exercise_type: self.edit_workout(e, d))
                 table.setCellWidget(row, 4, edit_btn)
     
@@ -1015,14 +1049,27 @@ class FitnessTrackerApp(QMainWindow):
         
         layout.addLayout(controls_layout)
         
+        # OPRAVA: Aktualizovaná legenda s černou pro dny před začátkem
         legend_frame = QFrame()
         legend_frame.setStyleSheet("background-color: #2d2d2d; border: 1px solid #3d3d3d; padding: 5px;")
         legend_layout = QHBoxLayout(legend_frame)
-        legend_layout.addWidget(QLabel("🟩 Cvičil jsem (všechna cvičení)"))
-        legend_layout.addWidget(QLabel("🟨 Cvičil jsem (částečně)"))
-        legend_layout.addWidget(QLabel("🟥 Necvičil jsem"))
-        legend_layout.addWidget(QLabel("⬜ Budoucí den"))
-        legend_layout.addWidget(QLabel("🟦 Dnešek"))
+        
+        # Vytvoření vzorků barev
+        def create_color_sample(color, text):
+            sample_layout = QHBoxLayout()
+            color_box = QLabel()
+            color_box.setFixedSize(20, 20)
+            color_box.setStyleSheet(f"background-color: {color}; border: 1px solid #3d3d3d;")
+            sample_layout.addWidget(color_box)
+            sample_layout.addWidget(QLabel(text))
+            return sample_layout
+        
+        legend_layout.addLayout(create_color_sample("#000000", "Před začátkem"))
+        legend_layout.addLayout(create_color_sample("#90EE90", "Všechna cvičení"))
+        legend_layout.addLayout(create_color_sample("#FFD700", "Částečně"))
+        legend_layout.addLayout(create_color_sample("#FF6B6B", "Necvičil"))
+        legend_layout.addLayout(create_color_sample("#4d4d4d", "Budoucí den"))
+        legend_layout.addLayout(create_color_sample("#87CEEB", "Dnešek"))
         legend_layout.addStretch()
         layout.addWidget(legend_frame)
         
@@ -1107,6 +1154,7 @@ class FitnessTrackerApp(QMainWindow):
         days_in_month = last_day.day
         
         today = datetime.now().date()
+        start_date = datetime.strptime(self.data['settings']['start_date'], '%Y-%m-%d').date()
         
         row = 1
         col = first_weekday
@@ -1120,8 +1168,8 @@ class FitnessTrackerApp(QMainWindow):
             day_label.setFixedSize(35, 35)
             day_label.setFrameStyle(QFrame.Box)
             
-            color = self.get_day_color(date_str, date.date(), today)
-            day_label.setStyleSheet(f"background-color: {color}; font-weight: bold; color: #1e1e1e; border: 1px solid #3d3d3d;")
+            color = self.get_day_color(date_str, date.date(), today, start_date)
+            day_label.setStyleSheet(f"background-color: {color}; font-weight: bold; color: #ffffff; border: 1px solid #3d3d3d;")
             
             layout.addWidget(day_label, row, col)
             
@@ -1133,14 +1181,21 @@ class FitnessTrackerApp(QMainWindow):
         group.setLayout(layout)
         return group
     
-    def get_day_color(self, date_str, date, today):
+    def get_day_color(self, date_str, date, today, start_date):
         """Určí barvu pro konkrétní den"""
+        # OPRAVA: Dny před začátkem cvičení jsou černé
+        if date < start_date:
+            return '#000000'
+        
+        # Budoucí den
         if date > today:
             return '#4d4d4d'
         
+        # Dnešek
         if date == today:
             return '#87CEEB'
         
+        # Minulý den - kontrola cvičení
         if date_str in self.data['workouts']:
             workout = self.data['workouts'][date_str]
             exercises = ['kliky', 'dřepy', 'skrčky']
@@ -1151,6 +1206,7 @@ class FitnessTrackerApp(QMainWindow):
             elif count > 0:
                 return '#FFD700'
         
+        # Necvičil jsem
         return '#FF6B6B'
     
     def update_statistics(self, year):
