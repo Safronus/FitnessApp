@@ -123,6 +123,23 @@ Všechna data se ukládají lokálně v souboru `fitness_data.json` ve stejném 
 
 ## 📝 Changelog
 
+### v1.5 (26.10.2025 01:08 CEST)
+**Nové funkce:**
+- 📏 Kalendář o 50% větší - větší text (16px), pole (42×36px) a názvy měsíců
+- 📊 Nový detailní přehled cvičení:
+  - Den: Aktuální den s cílem a stavem
+  - Týden: Současný týden (Po-Ne) s rozsahem dat
+  - Měsíc: Celý měsíc s názvem
+  - Zbytek roku: Zbývající dny a cíl do konce roku
+- 🎨 Nový sloupec "% cíle" u záznamů s barevným pozadím:
+  - Zelená: 100%+ (splněno)
+  - Světle zelená: 75-99%
+  - Žlutá: 50-74%
+  - Oranžová: 25-49%
+  - Červená: 0-24%
+
+---
+
 ### v1.4b (26.10.2025) - OPRAVNÁ VERZE
 **Opravy:**
 - ✅ Oprava importu - aplikace se už neukončuje po přepsání dat
@@ -384,5 +401,5 @@ Vytvořeno v roce 2025
 - [Issues](https://github.com/Safronus/FitnessApp/issues)
 
 ---
-**Poslední aktualizace:** 26.10.2025 01:03 CEST  
-**Aktuální verze:** 1.4b
+**Poslední aktualizace:** 26.10.2025 01:08 CEST  
+**Aktuální verze:** 1.5

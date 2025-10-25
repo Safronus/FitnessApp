@@ -2,21 +2,16 @@
 # -*- coding: utf-8 -*-
 """
 Fitness Tracker - Aplikace pro sledování cvičení s progresivními cíli
-Verze 1.4b
+Verze 1.5
 
 Changelog:
-v1.4b (26.10.2025) - OPRAVNÁ VERZE
-- Oprava importu - aplikace se už neukončuje po přepsání dat
-- Refresh všech záložek a seznamu roků po importu
-- Lepší aktualizace UI po obou režimech importu
+v1.5 (26.10.2025)
+- Kalendář o 50% větší (text, pole, názvy měsíců)
+- Nový detailní přehled: Den, Týden, Měsíc, Zbytek roku (s daty)
+- Nový sloupec "% cíle" u záznamů s barevným pozadím
+- Barevné indikace: Zelená (100%+), Světle zelená (75%+), Žlutá (50%+), Oranžová (25%+), Červená (<25%)
 
-v1.4a (26.10.2025)
-- Oprava update_year_statistics()
-
-v1.4 (26.10.2025)
-- Export a import celého cvičení
-
-v1.3f - v1.0.0
+v1.4b - v1.0.0
 - Předchozí verze
 """
 
@@ -36,7 +31,7 @@ from PySide6.QtCore import Qt, QDate, QTimer
 from PySide6.QtGui import QColor
 
 # Verze aplikace
-VERSION = "1.4b"
+VERSION = "1.5"
 VERSION_DATE = "26.10.2025"
 
 # Dark Theme Stylesheet
@@ -1601,35 +1596,39 @@ class FitnessTrackerApp(QMainWindow):
         """)
         goals_layout = QVBoxLayout(goals_frame)
         
-        today_goal_label = QLabel()
-        today_goal_label.setObjectName(f"today_goal_label_{exercise_type}")
-        today_goal_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #14919b; padding: 5px;")
-        goals_layout.addWidget(today_goal_label)
+        # NOVÝ PŘEHLED: Den
+        today_section = QLabel()
+        today_section.setObjectName(f"today_section_{exercise_type}")
+        today_section.setStyleSheet("font-size: 14px; font-weight: bold; color: #14919b; padding: 5px;")
+        today_section.setWordWrap(True)
+        goals_layout.addWidget(today_section)
         
-        calc_label = QLabel()
-        calc_label.setObjectName(f"calc_label_{exercise_type}")
-        calc_label.setStyleSheet("font-size: 10px; color: #a0a0a0; padding: 2px; font-style: italic;")
-        goals_layout.addWidget(calc_label)
+        # NOVÝ PŘEHLED: Týden
+        week_section = QLabel()
+        week_section.setObjectName(f"week_section_{exercise_type}")
+        week_section.setStyleSheet("font-size: 12px; color: #FFD700; padding: 5px;")
+        week_section.setWordWrap(True)
+        goals_layout.addWidget(week_section)
         
-        performance_label = QLabel()
-        performance_label.setObjectName(f"performance_label_{exercise_type}")
-        performance_label.setStyleSheet("font-size: 13px; font-weight: bold; padding: 5px;")
-        goals_layout.addWidget(performance_label)
+        # NOVÝ PŘEHLED: Měsíc
+        month_section = QLabel()
+        month_section.setObjectName(f"month_section_{exercise_type}")
+        month_section.setStyleSheet("font-size: 12px; color: #90EE90; padding: 5px;")
+        month_section.setWordWrap(True)
+        goals_layout.addWidget(month_section)
         
-        year_goal_label = QLabel()
-        year_goal_label.setObjectName(f"year_goal_label_{exercise_type}")
-        year_goal_label.setStyleSheet("font-size: 12px; font-weight: bold; color: #32c766; padding: 5px;")
-        goals_layout.addWidget(year_goal_label)
+        # NOVÝ PŘEHLED: Zbytek roku
+        year_rest_section = QLabel()
+        year_rest_section.setObjectName(f"year_rest_section_{exercise_type}")
+        year_rest_section.setStyleSheet("font-size: 12px; color: #87CEEB; padding: 5px;")
+        year_rest_section.setWordWrap(True)
+        goals_layout.addWidget(year_rest_section)
         
+        # Progress bar
         progress_bar = QProgressBar()
         progress_bar.setObjectName(f"progress_bar_{exercise_type}")
         progress_bar.setTextVisible(True)
         goals_layout.addWidget(progress_bar)
-        
-        stats_label = QLabel()
-        stats_label.setObjectName(f"stats_label_{exercise_type}")
-        stats_label.setStyleSheet("font-size: 11px; color: #a0a0a0; padding: 5px;")
-        goals_layout.addWidget(stats_label)
         
         left_layout.addWidget(goals_frame)
         
@@ -1657,8 +1656,8 @@ class FitnessTrackerApp(QMainWindow):
         # TABULKA s checkboxy a editací
         table = QTableWidget()
         table.setObjectName(f"table_{exercise_type}")
-        table.setColumnCount(5)
-        table.setHorizontalHeaderLabels(["☑️", "Datum cvičení", "Čas přidání", "Výkon", "Akce"])
+        table.setColumnCount(6)  # OPRAVA: Přidán sloupec
+        table.setHorizontalHeaderLabels(["☑️", "Datum cvičení", "Čas přidání", "Výkon", "% cíle", "Akce"])
         
         table.verticalHeader().setDefaultSectionSize(30)
         table.verticalHeader().setMinimumSectionSize(30)
@@ -1668,7 +1667,8 @@ class FitnessTrackerApp(QMainWindow):
         header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(3, QHeaderView.Stretch)
-        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)  # % cíle
+        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)  # Akce
         
         left_layout.addWidget(table)
         
@@ -1956,71 +1956,11 @@ class FitnessTrackerApp(QMainWindow):
             
             selected_year = int(selector.currentText())
             
-            today = datetime.now()
-            today_str = today.strftime('%Y-%m-%d')
-            
-            if selected_year > today.year:
-                display_date_str = f"{selected_year}-01-01"
-                today_goal = self.calculate_goal(exercise_type, display_date_str)
-                today_goal_label = self.findChild(QLabel, f"today_goal_label_{exercise_type}")
-                if today_goal_label:
-                    today_goal_label.setText(f"🎯 Cíl pro {selected_year}: {today_goal}")
-            elif selected_year < today.year:
-                display_date_str = f"{selected_year}-12-31"
-                today_goal = self.calculate_goal(exercise_type, display_date_str)
-                today_goal_label = self.findChild(QLabel, f"today_goal_label_{exercise_type}")
-                if today_goal_label:
-                    today_goal_label.setText(f"🎯 Cíl {selected_year} (31.12.): {today_goal}")
-            else:
-                today_goal = self.calculate_goal(exercise_type, today_str)
-                today_goal_label = self.findChild(QLabel, f"today_goal_label_{exercise_type}")
-                if today_goal_label:
-                    today_goal_label.setText(f"🎯 Dnešní cíl: {today_goal}")
-                display_date_str = today_str
-            
-            calc_label = self.findChild(QLabel, f"calc_label_{exercise_type}")
-            if calc_label:
-                calc_text = self.get_goal_calculation_text(exercise_type, display_date_str)
-                calc_label.setText(calc_text)
+            # NOVÝ PŘEHLED: Den, Týden, Měsíc, Rok
+            self.update_detailed_overview(exercise_type, selected_year)
             
             total_performed, total_yearly_goal, goal_to_date = self.calculate_yearly_progress(exercise_type, selected_year)
             difference = total_performed - goal_to_date
-            
-            performance_label = self.findChild(QLabel, f"performance_label_{exercise_type}")
-            if performance_label:
-                if difference > 0:
-                    performance_label.setText(f"📈 Náskok: +{difference:,}")
-                    performance_label.setStyleSheet("font-size: 13px; font-weight: bold; color: #32c766; padding: 5px;")
-                elif difference < 0:
-                    performance_label.setText(f"📉 Skluz: {difference:,}")
-                    performance_label.setStyleSheet("font-size: 13px; font-weight: bold; color: #ff6b6b; padding: 5px;")
-                else:
-                    performance_label.setText(f"✅ Podle plánu")
-                    performance_label.setStyleSheet("font-size: 13px; font-weight: bold; color: #14919b; padding: 5px;")
-            
-            year_goal_label = self.findChild(QLabel, f"year_goal_label_{exercise_type}")
-            if year_goal_label:
-                year_goal_label.setText(f"📅 Roční cíl {selected_year}: {total_yearly_goal:,}")
-            
-            progress_bar = self.findChild(QProgressBar, f"progress_bar_{exercise_type}")
-            if progress_bar and goal_to_date > 0:
-                percentage = int((total_performed / goal_to_date) * 100)
-                progress_bar.setValue(percentage)
-                progress_bar.setFormat(f"{total_performed:,} / {goal_to_date:,} ({percentage}%)")
-            elif progress_bar:
-                progress_bar.setValue(0)
-                progress_bar.setFormat("Žádný cíl")
-            
-            stats_label = self.findChild(QLabel, f"stats_label_{exercise_type}")
-            if stats_label:
-                remaining = max(0, goal_to_date - total_performed)
-                
-                days_trained = sum(1 for date_str, workouts in self.data['workouts'].items() 
-                                 if int(date_str.split('-')[0]) == selected_year and exercise_type in workouts)
-                
-                stats_label.setText(
-                    f"Splněno: {total_performed:,} | Zbývá: {remaining:,} | Dní: {days_trained}"
-                )
             
             table = self.findChild(QTableWidget, f"table_{exercise_type}")
             if table:
@@ -2068,14 +2008,169 @@ class FitnessTrackerApp(QMainWindow):
                     table.setItem(row, 2, QTableWidgetItem(time_only))
                     table.setItem(row, 3, QTableWidgetItem(str(value)))
                     
-                    # OPRAVA: Tlačítko edit
+                    # NOVÝ SLOUPEC: % cíle
+                    goal = self.calculate_goal(exercise_type, date_str)
+                    if not isinstance(goal, int):
+                        goal = int(goal) if goal else 0
+                    
+                    percent = (value / goal * 100) if goal > 0 else 0
+                    percent_item = QTableWidgetItem(f"{percent:.0f}%")
+                    
+                    # Barevné pozadí
+                    if percent >= 100:
+                        percent_item.setBackground(QColor(0, 100, 0))  # Zelená
+                    elif percent >= 75:
+                        percent_item.setBackground(QColor(144, 238, 144))  # Světle zelená
+                    elif percent >= 50:
+                        percent_item.setBackground(QColor(255, 215, 0))  # Žlutá
+                    elif percent >= 25:
+                        percent_item.setBackground(QColor(255, 140, 0))  # Oranžová
+                    else:
+                        percent_item.setBackground(QColor(255, 0, 0))  # Červená
+                    
+                    percent_item.setForeground(QColor(255, 255, 255))  # Bílý text
+                    table.setItem(row, 4, percent_item)
+                    
+                    # Tlačítko edit
                     edit_btn = QPushButton("✏️")
                     edit_btn.setMaximumSize(25, 25)
                     edit_btn.setToolTip("Upravit")
                     edit_btn.clicked.connect(lambda checked, d=date_str, e=exercise_type, rid=record_id: self.edit_workout(e, d, rid))
-                    table.setCellWidget(row, 4, edit_btn)
+                    table.setCellWidget(row, 5, edit_btn)
         except Exception as e:
             print(f"Chyba při update_exercise_tab pro {exercise_type}: {e}")
+
+    def update_detailed_overview(self, exercise_type, selected_year):
+        """Aktualizuje detailní přehled: Den, Týden, Měsíc, Zbytek roku"""
+        try:
+            today = datetime.now()
+            today_str = today.strftime('%Y-%m-%d')
+            
+            # === DEN ===
+            if selected_year == today.year:
+                day_goal = self.calculate_goal(exercise_type, today_str)
+                day_performed = 0
+                
+                if today_str in self.data['workouts'] and exercise_type in self.data['workouts'][today_str]:
+                    records = self.data['workouts'][today_str][exercise_type]
+                    if isinstance(records, list):
+                        day_performed = sum(r['value'] for r in records)
+                    elif isinstance(records, dict):
+                        day_performed = records.get('value', 0)
+                
+                day_diff = day_performed - day_goal
+                day_status = f"+{day_diff}" if day_diff >= 0 else str(day_diff)
+                day_color = "#32c766" if day_diff >= 0 else "#ff6b6b"
+                
+                today_section = self.findChild(QLabel, f"today_section_{exercise_type}")
+                if today_section:
+                    today_section.setText(
+                        f"📅 DNES ({today.strftime('%d.%m.%Y')}): {day_performed}/{day_goal} ({day_status})"
+                    )
+                    today_section.setStyleSheet(f"font-size: 14px; font-weight: bold; color: {day_color}; padding: 5px;")
+            
+            # === TÝDEN ===
+            week_start = today - timedelta(days=today.weekday())
+            week_end = week_start + timedelta(days=6)
+            
+            week_goal = 0
+            week_performed = 0
+            
+            current = week_start
+            while current <= week_end and current <= today:
+                date_str = current.strftime('%Y-%m-%d')
+                goal = self.calculate_goal(exercise_type, date_str)
+                if isinstance(goal, int):
+                    week_goal += goal
+                
+                if date_str in self.data['workouts'] and exercise_type in self.data['workouts'][date_str]:
+                    records = self.data['workouts'][date_str][exercise_type]
+                    if isinstance(records, list):
+                        week_performed += sum(r['value'] for r in records)
+                    elif isinstance(records, dict):
+                        week_performed += records.get('value', 0)
+                
+                current += timedelta(days=1)
+            
+            week_diff = week_performed - week_goal
+            week_status = f"+{week_diff}" if week_diff >= 0 else str(week_diff)
+            
+            week_section = self.findChild(QLabel, f"week_section_{exercise_type}")
+            if week_section:
+                week_section.setText(
+                    f"📆 TÝDEN ({week_start.strftime('%d.%m.')} - {week_end.strftime('%d.%m.')}): {week_performed}/{week_goal} ({week_status})"
+                )
+            
+            # === MĚSÍC ===
+            month_start = datetime(today.year, today.month, 1)
+            
+            month_goal = 0
+            month_performed = 0
+            
+            current = month_start
+            while current <= today:
+                date_str = current.strftime('%Y-%m-%d')
+                goal = self.calculate_goal(exercise_type, date_str)
+                if isinstance(goal, int):
+                    month_goal += goal
+                
+                if date_str in self.data['workouts'] and exercise_type in self.data['workouts'][date_str]:
+                    records = self.data['workouts'][date_str][exercise_type]
+                    if isinstance(records, list):
+                        month_performed += sum(r['value'] for r in records)
+                    elif isinstance(records, dict):
+                        month_performed += records.get('value', 0)
+                
+                current += timedelta(days=1)
+            
+            month_diff = month_performed - month_goal
+            month_status = f"+{month_diff}" if month_diff >= 0 else str(month_diff)
+            
+            month_section = self.findChild(QLabel, f"month_section_{exercise_type}")
+            if month_section:
+                month_section.setText(
+                    f"📅 MĚSÍC ({today.strftime('%B %Y')}): {month_performed}/{month_goal} ({month_status})"
+                )
+            
+            # === ZBYTEK ROKU ===
+            year_end = datetime(today.year, 12, 31)
+            tomorrow = today + timedelta(days=1)
+            
+            rest_goal = 0
+            
+            current = tomorrow
+            while current <= year_end:
+                date_str = current.strftime('%Y-%m-%d')
+                goal = self.calculate_goal(exercise_type, date_str)
+                if isinstance(goal, int):
+                    rest_goal += goal
+                current += timedelta(days=1)
+            
+            days_left = (year_end - today).days
+            
+            year_rest_section = self.findChild(QLabel, f"year_rest_section_{exercise_type}")
+            if year_rest_section:
+                year_rest_section.setText(
+                    f"📊 ZBYTEK ROKU: {rest_goal} ({days_left} dnů do {year_end.strftime('%d.%m.%Y')})"
+                )
+            
+            # Progress bar
+            total_performed, total_yearly_goal, goal_to_date = self.calculate_yearly_progress(exercise_type, selected_year)
+            
+            progress_bar = self.findChild(QProgressBar, f"progress_bar_{exercise_type}")
+            if progress_bar and goal_to_date > 0:
+                percentage = int((total_performed / goal_to_date) * 100)
+                progress_bar.setValue(percentage)
+                progress_bar.setFormat(f"{total_performed:,} / {goal_to_date:,} ({percentage}%)")
+            elif progress_bar:
+                progress_bar.setValue(0)
+                progress_bar.setFormat("Žádný cíl")
+        
+        except Exception as e:
+            print(f"Chyba v update_detailed_overview pro {exercise_type}: {e}")
+            import traceback
+            traceback.print_exc()
+
 
     def refresh_exercise_calendar(self, exercise_type):
         """Vytvoří roční kalendář"""
@@ -2129,36 +2224,36 @@ class FitnessTrackerApp(QMainWindow):
             traceback.print_exc()
 
     def create_month_calendar_for_exercise(self, year, month, month_name, exercise_type):
-        """Vytvoří kalendář měsíce s GRADIENTNÍMI BARVAMI"""
+        """Vytvoří kalendář měsíce s GRADIENTNÍMI BARVAMI - VĚTŠÍ"""
         group = QGroupBox(f"{month_name}")
         group.setStyleSheet("""
             QGroupBox { 
-                font-size: 12px;
+                font-size: 16px;
                 font-weight: bold;
                 background-color: #1e1e1e;
                 border: 2px solid #0d7377;
                 border-radius: 5px;
-                padding-top: 15px;
+                padding-top: 18px;
             }
             QGroupBox::title {
                 subcontrol-origin: margin;
                 subcontrol-position: top center;
-                padding: 2px 5px;
+                padding: 3px 8px;
                 color: #14919b;
             }
         """)
-        group.setFixedSize(220, 200)  # OPRAVA: Fixní velikost
+        group.setFixedSize(330, 300)  # OPRAVA: 50% větší (220→330, 200→300)
         
         layout = QGridLayout()
-        layout.setSpacing(3)
-        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(4)
+        layout.setContentsMargins(10, 10, 10, 10)
         
         days = ['Po', 'Út', 'St', 'Čt', 'Pá', 'So', 'Ne']
         for col, day in enumerate(days):
             label = QLabel(day)
             label.setAlignment(Qt.AlignCenter)
-            label.setStyleSheet("font-weight: bold; padding: 2px; color: #a0a0a0; font-size: 9px;")
-            label.setFixedHeight(15)  # OPRAVA: Menší výška
+            label.setStyleSheet("font-weight: bold; padding: 3px; color: #a0a0a0; font-size: 13px;")
+            label.setFixedHeight(20)
             layout.addWidget(label, 0, col)
         
         first_day = datetime(year, month, 1)
@@ -2184,17 +2279,15 @@ class FitnessTrackerApp(QMainWindow):
             
             day_label = QLabel(str(day))
             day_label.setAlignment(Qt.AlignCenter)
-            day_label.setFixedSize(28, 24)  # OPRAVA: Větší pole
+            day_label.setFixedSize(42, 36)  # OPRAVA: 50% větší (28→42, 24→36)
             day_label.setFrameStyle(QFrame.Box)
             
-            # Gradientní barvy
             color, tooltip_text = self.get_day_color_gradient(date_str, date.date(), today, start_date, exercise_type)
             
-            # Zvýraznění dnešního dne
             border_style = "border: 2px solid #87CEEB;" if date.date() == today else "border: 1px solid #3d3d3d;"
             
             day_label.setStyleSheet(
-                f"background-color: {color}; font-weight: bold; color: #ffffff; {border_style} font-size: 11px;"  # OPRAVA: Větší font
+                f"background-color: {color}; font-weight: bold; color: #ffffff; {border_style} font-size: 16px;"  # OPRAVA: 50% větší font (11→16)
             )
             day_label.setToolTip(tooltip_text)
             
