@@ -2,18 +2,18 @@
 # -*- coding: utf-8 -*-
 """
 Fitness Tracker - Aplikace pro sledování cvičení s progresivními cíli
-Verze 1.3a
+Verze 1.3b
 
 Changelog:
+v1.3b (26.10.2025) - OPRAVNÁ VERZE
+- Oprava porovnání v create_add_workout_tab() - správné zpracování list/dict
+
 v1.3a (26.10.2025) - OPRAVNÁ VERZE
 - Oprava chybějícího importu QCheckBox
-- Oprava calculate_goal() - vrací int místo možného float/list
-- Přidání tlačítka "Vynulovat záznamy roku" v nastavení
-- Vynulování smaže pouze záznamy, nastavení roku zůstane
+- Přidání tlačítka "Vynulovat záznamy roku"
 
 v1.3 (25.10.2025)
 - Více záznamů za den
-- Checkboxy a hromadné mazání
 
 v1.2b - v1.0.0
 - Předchozí verze
@@ -35,7 +35,7 @@ from PySide6.QtCore import Qt, QDate, QTimer
 from PySide6.QtGui import QColor
 
 # Verze aplikace
-VERSION = "1.3a"
+VERSION = "1.3b"
 VERSION_DATE = "26.10.2025"
 
 # Dark Theme Stylesheet
@@ -830,22 +830,25 @@ class FitnessTrackerApp(QMainWindow):
         for exercise in ['kliky', 'dřepy', 'skrčky']:
             goal = self.calculate_goal(exercise, selected_date_str)
             
+            # OPRAVA: Správné zpracování current_value
+            current_value = 0
             if selected_date_str in self.data['workouts'] and exercise in self.data['workouts'][selected_date_str]:
-                workout_data = self.data['workouts'][selected_date_str][exercise]
-                if isinstance(workout_data, dict):
-                    current_value = workout_data['value']
-                else:
-                    current_value = workout_data
+                records = self.data['workouts'][selected_date_str][exercise]
                 
-                if current_value >= goal:
-                    status = f"✅ Splněno ({current_value}/{goal})"
-                    color = "#32c766"
-                elif current_value > 0:
-                    status = f"⏳ Rozpracováno ({current_value}/{goal})"
-                    color = "#FFD700"
+                # OPRAVA: Kontrola typu a sečtení
+                if isinstance(records, list):
+                    current_value = sum(r['value'] for r in records)
+                elif isinstance(records, dict):
+                    current_value = records.get('value', 0)
                 else:
-                    status = f"❌ Nesplněno (0/{goal})"
-                    color = "#ff6b6b"
+                    current_value = 0
+            
+            if current_value >= goal:
+                status = f"✅ Splněno ({current_value}/{goal})"
+                color = "#32c766"
+            elif current_value > 0:
+                status = f"⏳ Rozpracováno ({current_value}/{goal})"
+                color = "#FFD700"
             else:
                 status = f"❌ Nesplněno (0/{goal})"
                 color = "#ff6b6b"
