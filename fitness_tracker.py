@@ -2,37 +2,21 @@
 # -*- coding: utf-8 -*-
 """
 Fitness Tracker - Aplikace pro sledování cvičení s progresivními cíli
-Verze 1.2
+Verze 1.2a
 
 Changelog:
+v1.2a (25.10.2025)
+- Odstranění sloupců "Cíl" a "✓" z tabulek v záložkách cvičení
+- Redesign záložky "Přidat výkon" - každá kategorie má vlastní pole + tlačítko
+- Přidání přehledu dnešních cílů do záložky přidávání
+- Tlačítko "Přidat všechny najednou"
+- Datum vždy aktuální (bez možnosti změny)
+
 v1.2 (25.10.2025)
-- Nová záložka "Přidat výkon" pro centralizované přidávání cvičení
-- Odstranění přidávání z jednotlivých záložek cvičení
-- Gradientní barevné zobrazení kalendáře podle výkonu
-- Tooltip s detaily při najetí na den v kalendáři
-- Zvýraznění dnešního dne bez ovlivnění barevného gradientu
-- Tmavší zelená = větší náskok, tmavší červená = větší skluz
+- Centralizované přidávání cvičení
+- Gradientní kalendář podle výkonu
 
-v1.1e (25.10.2025) - OPRAVNÁ VERZE
-- Oprava zobrazení cílů pro budoucí/minulé roky
-- Kompletní mazání roku včetně year_settings
-
-v1.1d (25.10.2025) - OPRAVNÁ VERZE
-- Oprava kalendáře
-
-v1.1c (25.10.2025) - OPRAVNÁ VERZE
-- Kompletní migrace na year_settings
-
-v1.1b (25.10.2025) - OPRAVNÁ VERZE
-- Oprava get_available_years()
-
-v1.1a (25.10.2025)
-- Nastavení specifická pro rok
-
-v1.1 (25.10.2025)
-- Přidána záložka "O aplikaci"
-
-v1.0.1c - v1.0.0
+v1.1e - v1.0.0
 - Předchozí verze
 """
 
@@ -51,7 +35,7 @@ from PySide6.QtCore import Qt, QDate, QTimer
 from PySide6.QtGui import QColor
 
 # Verze aplikace
-VERSION = "1.2"
+VERSION = "1.2a"
 VERSION_DATE = "25.10.2025"
 
 # Dark Theme Stylesheet
@@ -683,61 +667,20 @@ class FitnessTrackerApp(QMainWindow):
         self.tabs.addTab(self.create_exercise_tab('dřepy', '🦵'), "🦵 Dřepy")
         self.tabs.addTab(self.create_exercise_tab('skrčky', '🧘'), "🧘 Skrčky")
         self.tabs.addTab(self.create_about_tab(), "ℹ️ O aplikaci")
-        
-    def create_add_workout_tab(self):
-        """NOVÁ ZÁLOŽKA pro přidávání výkonů"""
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
-        
-        title_label = QLabel("➕ Přidání výkonu")
-        title_label.setStyleSheet("font-size: 18px; font-weight: bold; color: #14919b; padding: 10px;")
-        layout.addWidget(title_label)
-        
-        # Zadání výkonu
-        input_group = QGroupBox("Zadej výkon")
-        input_layout = QFormLayout()
-        
-        self.add_date_edit = QDateEdit()
-        self.add_date_edit.setDate(QDate.currentDate())
-        self.add_date_edit.setCalendarPopup(True)
-        input_layout.addRow("📅 Datum:", self.add_date_edit)
-        
-        self.add_exercise_combo = QComboBox()
-        self.add_exercise_combo.addItems(["kliky", "dřepy", "skrčky"])
-        input_layout.addRow("🏋️ Cvičení:", self.add_exercise_combo)
-        
-        self.add_value_spin = QSpinBox()
-        self.add_value_spin.setRange(0, 1000)
-        self.add_value_spin.setValue(0)
-        input_layout.addRow("🔢 Počet:", self.add_value_spin)
-        
-        input_group.setLayout(input_layout)
-        layout.addWidget(input_group)
-        
-        add_btn = QPushButton("✅ Přidat výkon")
-        add_btn.clicked.connect(self.add_workout_centralized)
-        add_btn.setStyleSheet("font-size: 14px; padding: 12px;")
-        layout.addWidget(add_btn)
-        
-        layout.addStretch()
-        
-        return widget
-    
-    def add_workout_centralized(self):
-        """Centralizované přidání výkonu"""
-        date_str = self.add_date_edit.date().toString('yyyy-MM-dd')
-        exercise_type = self.add_exercise_combo.currentText()
-        value = self.add_value_spin.value()
-        
+ 
+    def add_single_workout(self, exercise_type, value):
+        """Přidá výkon pro jednu kategorii"""
         if value == 0:
-            self.show_message("Chyba", "Zadej nenulovou hodnotu!", QMessageBox.Warning)
+            self.show_message("Chyba", f"Zadej nenulovou hodnotu pro {exercise_type}!", QMessageBox.Warning)
             return
         
-        if date_str not in self.data['workouts']:
-            self.data['workouts'][date_str] = {}
+        today_str = datetime.now().strftime('%Y-%m-%d')
+        
+        if today_str not in self.data['workouts']:
+            self.data['workouts'][today_str] = {}
         
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        self.data['workouts'][date_str][exercise_type] = {
+        self.data['workouts'][today_str][exercise_type] = {
             'value': value,
             'timestamp': timestamp
         }
@@ -749,10 +692,178 @@ class FitnessTrackerApp(QMainWindow):
             self.update_exercise_tab(exercise)
             self.refresh_exercise_calendar(exercise)
         
-        self.show_message("Přidáno", f"Výkon byl zaznamenán: {value} {exercise_type} ({date_str})")
+        # Refresh přehledu cílů v záložce přidat
+        self.tabs.setCurrentIndex(0)  # Přepni na přidat
+        self.tabs.setCurrentIndex(0)  # Refresh
+        
+        self.show_message("Přidáno", f"Výkon byl zaznamenán: {value} {exercise_type}")
         
         # Reset hodnoty
-        self.add_value_spin.setValue(0)
+        if exercise_type == 'kliky':
+            self.kliky_spin.setValue(0)
+        elif exercise_type == 'dřepy':
+            self.drepy_spin.setValue(0)
+        elif exercise_type == 'skrčky':
+            self.skrcky_spin.setValue(0)
+
+    def add_all_workouts(self):
+        """Přidá všechny výkony najednou"""
+        kliky_val = self.kliky_spin.value()
+        drepy_val = self.drepy_spin.value()
+        skrcky_val = self.skrcky_spin.value()
+        
+        if kliky_val == 0 and drepy_val == 0 and skrcky_val == 0:
+            self.show_message("Chyba", "Zadej alespoň jednu nenulovou hodnotu!", QMessageBox.Warning)
+            return
+        
+        today_str = datetime.now().strftime('%Y-%m-%d')
+        
+        if today_str not in self.data['workouts']:
+            self.data['workouts'][today_str] = {}
+        
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        
+        added = []
+        
+        if kliky_val > 0:
+            self.data['workouts'][today_str]['kliky'] = {
+                'value': kliky_val,
+                'timestamp': timestamp
+            }
+            added.append(f"kliky: {kliky_val}")
+        
+        if drepy_val > 0:
+            self.data['workouts'][today_str]['dřepy'] = {
+                'value': drepy_val,
+                'timestamp': timestamp
+            }
+            added.append(f"dřepy: {drepy_val}")
+        
+        if skrcky_val > 0:
+            self.data['workouts'][today_str]['skrčky'] = {
+                'value': skrcky_val,
+                'timestamp': timestamp
+            }
+            added.append(f"skrčky: {skrcky_val}")
+        
+        self.save_data()
+        
+        # Aktualizuj všechny záložky
+        for exercise in ['kliky', 'dřepy', 'skrčky']:
+            self.update_exercise_tab(exercise)
+            self.refresh_exercise_calendar(exercise)
+        
+        # Refresh přehledu
+        self.tabs.setCurrentIndex(0)
+        self.tabs.setCurrentIndex(0)
+        
+        self.show_message("Přidáno", f"Výkony zaznamenány:\n" + "\n".join(added))
+        
+        # Reset hodnot
+        self.kliky_spin.setValue(0)
+        self.drepy_spin.setValue(0)
+        self.skrcky_spin.setValue(0)
+
+    def create_add_workout_tab(self):
+        """Záložka pro přidávání výkonů - redesign"""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        
+        title_label = QLabel("➕ Přidání dnešního výkonu")
+        title_label.setStyleSheet("font-size: 18px; font-weight: bold; color: #14919b; padding: 10px;")
+        layout.addWidget(title_label)
+        
+        # Dnešní datum (informativně)
+        today_label = QLabel(f"📅 Datum: {datetime.now().strftime('%d.%m.%Y (%A)')}")
+        today_label.setStyleSheet("font-size: 14px; padding: 5px; color: #a0a0a0;")
+        layout.addWidget(today_label)
+        
+        # Přehled dnešních cílů
+        goals_group = QGroupBox("🎯 Dnešní cíle")
+        goals_layout = QVBoxLayout()
+        
+        today_str = datetime.now().strftime('%Y-%m-%d')
+        
+        for exercise in ['kliky', 'dřepy', 'skrčky']:
+            goal = self.calculate_goal(exercise, today_str)
+            
+            # Zjisti, zda už bylo dnes přidáno
+            if today_str in self.data['workouts'] and exercise in self.data['workouts'][today_str]:
+                workout_data = self.data['workouts'][today_str][exercise]
+                if isinstance(workout_data, dict):
+                    current_value = workout_data['value']
+                else:
+                    current_value = workout_data
+                
+                if current_value >= goal:
+                    status = f"✅ Splněno ({current_value}/{goal})"
+                    color = "#32c766"
+                else:
+                    status = f"⏳ Rozpracováno ({current_value}/{goal})"
+                    color = "#FFD700"
+            else:
+                status = f"❌ Nesplněno (0/{goal})"
+                color = "#ff6b6b"
+            
+            goal_label = QLabel(f"{exercise.capitalize()}: {status}")
+            goal_label.setStyleSheet(f"font-size: 13px; padding: 5px; color: {color}; font-weight: bold;")
+            goals_layout.addWidget(goal_label)
+        
+        goals_group.setLayout(goals_layout)
+        layout.addWidget(goals_group)
+        
+        # Přidávání výkonů - každá kategorie samostatně
+        add_group = QGroupBox("➕ Zadat výkon")
+        add_layout = QVBoxLayout()
+        
+        # Kliky
+        kliky_row = QHBoxLayout()
+        kliky_row.addWidget(QLabel("💪 Kliky:"))
+        self.kliky_spin = QSpinBox()
+        self.kliky_spin.setRange(0, 1000)
+        self.kliky_spin.setValue(0)
+        kliky_row.addWidget(self.kliky_spin)
+        kliky_btn = QPushButton("✅ Přidat")
+        kliky_btn.clicked.connect(lambda: self.add_single_workout('kliky', self.kliky_spin.value()))
+        kliky_row.addWidget(kliky_btn)
+        add_layout.addLayout(kliky_row)
+        
+        # Dřepy
+        drepy_row = QHBoxLayout()
+        drepy_row.addWidget(QLabel("🦵 Dřepy:"))
+        self.drepy_spin = QSpinBox()
+        self.drepy_spin.setRange(0, 1000)
+        self.drepy_spin.setValue(0)
+        drepy_row.addWidget(self.drepy_spin)
+        drepy_btn = QPushButton("✅ Přidat")
+        drepy_btn.clicked.connect(lambda: self.add_single_workout('dřepy', self.drepy_spin.value()))
+        drepy_row.addWidget(drepy_btn)
+        add_layout.addLayout(drepy_row)
+        
+        # Skrčky
+        skrcky_row = QHBoxLayout()
+        skrcky_row.addWidget(QLabel("🧘 Skrčky:"))
+        self.skrcky_spin = QSpinBox()
+        self.skrcky_spin.setRange(0, 1000)
+        self.skrcky_spin.setValue(0)
+        skrcky_row.addWidget(self.skrcky_spin)
+        skrcky_btn = QPushButton("✅ Přidat")
+        skrcky_btn.clicked.connect(lambda: self.add_single_workout('skrčky', self.skrcky_spin.value()))
+        skrcky_row.addWidget(skrcky_btn)
+        add_layout.addLayout(skrcky_row)
+        
+        add_group.setLayout(add_layout)
+        layout.addWidget(add_group)
+        
+        # Tlačítko pro přidání všeho najednou
+        add_all_btn = QPushButton("🚀 Přidat všechny výkony najednou")
+        add_all_btn.setStyleSheet("font-size: 14px; padding: 12px; background-color: #0d7377;")
+        add_all_btn.clicked.connect(self.add_all_workouts)
+        layout.addWidget(add_all_btn)
+        
+        layout.addStretch()
+        
+        return widget
     
     def on_tab_changed(self, index):
         try:
@@ -1322,8 +1433,8 @@ class FitnessTrackerApp(QMainWindow):
         # TABULKA zůstává
         table = QTableWidget()
         table.setObjectName(f"table_{exercise_type}")
-        table.setColumnCount(6)
-        table.setHorizontalHeaderLabels(["Datum", "Čas", "Výkon", "Cíl", "✓", "Akce"])
+        table.setColumnCount(3)
+        table.setHorizontalHeaderLabels(["Datum", "Čas", "Výkon"])
         
         table.verticalHeader().setDefaultSectionSize(30)
         table.verticalHeader().setMinimumSectionSize(30)
@@ -1331,10 +1442,7 @@ class FitnessTrackerApp(QMainWindow):
         header = table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(4, QHeaderView.Stretch)
-        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(2, QHeaderView.Stretch)
         
         left_layout.addWidget(table)
         
@@ -1646,29 +1754,13 @@ class FitnessTrackerApp(QMainWindow):
                         value = workout_data
                         time_only = 'N/A'
                     
-                    goal = self.calculate_goal(exercise_type, date_str)
-                    achieved = value >= goal
-                    
                     row = table.rowCount()
                     table.insertRow(row)
                     
                     table.setItem(row, 0, QTableWidgetItem(date_str))
                     table.setItem(row, 1, QTableWidgetItem(time_only))
                     table.setItem(row, 2, QTableWidgetItem(str(value)))
-                    table.setItem(row, 3, QTableWidgetItem(str(goal)))
-                    
-                    status_item = QTableWidgetItem("✅" if achieved else "❌")
-                    if achieved:
-                        status_item.setBackground(QColor(50, 200, 100))
-                    else:
-                        status_item.setBackground(QColor(200, 50, 50))
-                    table.setItem(row, 4, status_item)
-                    
-                    edit_btn = QPushButton("✏️")
-                    edit_btn.setMaximumSize(25, 25)
-                    edit_btn.setToolTip("Upravit")
-                    edit_btn.clicked.connect(lambda checked, d=date_str, e=exercise_type: self.edit_workout(e, d))
-                    table.setCellWidget(row, 5, edit_btn)
+
         except Exception as e:
             print(f"Chyba při update_exercise_tab pro {exercise_type}: {e}")
     
