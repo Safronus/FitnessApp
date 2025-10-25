@@ -2,17 +2,15 @@
 # -*- coding: utf-8 -*-
 """
 Fitness Tracker - Aplikace pro sledování cvičení s progresivními cíli
-Verze 1.3c
+Verze 1.3d
 
 Changelog:
-v1.3c (26.10.2025) - OPRAVNÁ VERZE
-- Oprava mazání - checkbox je v QWidget layoutu
-- Zastavení auto-refresh během mazání (zachování checkboxů)
-- Přidání tlačítka "Edit" do tabulky záznamů
-- Oprava refresh cílů po smazání/vynulování roku
-- Oprava porovnání v kalendáři
+v1.3d (26.10.2025) - OPRAVNÁ VERZE
+- Vypnutí auto-refresh (řešení problému s odznačováním checkboxů)
+- Oprava porovnání v get_day_color_gradient() - kontrola typu goal
+- Změna názvů sloupců: "Datum cvičení" a "Čas přidání"
 
-v1.3b - v1.0.0
+v1.3c - v1.0.0
 - Předchozí verze
 """
 
@@ -32,7 +30,7 @@ from PySide6.QtCore import Qt, QDate, QTimer
 from PySide6.QtGui import QColor
 
 # Verze aplikace
-VERSION = "1.3c"
+VERSION = "1.3d"
 VERSION_DATE = "26.10.2025"
 
 # Dark Theme Stylesheet
@@ -471,9 +469,9 @@ class FitnessTrackerApp(QMainWindow):
         self.setup_ui()
         self.restore_app_state()
         
-        self.update_timer = QTimer()
-        self.update_timer.timeout.connect(self.auto_refresh)
-        self.update_timer.start(5000)
+        #self.update_timer = QTimer()
+        #self.update_timer.timeout.connect(self.auto_refresh)
+        #self.update_timer.start(5000)
         
     def closeEvent(self, event):
         try:
@@ -1608,8 +1606,8 @@ class FitnessTrackerApp(QMainWindow):
         # TABULKA s checkboxy a editací
         table = QTableWidget()
         table.setObjectName(f"table_{exercise_type}")
-        table.setColumnCount(5)  # OPRAVA: Přidán sloupec pro edit
-        table.setHorizontalHeaderLabels(["☑️", "Datum", "Čas", "Výkon", "Akce"])
+        table.setColumnCount(5)
+        table.setHorizontalHeaderLabels(["☑️", "Datum cvičení", "Čas přidání", "Výkon", "Akce"])  # OPRAVA: Nové názvy
         
         table.verticalHeader().setDefaultSectionSize(30)
         table.verticalHeader().setMinimumSectionSize(30)
@@ -1694,7 +1692,6 @@ class FitnessTrackerApp(QMainWindow):
         for row in range(table.rowCount()):
             checkbox_widget = table.cellWidget(row, 0)
             if checkbox_widget:
-                # OPRAVA: Checkbox je uvnitř QWidget layoutu
                 checkbox = checkbox_widget.findChild(QCheckBox)
                 if checkbox and checkbox.isChecked():
                     record_id = table.item(row, 1).data(Qt.UserRole)
@@ -1717,9 +1714,6 @@ class FitnessTrackerApp(QMainWindow):
         no_btn.setText("Ne, zrušit")
         
         if msg.exec() == QMessageBox.Yes:
-            # OPRAVA: Zastav auto-refresh během mazání
-            self.update_timer.stop()
-            
             for date_str, record_id in selected_ids:
                 if date_str in self.data['workouts'] and exercise_type in self.data['workouts'][date_str]:
                     records = self.data['workouts'][date_str][exercise_type]
@@ -1735,10 +1729,7 @@ class FitnessTrackerApp(QMainWindow):
             self.save_data()
             self.update_exercise_tab(exercise_type)
             self.refresh_exercise_calendar(exercise_type)
-            self.refresh_add_tab_goals()  # OPRAVA: Refresh cílů
-            
-            # OPRAVA: Znovuspusť auto-refresh
-            self.update_timer.start(5000)
+            self.refresh_add_tab_goals()
             
             self.show_message("Smazáno", f"{len(selected_ids)} záznamů bylo smazáno")
 
@@ -2157,6 +2148,10 @@ class FitnessTrackerApp(QMainWindow):
         
         goal = self.calculate_goal(exercise_type, date_str)
         
+        # OPRAVA: Ujisti se že goal je int
+        if not isinstance(goal, int):
+            goal = int(goal) if goal else 0
+        
         if date_str in self.data['workouts']:
             workout = self.data['workouts'][date_str]
             if exercise_type in workout:
@@ -2179,7 +2174,7 @@ class FitnessTrackerApp(QMainWindow):
                     color = '#006400'
                     status = "Velký náskok"
                 elif difference > 0:
-                    intensity = min(difference / goal, 1.0)
+                    intensity = min(difference / goal, 1.0) if goal > 0 else 0
                     green_val = int(144 + (100 - 144) * intensity)
                     color = f'#{0:02x}{green_val:02x}{0:02x}'
                     status = f"Náskok +{difference}"
@@ -2187,7 +2182,7 @@ class FitnessTrackerApp(QMainWindow):
                     color = '#FFD700'
                     status = "Přesně podle plánu"
                 elif difference >= -goal * 0.5:
-                    intensity = abs(difference) / (goal * 0.5)
+                    intensity = abs(difference) / (goal * 0.5) if goal > 0 else 0
                     red_val = int(107 + (255 - 107) * (1 - intensity))
                     color = f'#ff{red_val:02x}{red_val:02x}'
                     status = f"Skluz {difference}"
