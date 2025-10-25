@@ -2,16 +2,18 @@
 # -*- coding: utf-8 -*-
 """
 Fitness Tracker - Aplikace pro sledování cvičení s progresivními cíli
-Verze 1.3
+Verze 1.3a
 
 Changelog:
+v1.3a (26.10.2025) - OPRAVNÁ VERZE
+- Oprava chybějícího importu QCheckBox
+- Oprava calculate_goal() - vrací int místo možného float/list
+- Přidání tlačítka "Vynulovat záznamy roku" v nastavení
+- Vynulování smaže pouze záznamy, nastavení roku zůstane
+
 v1.3 (25.10.2025)
-- Více záznamů za den (nepřepisování)
-- Každý záznam má vlastní řádek v tabulce
-- Checkboxy pro výběr záznamů
-- Hromadné mazání vybraných záznamů
-- Editace a mazání jednotlivých záznamů
-- Migrace dat na nový formát s lists
+- Více záznamů za den
+- Checkboxy a hromadné mazání
 
 v1.2b - v1.0.0
 - Předchozí verze
@@ -27,13 +29,13 @@ from PySide6.QtWidgets import (
     QTabWidget, QLabel, QSpinBox, QPushButton, QDateEdit, QTableWidget,
     QTableWidgetItem, QGroupBox, QFormLayout, QHeaderView, QMessageBox,
     QGridLayout, QComboBox, QScrollArea, QFrame, QProgressBar, QTextEdit,
-    QDialog, QListWidget, QListWidgetItem, QInputDialog
+    QDialog, QListWidget, QListWidgetItem, QInputDialog, QCheckBox
 )
 from PySide6.QtCore import Qt, QDate, QTimer
 from PySide6.QtGui import QColor
 
 # Verze aplikace
-VERSION = "1.3"
+VERSION = "1.3a"
 VERSION_DATE = "26.10.2025"
 
 # Dark Theme Stylesheet
@@ -1165,6 +1167,20 @@ class FitnessTrackerApp(QMainWindow):
         delete_year_btn.clicked.connect(lambda: self.delete_year_from_list())
         years_buttons.addWidget(delete_year_btn)
         
+        # NOVÉ TLAČÍTKO - Vynulovat záznamy
+        reset_year_btn = QPushButton("🔄 Vynulovat záznamy roku")
+        reset_year_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #ff9800;
+                color: white;
+            }
+            QPushButton:hover {
+                background-color: #e68900;
+            }
+        """)
+        reset_year_btn.clicked.connect(self.reset_year_workouts)
+        years_buttons.addWidget(reset_year_btn)
+        
         years_layout.addLayout(years_buttons)
         
         years_group.setLayout(years_layout)
@@ -1247,6 +1263,57 @@ class FitnessTrackerApp(QMainWindow):
         self.load_year_settings_to_ui(self.current_settings_year)
         
         return widget
+
+    def reset_year_workouts(self):
+        """Vynuluje všechny záznamy pro vybraný rok (ponechá nastavení)"""
+        selected_items = self.years_list.selectedItems()
+        if not selected_items:
+            self.show_message("Chyba", "Vyber rok, jehož záznamy chceš vynulovat", QMessageBox.Warning)
+            return
+        
+        year = selected_items[0].data(Qt.UserRole)
+        
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Potvrzení vynulování")
+        msg.setText(
+            f"Opravdu chceš vynulovat všechny záznamy pro rok {year}?\n\n"
+            f"Nastavení roku (datum začátku, cíle, přírůstky) zůstanou zachovány.\n"
+            f"Tato akce je nevratná!"
+        )
+        msg.setIcon(QMessageBox.Warning)
+        msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        
+        yes_btn = msg.button(QMessageBox.Yes)
+        yes_btn.setText("Ano, vynulovat")
+        no_btn = msg.button(QMessageBox.No)
+        no_btn.setText("Ne, zrušit")
+        
+        if msg.exec() == QMessageBox.Yes:
+            dates_to_delete = []
+            for date_str in self.data['workouts'].keys():
+                if int(date_str.split('-')[0]) == year:
+                    dates_to_delete.append(date_str)
+            
+            for date_str in dates_to_delete:
+                del self.data['workouts'][date_str]
+            
+            self.save_data()
+            self.update_all_year_selectors()
+            
+            self.show_message("Vynulováno", f"Všechny záznamy pro rok {year} byly smazány.\nNastavení roku bylo zachováno.")
+            
+            for exercise in ['kliky', 'dřepy', 'skrčky']:
+                self.update_exercise_tab(exercise)
+                self.refresh_exercise_calendar(exercise)
+            
+            # Refresh seznamu roků
+            self.years_list.clear()
+            for y in self.get_available_years():
+                year_workouts = sum(1 for date_str in self.data['workouts'].keys() 
+                                  if int(date_str.split('-')[0]) == y)
+                item = QListWidgetItem(f"📆 Rok {y} ({year_workouts} dnů s cvičením)")
+                item.setData(Qt.UserRole, y)
+                self.years_list.addItem(item)
 
     def load_year_settings_to_ui(self, year):
         """Načte nastavení pro daný rok do UI"""
@@ -1689,7 +1756,7 @@ class FitnessTrackerApp(QMainWindow):
         first_week_end = start_date + timedelta(days=days_to_sunday)
         
         if target_date <= first_week_end:
-            return base_goal
+            return int(base_goal)
         
         first_full_week_start = first_week_end + timedelta(days=1)
         days_since_first_full_week = (target_date - first_full_week_start).days
@@ -1698,8 +1765,8 @@ class FitnessTrackerApp(QMainWindow):
         
         goal = base_goal + (full_weeks * increment)
         
-        return max(0, goal)
-    
+        return int(max(0, goal))
+
     def get_goal_calculation_text(self, exercise_type, date_str):
         """Vrátí text s vysvětlením výpočtu"""
         target_date = datetime.strptime(date_str, '%Y-%m-%d')
