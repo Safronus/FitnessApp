@@ -2,20 +2,17 @@
 # -*- coding: utf-8 -*-
 """
 Fitness Tracker - Aplikace pro sledování cvičení s progresivními cíli
-Verze 1.3b
+Verze 1.3c
 
 Changelog:
-v1.3b (26.10.2025) - OPRAVNÁ VERZE
-- Oprava porovnání v create_add_workout_tab() - správné zpracování list/dict
+v1.3c (26.10.2025) - OPRAVNÁ VERZE
+- Oprava mazání - checkbox je v QWidget layoutu
+- Zastavení auto-refresh během mazání (zachování checkboxů)
+- Přidání tlačítka "Edit" do tabulky záznamů
+- Oprava refresh cílů po smazání/vynulování roku
+- Oprava porovnání v kalendáři
 
-v1.3a (26.10.2025) - OPRAVNÁ VERZE
-- Oprava chybějícího importu QCheckBox
-- Přidání tlačítka "Vynulovat záznamy roku"
-
-v1.3 (25.10.2025)
-- Více záznamů za den
-
-v1.2b - v1.0.0
+v1.3b - v1.0.0
 - Předchozí verze
 """
 
@@ -35,7 +32,7 @@ from PySide6.QtCore import Qt, QDate, QTimer
 from PySide6.QtGui import QColor
 
 # Verze aplikace
-VERSION = "1.3b"
+VERSION = "1.3c"
 VERSION_DATE = "26.10.2025"
 
 # Dark Theme Stylesheet
@@ -1309,6 +1306,9 @@ class FitnessTrackerApp(QMainWindow):
                 self.update_exercise_tab(exercise)
                 self.refresh_exercise_calendar(exercise)
             
+            # OPRAVA: Refresh cílů v záložce přidat
+            self.refresh_add_tab_goals()
+            
             # Refresh seznamu roků
             self.years_list.clear()
             for y in self.get_available_years():
@@ -1605,11 +1605,11 @@ class FitnessTrackerApp(QMainWindow):
         
         left_layout.addLayout(bulk_actions_layout)
         
-        # TABULKA s checkboxy
+        # TABULKA s checkboxy a editací
         table = QTableWidget()
         table.setObjectName(f"table_{exercise_type}")
-        table.setColumnCount(4)
-        table.setHorizontalHeaderLabels(["☑️", "Datum", "Čas", "Výkon"])
+        table.setColumnCount(5)  # OPRAVA: Přidán sloupec pro edit
+        table.setHorizontalHeaderLabels(["☑️", "Datum", "Čas", "Výkon", "Akce"])
         
         table.verticalHeader().setDefaultSectionSize(30)
         table.verticalHeader().setMinimumSectionSize(30)
@@ -1619,6 +1619,7 @@ class FitnessTrackerApp(QMainWindow):
         header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(3, QHeaderView.Stretch)
+        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
         
         left_layout.addWidget(table)
         
@@ -1691,11 +1692,14 @@ class FitnessTrackerApp(QMainWindow):
         
         selected_ids = []
         for row in range(table.rowCount()):
-            checkbox = table.cellWidget(row, 0)
-            if checkbox and checkbox.isChecked():
-                record_id = table.item(row, 1).data(Qt.UserRole)
-                date_str = table.item(row, 1).text()
-                selected_ids.append((date_str, record_id))
+            checkbox_widget = table.cellWidget(row, 0)
+            if checkbox_widget:
+                # OPRAVA: Checkbox je uvnitř QWidget layoutu
+                checkbox = checkbox_widget.findChild(QCheckBox)
+                if checkbox and checkbox.isChecked():
+                    record_id = table.item(row, 1).data(Qt.UserRole)
+                    date_str = table.item(row, 1).text()
+                    selected_ids.append((date_str, record_id))
         
         if not selected_ids:
             self.show_message("Chyba", "Nevybral jsi žádné záznamy!", QMessageBox.Warning)
@@ -1713,6 +1717,9 @@ class FitnessTrackerApp(QMainWindow):
         no_btn.setText("Ne, zrušit")
         
         if msg.exec() == QMessageBox.Yes:
+            # OPRAVA: Zastav auto-refresh během mazání
+            self.update_timer.stop()
+            
             for date_str, record_id in selected_ids:
                 if date_str in self.data['workouts'] and exercise_type in self.data['workouts'][date_str]:
                     records = self.data['workouts'][date_str][exercise_type]
@@ -1728,6 +1735,11 @@ class FitnessTrackerApp(QMainWindow):
             self.save_data()
             self.update_exercise_tab(exercise_type)
             self.refresh_exercise_calendar(exercise_type)
+            self.refresh_add_tab_goals()  # OPRAVA: Refresh cílů
+            
+            # OPRAVA: Znovuspusť auto-refresh
+            self.update_timer.start(5000)
+            
             self.show_message("Smazáno", f"{len(selected_ids)} záznamů bylo smazáno")
 
     def update_exercise_tab_and_calendar(self, exercise_type):
@@ -2010,6 +2022,13 @@ class FitnessTrackerApp(QMainWindow):
                     
                     table.setItem(row, 2, QTableWidgetItem(time_only))
                     table.setItem(row, 3, QTableWidgetItem(str(value)))
+                    
+                    # OPRAVA: Tlačítko edit
+                    edit_btn = QPushButton("✏️")
+                    edit_btn.setMaximumSize(25, 25)
+                    edit_btn.setToolTip("Upravit")
+                    edit_btn.clicked.connect(lambda checked, d=date_str, e=exercise_type, rid=record_id: self.edit_workout(e, d, rid))
+                    table.setCellWidget(row, 4, edit_btn)
         except Exception as e:
             print(f"Chyba při update_exercise_tab pro {exercise_type}: {e}")
 
