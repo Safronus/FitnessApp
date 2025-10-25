@@ -123,6 +123,18 @@ Všechna data se ukládají lokálně v souboru `fitness_data.json` ve stejném 
 
 ## 📝 Changelog
 
+### v1.5b (26.10.2025 01:28 CEST) - OPRAVNÁ VERZE
+**Opravy:**
+- ✅ Oprava legendy - jednoduchý design bez duplicitních boxů
+- 🔘 Oprava tlačítka "Akce" - nyní viditelné u záznamů
+- 📂 **Sbalování záznamů po dnech:**
+  - TreeWidget místo tabulky
+  - Defaultně sbalené dny
+  - Ikona stavu (✅/⏳/❌), souhrnný výkon a počet záznamů
+  - Rozbalit/sbalit kliknutím na den
+
+---
+
 ### v1.5a (26.10.2025 01:18 CEST) - OPRAVNÁ VERZE
 **Vylepšení:**
 - 🎨 Seskupení záznamů podle dne - střídání barev pozadí pro lepší přehlednost
@@ -409,5 +421,5 @@ Vytvořeno v roce 2025
 - [Issues](https://github.com/Safronus/FitnessApp/issues)
 
 ---
-**Poslední aktualizace:** 26.10.2025 01:18 CEST  
-**Aktuální verze:** 1.5a
+**Poslední aktualizace:** 26.10.2025 01:28 CEST  
+**Aktuální verze:** 1.5b
