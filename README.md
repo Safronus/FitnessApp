@@ -123,6 +123,14 @@ Všechna data se ukládají lokálně v souboru `fitness_data.json` ve stejném 
 
 ## 📝 Changelog
 
+### v1.5a (26.10.2025 01:18 CEST) - OPRAVNÁ VERZE
+**Vylepšení:**
+- 🎨 Seskupení záznamů podle dne - střídání barev pozadí pro lepší přehlednost
+- 🔘 Větší tlačítko "Akce" (30×30px) a vyšší řádky tabulky (35px)
+- 📊 Nový design legendy kalendáře s ikonami, rámečkem a lepším stylingem
+
+---
+
 ### v1.5 (26.10.2025 01:08 CEST)
 **Nové funkce:**
 - 📏 Kalendář o 50% větší - větší text (16px), pole (42×36px) a názvy měsíců
@@ -401,5 +409,5 @@ Vytvořeno v roce 2025
 - [Issues](https://github.com/Safronus/FitnessApp/issues)
 
 ---
-**Poslední aktualizace:** 26.10.2025 01:08 CEST  
-**Aktuální verze:** 1.5
+**Poslední aktualizace:** 26.10.2025 01:18 CEST  
+**Aktuální verze:** 1.5a

@@ -2,14 +2,17 @@
 # -*- coding: utf-8 -*-
 """
 Fitness Tracker - Aplikace pro sledování cvičení s progresivními cíli
-Verze 1.5
+Verze 1.5a
 
 Changelog:
+v1.5a (26.10.2025) - OPRAVNÁ VERZE
+- Seskupení záznamů podle dne - střídání barev pozadí (#2d2d2d / #232323)
+- Větší tlačítko Akce (30×30px) a větší řádky tabulky (35px)
+- Nový design legendy s ikonami, rámečkem a lepším stylingem
+
 v1.5 (26.10.2025)
-- Kalendář o 50% větší (text, pole, názvy měsíců)
-- Nový detailní přehled: Den, Týden, Měsíc, Zbytek roku (s daty)
-- Nový sloupec "% cíle" u záznamů s barevným pozadím
-- Barevné indikace: Zelená (100%+), Světle zelená (75%+), Žlutá (50%+), Oranžová (25%+), Červená (<25%)
+- Větší kalendář o 50%
+- Detailní přehledy
 
 v1.4b - v1.0.0
 - Předchozí verze
@@ -31,7 +34,7 @@ from PySide6.QtCore import Qt, QDate, QTimer
 from PySide6.QtGui import QColor
 
 # Verze aplikace
-VERSION = "1.5"
+VERSION = "1.5a"
 VERSION_DATE = "26.10.2025"
 
 # Dark Theme Stylesheet
@@ -1656,11 +1659,12 @@ class FitnessTrackerApp(QMainWindow):
         # TABULKA s checkboxy a editací
         table = QTableWidget()
         table.setObjectName(f"table_{exercise_type}")
-        table.setColumnCount(6)  # OPRAVA: Přidán sloupec
+        table.setColumnCount(6)
         table.setHorizontalHeaderLabels(["☑️", "Datum cvičení", "Čas přidání", "Výkon", "% cíle", "Akce"])
         
-        table.verticalHeader().setDefaultSectionSize(30)
-        table.verticalHeader().setMinimumSectionSize(30)
+        # OPRAVA: Větší řádky pro tlačítko
+        table.verticalHeader().setDefaultSectionSize(35)
+        table.verticalHeader().setMinimumSectionSize(35)
         
         header = table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
@@ -1681,32 +1685,62 @@ class FitnessTrackerApp(QMainWindow):
         overview_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #14919b; padding: 5px;")
         right_layout.addWidget(overview_label)
         
+        # NOVÝ DESIGN LEGENDY
         legend_frame = QFrame()
-        legend_frame.setStyleSheet("background-color: #2d2d2d; border: 1px solid #3d3d3d; padding: 5px;")
-        legend_layout = QGridLayout(legend_frame)
-        legend_layout.setSpacing(5)
+        legend_frame.setStyleSheet("""
+            QFrame {
+                background-color: #1e1e1e;
+                border: 2px solid #0d7377;
+                border-radius: 8px;
+                padding: 10px;
+            }
+        """)
+        legend_main_layout = QVBoxLayout(legend_frame)
         
-        def create_color_sample(color, text):
-            h_layout = QHBoxLayout()
-            h_layout.setSpacing(3)
+        legend_title = QLabel("📊 Legenda barev")
+        legend_title.setStyleSheet("font-size: 13px; font-weight: bold; color: #14919b; padding-bottom: 5px;")
+        legend_main_layout.addWidget(legend_title)
+        
+        legend_grid = QGridLayout()
+        legend_grid.setSpacing(8)
+        legend_grid.setContentsMargins(5, 5, 5, 5)
+        
+        def create_color_sample(color, text, icon=""):
+            container = QFrame()
+            container.setStyleSheet("""
+                QFrame {
+                    background-color: #2d2d2d;
+                    border-radius: 4px;
+                    padding: 5px;
+                }
+            """)
+            h_layout = QHBoxLayout(container)
+            h_layout.setSpacing(6)
+            h_layout.setContentsMargins(5, 3, 5, 3)
+            
             color_box = QLabel()
-            color_box.setFixedSize(15, 15)
-            color_box.setStyleSheet(f"background-color: {color}; border: 1px solid #3d3d3d;")
+            color_box.setFixedSize(20, 20)
+            color_box.setStyleSheet(f"background-color: {color}; border: 2px solid #3d3d3d; border-radius: 3px;")
             h_layout.addWidget(color_box)
-            text_label = QLabel(text)
-            text_label.setStyleSheet("font-size: 10px;")
+            
+            text_label = QLabel(f"{icon} {text}" if icon else text)
+            text_label.setStyleSheet("font-size: 11px; color: #e0e0e0;")
             h_layout.addWidget(text_label)
             h_layout.addStretch()
-            return h_layout
+            
+            return container
         
-        legend_layout.addLayout(create_color_sample("#000000", "Před začátkem"), 0, 0)
-        legend_layout.addLayout(create_color_sample("#006400", "Velký náskok"), 0, 1)
-        legend_layout.addLayout(create_color_sample("#90EE90", "Mírný náskok"), 0, 2)
-        legend_layout.addLayout(create_color_sample("#FFD700", "Akorát"), 1, 0)
-        legend_layout.addLayout(create_color_sample("#FF6B6B", "Mírný skluz"), 1, 1)
-        legend_layout.addLayout(create_color_sample("#8B0000", "Velký skluz"), 1, 2)
+        legend_grid.addWidget(create_color_sample("#000000", "Před začátkem", "⬛"), 0, 0)
+        legend_grid.addWidget(create_color_sample("#006400", "Velký náskok", "🟢"), 0, 1)
+        legend_grid.addWidget(create_color_sample("#90EE90", "Mírný náskok", "🟩"), 0, 2)
+        legend_grid.addWidget(create_color_sample("#FFD700", "Akorát", "🟨"), 1, 0)
+        legend_grid.addWidget(create_color_sample("#FF6B6B", "Mírný skluz", "🟧"), 1, 1)
+        legend_grid.addWidget(create_color_sample("#8B0000", "Velký skluz", "🟥"), 1, 2)
+        
+        legend_main_layout.addLayout(legend_grid)
         
         right_layout.addWidget(legend_frame)
+
         
         # OPRAVA: Scroll area s kalendářem
         scroll = QScrollArea()
@@ -1982,7 +2016,16 @@ class FitnessTrackerApp(QMainWindow):
                 # Seřadit podle data a času
                 all_records.sort(key=lambda x: (x[0], x[1].get('timestamp', '')), reverse=True)
                 
+                # NOVÉ: Střídání barev podle dne
+                current_date = None
+                alternate = False
+                
                 for date_str, record in all_records:
+                    # NOVÉ: Změna barvy při změně dne
+                    if current_date != date_str:
+                        current_date = date_str
+                        alternate = not alternate
+                    
                     value = record['value']
                     timestamp = record.get('timestamp', 'N/A')
                     time_only = timestamp.split(' ')[1] if ' ' in timestamp else timestamp
@@ -1991,9 +2034,13 @@ class FitnessTrackerApp(QMainWindow):
                     row = table.rowCount()
                     table.insertRow(row)
                     
+                    # NOVÉ: Barva pozadí řádku
+                    row_color = QColor(45, 45, 45) if alternate else QColor(35, 35, 35)
+                    
                     # Checkbox
                     checkbox = QCheckBox()
                     checkbox_widget = QWidget()
+                    checkbox_widget.setStyleSheet(f"background-color: {row_color.name()};")
                     checkbox_layout = QHBoxLayout(checkbox_widget)
                     checkbox_layout.addWidget(checkbox)
                     checkbox_layout.setAlignment(Qt.AlignCenter)
@@ -2003,12 +2050,18 @@ class FitnessTrackerApp(QMainWindow):
                     # Datum (s ID v UserRole)
                     date_item = QTableWidgetItem(date_str)
                     date_item.setData(Qt.UserRole, record_id)
+                    date_item.setBackground(row_color)
                     table.setItem(row, 1, date_item)
                     
-                    table.setItem(row, 2, QTableWidgetItem(time_only))
-                    table.setItem(row, 3, QTableWidgetItem(str(value)))
+                    time_item = QTableWidgetItem(time_only)
+                    time_item.setBackground(row_color)
+                    table.setItem(row, 2, time_item)
                     
-                    # NOVÝ SLOUPEC: % cíle
+                    value_item = QTableWidgetItem(str(value))
+                    value_item.setBackground(row_color)
+                    table.setItem(row, 3, value_item)
+                    
+                    # % cíle
                     goal = self.calculate_goal(exercise_type, date_str)
                     if not isinstance(goal, int):
                         goal = int(goal) if goal else 0
@@ -2018,23 +2071,25 @@ class FitnessTrackerApp(QMainWindow):
                     
                     # Barevné pozadí
                     if percent >= 100:
-                        percent_item.setBackground(QColor(0, 100, 0))  # Zelená
+                        percent_item.setBackground(QColor(0, 100, 0))
                     elif percent >= 75:
-                        percent_item.setBackground(QColor(144, 238, 144))  # Světle zelená
+                        percent_item.setBackground(QColor(144, 238, 144))
                     elif percent >= 50:
-                        percent_item.setBackground(QColor(255, 215, 0))  # Žlutá
+                        percent_item.setBackground(QColor(255, 215, 0))
                     elif percent >= 25:
-                        percent_item.setBackground(QColor(255, 140, 0))  # Oranžová
+                        percent_item.setBackground(QColor(255, 140, 0))
                     else:
-                        percent_item.setBackground(QColor(255, 0, 0))  # Červená
+                        percent_item.setBackground(QColor(255, 0, 0))
                     
-                    percent_item.setForeground(QColor(255, 255, 255))  # Bílý text
+                    percent_item.setForeground(QColor(255, 255, 255))
                     table.setItem(row, 4, percent_item)
                     
-                    # Tlačítko edit
+                    # OPRAVA: Větší tlačítko edit
                     edit_btn = QPushButton("✏️")
-                    edit_btn.setMaximumSize(25, 25)
-                    edit_btn.setToolTip("Upravit")
+                    edit_btn.setMinimumSize(30, 30)  # OPRAVA: Větší tlačítko
+                    edit_btn.setMaximumSize(30, 30)
+                    edit_btn.setToolTip("Upravit záznam")
+                    edit_btn.setStyleSheet(f"background-color: {row_color.name()}; font-size: 14px;")
                     edit_btn.clicked.connect(lambda checked, d=date_str, e=exercise_type, rid=record_id: self.edit_workout(e, d, rid))
                     table.setCellWidget(row, 5, edit_btn)
         except Exception as e:
