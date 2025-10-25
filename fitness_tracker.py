@@ -2,18 +2,15 @@
 # -*- coding: utf-8 -*-
 """
 Fitness Tracker - Aplikace pro sledování cvičení s progresivními cíli
-Verze 1.3e
+Verze 1.3f
 
 Changelog:
-v1.3e (26.10.2025) - OPRAVNÁ VERZE
-- Oprava "stínového" kalendáře - lepší styling scroll area
-- Nový design měsíčního kalendáře (větší čísla, menší názvy dnů)
-- Fixní velikost kalendáře pro konzistentní zobrazení
-- Skluz do konce roku i pro budoucí dny
-- Oprava porovnání v calculate_total_difference_to_date()
-- Kalendář v 4 sloupcích místo 3
+v1.3f (26.10.2025) - OPRAVNÁ VERZE
+- Oprava skluzu k 31.12. pro budoucí dny (tooltip)
+- Odstranění duplicitního kalendáře - lepší čištění layoutu
+- Budoucí dny nyní zobrazují celkový skluz do konce roku
 
-v1.3d - v1.0.0
+v1.3e - v1.0.0
 - Předchozí verze
 """
 
@@ -33,7 +30,7 @@ from PySide6.QtCore import Qt, QDate, QTimer
 from PySide6.QtGui import QColor
 
 # Verze aplikace
-VERSION = "1.3e"
+VERSION = "1.3f"
 VERSION_DATE = "26.10.2025"
 
 # Dark Theme Stylesheet
@@ -2037,10 +2034,17 @@ class FitnessTrackerApp(QMainWindow):
             
             calendar_layout = self.exercise_calendar_widgets[exercise_type]
             
+            # OPRAVA: Vyčisti všechny children včetně layoutů
             while calendar_layout.count():
                 child = calendar_layout.takeAt(0)
                 if child.widget():
                     child.widget().deleteLater()
+                elif child.layout():
+                    # Vyčisti vnořený layout
+                    while child.layout().count():
+                        sub_child = child.layout().takeAt(0)
+                        if sub_child.widget():
+                            sub_child.widget().deleteLater()
             
             if exercise_type not in self.exercise_year_selectors:
                 return
@@ -2060,12 +2064,12 @@ class FitnessTrackerApp(QMainWindow):
             
             for month_num in range(1, 13):
                 month_widget = self.create_month_calendar_for_exercise(selected_year, month_num, months[month_num-1], exercise_type)
-                row = (month_num - 1) // 4  # OPRAVA: 4 sloupce
+                row = (month_num - 1) // 4
                 col = (month_num - 1) % 4
                 months_grid.addWidget(month_widget, row, col)
             
             calendar_layout.addLayout(months_grid)
-            calendar_layout.addStretch()  # OPRAVA: Stretch místo scrollu
+            calendar_layout.addStretch()
             
             self.update_year_statistics(exercise_type, selected_year)
         except Exception as e:
@@ -2158,13 +2162,29 @@ class FitnessTrackerApp(QMainWindow):
         if date < start_date:
             return '#000000', "Před začátkem cvičení"
         
+        # OPRAVA: Budoucnost - spočítej skluz
         if date > today:
             goal = self.calculate_goal(exercise_type, date_str)
-            return '#8B0000', f"Budoucí den\nCíl: {goal}"
+            
+            if not isinstance(goal, int):
+                goal = int(goal) if goal else 0
+            
+            # OPRAVA: Výpočet skluzu do konce roku i pro budoucnost
+            year = date.year
+            end_of_year = datetime(year, 12, 31).date()
+            total_diff = self.calculate_total_difference_to_date(exercise_type, date, end_of_year)
+            
+            if total_diff > 0:
+                total_status = f"\n📊 Celkový náskok k 31.12.: +{total_diff}"
+            elif total_diff < 0:
+                total_status = f"\n📊 Celkový skluz k 31.12.: {total_diff}"
+            else:
+                total_status = f"\n📊 Celkový stav k 31.12.: Přesně"
+            
+            return '#8B0000', f"Budoucí den\nCíl: {goal}{total_status}"
         
         goal = self.calculate_goal(exercise_type, date_str)
         
-        # OPRAVA: Ujisti se že goal je int
         if not isinstance(goal, int):
             goal = int(goal) if goal else 0
         
@@ -2173,7 +2193,6 @@ class FitnessTrackerApp(QMainWindow):
             if exercise_type in workout:
                 records = workout[exercise_type]
                 
-                # Sečti všechny záznamy za den
                 if isinstance(records, list):
                     value = sum(r['value'] for r in records)
                     count = len(records)
