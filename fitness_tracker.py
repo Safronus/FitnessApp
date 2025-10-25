@@ -2,18 +2,21 @@
 # -*- coding: utf-8 -*-
 """
 Fitness Tracker - Aplikace pro sledování cvičení s progresivními cíli
-Verze 1.1b
+Verze 1.1c
 
 Changelog:
+v1.1c (25.10.2025) - OPRAVNÁ VERZE
+- Oprava get_goal_calculation_text() - poslední reference na staré settings
+- Kompletní migrace všech funkcí na year_settings
+- Stabilní verze pro per-year nastavení
+
 v1.1b (25.10.2025) - OPRAVNÁ VERZE
 - Oprava KeyError: 'settings' v get_available_years()
 - Oprava diagnostiky pro nový formát year_settings
-- Stabilizace aplikace po migraci na per-year settings
 
 v1.1a (25.10.2025)
 - Nastavení specifická pro rok (datum začátku, cíle, přírůstky)
 - Každý rok má vlastní konfiguraci
-- Automatické vytvoření defaultního nastavení pro nový rok
 
 v1.1 (25.10.2025)
 - Přidána záložka "O aplikaci"
@@ -1437,11 +1440,14 @@ class FitnessTrackerApp(QMainWindow):
 
     def get_goal_calculation_text(self, exercise_type, date_str):
         """Vrátí text s vysvětlením výpočtu"""
-        start_date = datetime.strptime(self.data['settings']['start_date'], '%Y-%m-%d')
         target_date = datetime.strptime(date_str, '%Y-%m-%d')
+        year = target_date.year
         
-        base = self.data['settings']['base_goals'][exercise_type]
-        increment = self.data['settings']['weekly_increment'][exercise_type]
+        settings = self.get_year_settings(year)
+        
+        start_date = datetime.strptime(settings['start_date'], '%Y-%m-%d')
+        base = settings['base_goals'][exercise_type]
+        increment = settings['weekly_increment'][exercise_type]
         
         days_to_sunday = 6 - start_date.weekday()
         first_week_end = start_date + timedelta(days=days_to_sunday)
@@ -1454,7 +1460,7 @@ class FitnessTrackerApp(QMainWindow):
         full_weeks = (days_since // 7) + 1
         
         return f"{base} + {full_weeks} týdnů × {increment} = {base + full_weeks * increment}"
-    
+
     def calculate_yearly_goal(self, exercise_type, year):
         """Vypočítá celkový roční cíl"""
         start_date = datetime(year, 1, 1)
@@ -1470,7 +1476,7 @@ class FitnessTrackerApp(QMainWindow):
             current_date += timedelta(days=1)
         
         return total_goal
-    
+
     def calculate_yearly_progress(self, exercise_type, year):
         """Vypočítá aktuální progress"""
         total_goal = self.calculate_yearly_goal(exercise_type, year)
