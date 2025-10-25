@@ -2,15 +2,16 @@
 # -*- coding: utf-8 -*-
 """
 Fitness Tracker - Aplikace pro sledování cvičení s progresivními cíli
-Verze 1.3f
+Verze 1.4
 
 Changelog:
-v1.3f (26.10.2025) - OPRAVNÁ VERZE
-- Oprava skluzu k 31.12. pro budoucí dny (tooltip)
-- Odstranění duplicitního kalendáře - lepší čištění layoutu
-- Budoucí dny nyní zobrazují celkový skluz do konce roku
+v1.4 (26.10.2025)
+- Export celého cvičení do JSON souboru (všechny roky, záznamy, nastavení)
+- Import z JSON souboru s možností sloučení nebo přepsání dat
+- Nová sekce "Záloha a obnova dat" v záložce Nastavení
+- Automatické pojmenování zálohy s časovým razítkem
 
-v1.3e - v1.0.0
+v1.3f - v1.0.0
 - Předchozí verze
 """
 
@@ -24,13 +25,13 @@ from PySide6.QtWidgets import (
     QTabWidget, QLabel, QSpinBox, QPushButton, QDateEdit, QTableWidget,
     QTableWidgetItem, QGroupBox, QFormLayout, QHeaderView, QMessageBox,
     QGridLayout, QComboBox, QScrollArea, QFrame, QProgressBar, QTextEdit,
-    QDialog, QListWidget, QListWidgetItem, QInputDialog, QCheckBox
+    QDialog, QListWidget, QListWidgetItem, QInputDialog, QCheckBox, QFileDialog
 )
 from PySide6.QtCore import Qt, QDate, QTimer
 from PySide6.QtGui import QColor
 
 # Verze aplikace
-VERSION = "1.3f"
+VERSION = "1.4"
 VERSION_DATE = "26.10.2025"
 
 # Dark Theme Stylesheet
@@ -1256,6 +1257,51 @@ class FitnessTrackerApp(QMainWindow):
         save_btn.clicked.connect(self.save_settings)
         layout.addWidget(save_btn)
         
+        # NOVÁ SEKCE: Export/Import
+        export_import_group = QGroupBox("💾 Záloha a obnova dat")
+        export_import_layout = QVBoxLayout()
+        
+        export_import_info = QLabel(
+            "Export uloží všechna cvičení, nastavení a roky do souboru.\n"
+            "Import umožňuje obnovit nebo sloučit data ze zálohy."
+        )
+        export_import_info.setStyleSheet("font-size: 11px; color: #a0a0a0; padding: 5px;")
+        export_import_info.setWordWrap(True)
+        export_import_layout.addWidget(export_import_info)
+        
+        export_import_buttons = QHBoxLayout()
+        
+        export_btn = QPushButton("📤 Exportovat cvičení")
+        export_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #28a745;
+                color: white;
+            }
+            QPushButton:hover {
+                background-color: #218838;
+            }
+        """)
+        export_btn.clicked.connect(self.export_data)
+        export_import_buttons.addWidget(export_btn)
+        
+        import_btn = QPushButton("📥 Importovat cvičení")
+        import_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #17a2b8;
+                color: white;
+            }
+            QPushButton:hover {
+                background-color: #138496;
+            }
+        """)
+        import_btn.clicked.connect(self.import_data)
+        export_import_buttons.addWidget(import_btn)
+        
+        export_import_layout.addLayout(export_import_buttons)
+        
+        export_import_group.setLayout(export_import_layout)
+        layout.addWidget(export_import_group)
+        
         layout.addStretch()
         
         self.load_year_settings_to_ui(self.current_settings_year)
@@ -2334,6 +2380,166 @@ class FitnessTrackerApp(QMainWindow):
             f"Splněno cílů: {days_achieved}/{total_days} ({achievement_percent:.1f}%)"
         )
 
+    def export_data(self):
+        """Export celého cvičení do JSON souboru"""
+        filename, _ = QFileDialog.getSaveFileName(
+            self,
+            "Exportovat cvičení",
+            f"fitness_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+            "JSON soubory (*.json)"
+        )
+        
+        if filename:
+            try:
+                export_data = {
+                    'version': VERSION,
+                    'export_date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    'year_settings': self.data['year_settings'],
+                    'workouts': self.data['workouts'],
+                    'app_state': self.data['app_state']
+                }
+                
+                with open(filename, 'w', encoding='utf-8') as f:
+                    json.dump(export_data, f, ensure_ascii=False, indent=2)
+                
+                years = list(self.data['year_settings'].keys())
+                total_workouts = len(self.data['workouts'])
+                
+                self.show_message(
+                    "Export úspěšný",
+                    f"Cvičení bylo exportováno!\n\n"
+                    f"Roky: {', '.join(years)}\n"
+                    f"Celkem dnů: {total_workouts}\n"
+                    f"Soubor: {Path(filename).name}"
+                )
+            except Exception as e:
+                self.show_message("Chyba", f"Export selhal: {e}", QMessageBox.Critical)
+
+    def import_data(self):
+        """Import cvičení z JSON souboru"""
+        filename, _ = QFileDialog.getOpenFileName(
+            self,
+            "Importovat cvičení",
+            "",
+            "JSON soubory (*.json)"
+        )
+        
+        if filename:
+            try:
+                with open(filename, 'r', encoding='utf-8') as f:
+                    imported_data = json.load(f)
+                
+                # Ověř strukturu
+                if 'year_settings' not in imported_data or 'workouts' not in imported_data:
+                    self.show_message("Chyba", "Neplatný formát souboru!", QMessageBox.Critical)
+                    return
+                
+                # Dialog pro výběr režimu
+                msg = QMessageBox(self)
+                msg.setWindowTitle("Režim importu")
+                msg.setText(
+                    "Jak chceš importovat data?\n\n"
+                    "Sloučit: Přidá nová data k existujícím\n"
+                    "Přepsat: Smaže všechna současná data a nahradí je importovanými"
+                )
+                msg.setIcon(QMessageBox.Question)
+                
+                merge_btn = msg.addButton("Sloučit", QMessageBox.ActionRole)
+                overwrite_btn = msg.addButton("Přepsat", QMessageBox.DestructiveRole)
+                cancel_btn = msg.addButton("Zrušit", QMessageBox.RejectRole)
+                
+                msg.exec()
+                
+                if msg.clickedButton() == cancel_btn:
+                    return
+                
+                if msg.clickedButton() == overwrite_btn:
+                    # Přepsat vše
+                    confirm = QMessageBox(self)
+                    confirm.setWindowTitle("Potvrzení přepsání")
+                    confirm.setText(
+                        "VAROVÁNÍ: Všechna současná data budou smazána!\n\n"
+                        "Tato akce je nevratná. Pokračovat?"
+                    )
+                    confirm.setIcon(QMessageBox.Warning)
+                    confirm.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+                    
+                    yes_btn = confirm.button(QMessageBox.Yes)
+                    yes_btn.setText("Ano, přepsat")
+                    no_btn = confirm.button(QMessageBox.No)
+                    no_btn.setText("Ne, zrušit")
+                    
+                    if confirm.exec() == QMessageBox.Yes:
+                        self.data['year_settings'] = imported_data['year_settings']
+                        self.data['workouts'] = imported_data['workouts']
+                        if 'app_state' in imported_data:
+                            self.data['app_state'] = imported_data['app_state']
+                        
+                        self.save_data()
+                        
+                        self.show_message(
+                            "Import dokončen",
+                            "Data byla přepsána importovanými daty.\n\n"
+                            "Aplikace se nyní restartuje."
+                        )
+                        
+                        # Restart
+                        self.close()
+                        QApplication.quit()
+                        return
+                
+                elif msg.clickedButton() == merge_btn:
+                    # Sloučit
+                    merged_years = []
+                    merged_workouts = 0
+                    
+                    # Sloučit year_settings
+                    for year, settings in imported_data['year_settings'].items():
+                        if year not in self.data['year_settings']:
+                            self.data['year_settings'][year] = settings
+                            merged_years.append(year)
+                    
+                    # Sloučit workouts
+                    for date_str, workouts in imported_data['workouts'].items():
+                        if date_str not in self.data['workouts']:
+                            self.data['workouts'][date_str] = workouts
+                            merged_workouts += 1
+                        else:
+                            # Sloučit záznamy pro stejný den
+                            for exercise, records in workouts.items():
+                                if exercise not in self.data['workouts'][date_str]:
+                                    self.data['workouts'][date_str][exercise] = records
+                                else:
+                                    # Přidej záznamy
+                                    if isinstance(records, list):
+                                        if isinstance(self.data['workouts'][date_str][exercise], list):
+                                            self.data['workouts'][date_str][exercise].extend(records)
+                                        else:
+                                            self.data['workouts'][date_str][exercise] = [
+                                                self.data['workouts'][date_str][exercise],
+                                                *records
+                                            ]
+                    
+                    self.save_data()
+                    self.update_all_year_selectors()
+                    
+                    for exercise in ['kliky', 'dřepy', 'skrčky']:
+                        self.update_exercise_tab(exercise)
+                        self.refresh_exercise_calendar(exercise)
+                    
+                    self.refresh_add_tab_goals()
+                    
+                    self.show_message(
+                        "Import dokončen",
+                        f"Data byla sloučena!\n\n"
+                        f"Nové roky: {', '.join(merged_years) if merged_years else 'žádné'}\n"
+                        f"Nové dny: {merged_workouts}"
+                    )
+            
+            except Exception as e:
+                self.show_message("Chyba", f"Import selhal: {e}", QMessageBox.Critical)
+                import traceback
+                traceback.print_exc()
 
 def main():
     app = QApplication(sys.argv)
