@@ -2,17 +2,17 @@
 # -*- coding: utf-8 -*-
 """
 Fitness Tracker - Aplikace pro sledování cvičení s progresivními cíli
-Verze 1.5b
+Verze 1.5c
 
 Changelog:
-v1.5b (26.10.2025) - OPRAVNÁ VERZE
-- Oprava legendy - jednoduchý design (barva + text bez duplicity)
-- Oprava tlačítka Akce - nyní viditelné
-- Sbalování záznamů po dnech - TreeWidget místo tabulky
-- Defaultně sbalené dny s ikonou stavu a souhrnným výkonem
-- Rozbalit/sbalit kliknutím na den
+v1.5c (26.10.2025) - OPRAVNÁ VERZE
+- Odstraněn sloupec "Akce"
+- Kontextové menu (pravé tlačítko):
+  - Na záznamu: Upravit / Smazat
+  - Na dni: Smazat všechny záznamy dne
+- Jednoduchá legenda - jeden řádek, barva + text
 
-v1.5a - v1.0.0
+v1.5b - v1.0.0
 - Předchozí verze
 """
 
@@ -31,10 +31,10 @@ from PySide6.QtWidgets import (
 )
 
 from PySide6.QtCore import Qt, QDate, QTimer
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QAction
 
 # Verze aplikace
-VERSION = "1.5b"
+VERSION = "1.5c"
 VERSION_DATE = "26.10.2025"
 
 # Dark Theme Stylesheet
@@ -1599,35 +1599,30 @@ class FitnessTrackerApp(QMainWindow):
         """)
         goals_layout = QVBoxLayout(goals_frame)
         
-        # Přehled: Den
         today_section = QLabel()
         today_section.setObjectName(f"today_section_{exercise_type}")
         today_section.setStyleSheet("font-size: 14px; font-weight: bold; color: #14919b; padding: 5px;")
         today_section.setWordWrap(True)
         goals_layout.addWidget(today_section)
         
-        # Přehled: Týden
         week_section = QLabel()
         week_section.setObjectName(f"week_section_{exercise_type}")
         week_section.setStyleSheet("font-size: 12px; color: #FFD700; padding: 5px;")
         week_section.setWordWrap(True)
         goals_layout.addWidget(week_section)
         
-        # Přehled: Měsíc
         month_section = QLabel()
         month_section.setObjectName(f"month_section_{exercise_type}")
         month_section.setStyleSheet("font-size: 12px; color: #90EE90; padding: 5px;")
         month_section.setWordWrap(True)
         goals_layout.addWidget(month_section)
         
-        # Přehled: Zbytek roku
         year_rest_section = QLabel()
         year_rest_section.setObjectName(f"year_rest_section_{exercise_type}")
         year_rest_section.setStyleSheet("font-size: 12px; color: #87CEEB; padding: 5px;")
         year_rest_section.setWordWrap(True)
         goals_layout.addWidget(year_rest_section)
         
-        # Progress bar
         progress_bar = QProgressBar()
         progress_bar.setObjectName(f"progress_bar_{exercise_type}")
         progress_bar.setTextVisible(True)
@@ -1635,7 +1630,6 @@ class FitnessTrackerApp(QMainWindow):
         
         left_layout.addWidget(goals_frame)
         
-        # Tlačítka pro hromadné akce
         bulk_actions_layout = QHBoxLayout()
         
         delete_selected_btn = QPushButton("🗑️ Smazat vybrané")
@@ -1656,22 +1650,22 @@ class FitnessTrackerApp(QMainWindow):
         
         left_layout.addLayout(bulk_actions_layout)
         
-        # TABULKA - nyní s TreeWidget pro sbalování
-        from PySide6.QtWidgets import QTreeWidget, QTreeWidgetItem
-        
+        # TreeWidget s kontextovým menu
         tree = QTreeWidget()
         tree.setObjectName(f"tree_{exercise_type}")
-        tree.setColumnCount(5)
-        tree.setHeaderLabels(["Datum / Záznam", "Čas / Výkon", "% cíle", "Akce", "Data"])
-        tree.setColumnHidden(4, True)  # Skrytý sloupec pro data
+        tree.setColumnCount(4)  # OPRAVA: Bez sloupce Akce
+        tree.setHeaderLabels(["Datum / Záznam", "Čas / Výkon", "% cíle", "Data"])
+        tree.setColumnHidden(3, True)
         
         header = tree.header()
         header.setSectionResizeMode(0, QHeaderView.Stretch)
         header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
         
         tree.setIndentation(20)
+        tree.setContextMenuPolicy(Qt.CustomContextMenu)
+        tree.customContextMenuRequested.connect(lambda pos: self.show_tree_context_menu(pos, exercise_type))
+        
         tree.setStyleSheet("""
             QTreeWidget {
                 background-color: #1e1e1e;
@@ -1695,51 +1689,33 @@ class FitnessTrackerApp(QMainWindow):
         overview_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #14919b; padding: 5px;")
         right_layout.addWidget(overview_label)
         
-        # OPRAVENÁ LEGENDA - jednoduchá
-        legend_frame = QFrame()
-        legend_frame.setStyleSheet("""
-            QFrame {
-                background-color: #1e1e1e;
-                border: 2px solid #0d7377;
-                border-radius: 8px;
-                padding: 10px;
-            }
-        """)
-        legend_layout = QVBoxLayout(legend_frame)
-        legend_layout.setSpacing(8)
+        # JEDNODUCHÁ LEGENDA - jeden řádek
+        legend_layout = QHBoxLayout()
+        legend_layout.setSpacing(15)
+        legend_layout.setContentsMargins(10, 5, 10, 5)
         
-        legend_title = QLabel("📊 Legenda barev")
-        legend_title.setStyleSheet("font-size: 13px; font-weight: bold; color: #14919b; padding-bottom: 5px;")
-        legend_layout.addWidget(legend_title)
-        
-        # OPRAVA: Jednoduchá legenda - pouze barva + text
         def add_legend_item(color, text):
-            item_layout = QHBoxLayout()
-            item_layout.setSpacing(8)
-            
             color_box = QLabel()
-            color_box.setFixedSize(20, 20)
-            color_box.setStyleSheet(f"background-color: {color}; border: 2px solid #3d3d3d; border-radius: 3px;")
+            color_box.setFixedSize(18, 18)
+            color_box.setStyleSheet(f"background-color: {color}; border: 1px solid #3d3d3d;")
             
             text_label = QLabel(text)
-            text_label.setStyleSheet("font-size: 11px; color: #e0e0e0;")
+            text_label.setStyleSheet("font-size: 10px; color: #e0e0e0;")
             
-            item_layout.addWidget(color_box)
-            item_layout.addWidget(text_label)
-            item_layout.addStretch()
-            
-            legend_layout.addLayout(item_layout)
+            legend_layout.addWidget(color_box)
+            legend_layout.addWidget(text_label)
         
-        add_legend_item("#000000", "⬛ Před začátkem")
-        add_legend_item("#006400", "🟢 Velký náskok")
-        add_legend_item("#90EE90", "🟩 Mírný náskok")
-        add_legend_item("#FFD700", "🟨 Akorát")
-        add_legend_item("#FF6B6B", "🟧 Mírný skluz")
-        add_legend_item("#8B0000", "🟥 Velký skluz")
+        add_legend_item("#000000", "Před začátkem")
+        add_legend_item("#006400", "Velký náskok")
+        add_legend_item("#90EE90", "Mírný náskok")
+        add_legend_item("#FFD700", "Akorát")
+        add_legend_item("#FF6B6B", "Mírný skluz")
+        add_legend_item("#8B0000", "Velký skluz")
         
-        right_layout.addWidget(legend_frame)
+        legend_layout.addStretch()
         
-        # Scroll area s kalendářem
+        right_layout.addLayout(legend_layout)
+        
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setStyleSheet("QScrollArea { border: none; background-color: #1e1e1e; }")
@@ -1766,6 +1742,127 @@ class FitnessTrackerApp(QMainWindow):
         self.refresh_exercise_calendar(exercise_type)
         
         return widget
+
+    def show_tree_context_menu(self, position, exercise_type):
+        """Zobrazí kontextové menu pro tree položky"""
+        tree = self.findChild(QTreeWidget, f"tree_{exercise_type}")
+        if not tree:
+            return
+        
+        item = tree.itemAt(position)
+        if not item:
+            return
+        
+        from PySide6.QtWidgets import QMenu
+        from PySide6.QtGui import QAction
+        
+        menu = QMenu()
+        menu.setStyleSheet("""
+            QMenu {
+                background-color: #2d2d2d;
+                color: #e0e0e0;
+                border: 1px solid #3d3d3d;
+            }
+            QMenu::item:selected {
+                background-color: #0d7377;
+            }
+        """)
+        
+        # Zjisti, zda je to parent (den) nebo child (záznam)
+        is_parent = item.parent() is None
+        
+        if is_parent:
+            # Menu pro den - pouze smazat
+            delete_day_action = QAction("🗑️ Smazat všechny záznamy dne", self)
+            delete_day_action.triggered.connect(lambda: self.delete_day_records(exercise_type, item))
+            menu.addAction(delete_day_action)
+        else:
+            # Menu pro záznam - edit a smazat
+            edit_action = QAction("✏️ Upravit záznam", self)
+            data = item.data(3, Qt.UserRole)
+            if data:
+                edit_action.triggered.connect(lambda: self.edit_workout(data['exercise'], data['date'], data['record_id']))
+            menu.addAction(edit_action)
+            
+            menu.addSeparator()
+            
+            delete_action = QAction("🗑️ Smazat záznam", self)
+            delete_action.triggered.connect(lambda: self.delete_single_record(exercise_type, item))
+            menu.addAction(delete_action)
+        
+        menu.exec(tree.viewport().mapToGlobal(position))
+
+    def delete_day_records(self, exercise_type, day_item):
+        """Smaže všechny záznamy pro daný den"""
+        # Získej datum z textu
+        date_text = day_item.text(0)
+        # Odstranění ikony a získání data
+        date_str = date_text.split(' ', 1)[1] if ' ' in date_text else date_text
+        
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Potvrzení smazání")
+        msg.setText(f"Opravdu chceš smazat všechny záznamy pro {date_str}?")
+        msg.setIcon(QMessageBox.Warning)
+        msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        
+        yes_btn = msg.button(QMessageBox.Yes)
+        yes_btn.setText("Ano, smazat")
+        no_btn = msg.button(QMessageBox.No)
+        no_btn.setText("Ne, zrušit")
+        
+        if msg.exec() == QMessageBox.Yes:
+            if date_str in self.data['workouts'] and exercise_type in self.data['workouts'][date_str]:
+                del self.data['workouts'][date_str][exercise_type]
+                
+                if not self.data['workouts'][date_str]:
+                    del self.data['workouts'][date_str]
+                
+                self.save_data()
+                self.update_exercise_tab(exercise_type)
+                self.refresh_exercise_calendar(exercise_type)
+                self.refresh_add_tab_goals()
+                
+                self.show_message("Smazáno", f"Všechny záznamy pro {date_str} byly smazány")
+
+    def delete_single_record(self, exercise_type, record_item):
+        """Smaže jeden záznam"""
+        data = record_item.data(3, Qt.UserRole)
+        if not data:
+            return
+        
+        date_str = data['date']
+        record_id = data['record_id']
+        
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Potvrzení smazání")
+        msg.setText(f"Opravdu chceš smazat tento záznam?")
+        msg.setIcon(QMessageBox.Warning)
+        msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        
+        yes_btn = msg.button(QMessageBox.Yes)
+        yes_btn.setText("Ano, smazat")
+        no_btn = msg.button(QMessageBox.No)
+        no_btn.setText("Ne, zrušit")
+        
+        if msg.exec() == QMessageBox.Yes:
+            if date_str in self.data['workouts'] and exercise_type in self.data['workouts'][date_str]:
+                records = self.data['workouts'][date_str][exercise_type]
+                
+                if isinstance(records, list):
+                    self.data['workouts'][date_str][exercise_type] = [r for r in records if r['id'] != record_id]
+                    
+                    if not self.data['workouts'][date_str][exercise_type]:
+                        del self.data['workouts'][date_str][exercise_type]
+                    
+                    if not self.data['workouts'][date_str]:
+                        del self.data['workouts'][date_str]
+                
+                self.save_data()
+                self.update_exercise_tab(exercise_type)
+                self.refresh_exercise_calendar(exercise_type)
+                self.refresh_add_tab_goals()
+                
+                self.show_message("Smazáno", "Záznam byl smazán")
 
     def delete_selected_records(self, exercise_type):
         """Smaže vybrané záznamy"""
@@ -1987,14 +2084,12 @@ class FitnessTrackerApp(QMainWindow):
             
             selected_year = int(selector.currentText())
             
-            # Přehled
             self.update_detailed_overview(exercise_type, selected_year)
             
             tree = self.findChild(QTreeWidget, f"tree_{exercise_type}")
             if tree:
                 tree.clear()
                 
-                # Sesbírat záznamy po dnech
                 days_data = {}
                 for date_str in self.data['workouts'].keys():
                     workout_year = int(date_str.split('-')[0])
@@ -2009,28 +2104,22 @@ class FitnessTrackerApp(QMainWindow):
                         elif isinstance(records, dict):
                             days_data[date_str].append(records)
                 
-                # Seřadit podle data
                 sorted_dates = sorted(days_data.keys(), reverse=True)
                 
                 for date_str in sorted_dates:
                     records = days_data[date_str]
                     
-                    # Parent item - den (sbalený)
                     day_item = QTreeWidgetItem(tree)
                     
-                    # Součet výkonů za den
                     total_day_value = sum(r['value'] for r in records)
                     record_count = len(records)
                     
-                    # Cíl pro den
                     goal = self.calculate_goal(exercise_type, date_str)
                     if not isinstance(goal, int):
                         goal = int(goal) if goal else 0
                     
-                    # % cíle pro den
                     percent = (total_day_value / goal * 100) if goal > 0 else 0
                     
-                    # Ikona podle stavu
                     if percent >= 100:
                         status_icon = "✅"
                         color = QColor(0, 100, 0)
@@ -2049,13 +2138,10 @@ class FitnessTrackerApp(QMainWindow):
                     day_item.setBackground(2, color)
                     day_item.setForeground(2, QColor(255, 255, 255))
                     
-                    # Defaultně sbalený
                     day_item.setExpanded(False)
                     
-                    # Seřadit záznamy podle času
                     records_sorted = sorted(records, key=lambda x: x.get('timestamp', ''))
                     
-                    # Child items - jednotlivé záznamy
                     for record in records_sorted:
                         value = record['value']
                         timestamp = record.get('timestamp', 'N/A')
@@ -2067,7 +2153,6 @@ class FitnessTrackerApp(QMainWindow):
                         record_item.setText(0, f"  📝 Záznam")
                         record_item.setText(1, f"{time_only} | {value}")
                         
-                        # % pro jednotlivý záznam
                         record_percent = (value / goal * 100) if goal > 0 else 0
                         record_item.setText(2, f"{record_percent:.0f}%")
                         
@@ -2084,16 +2169,8 @@ class FitnessTrackerApp(QMainWindow):
                         
                         record_item.setForeground(2, QColor(255, 255, 255))
                         
-                        # Uložit data pro edit
-                        record_item.setData(4, Qt.UserRole, {'date': date_str, 'record_id': record_id, 'exercise': exercise_type})
-                        
-                        # OPRAVA: Tlačítko edit v column 3
-                        edit_btn = QPushButton("✏️")
-                        edit_btn.setMinimumSize(30, 30)
-                        edit_btn.setMaximumSize(30, 30)
-                        edit_btn.setToolTip("Upravit záznam")
-                        edit_btn.clicked.connect(lambda checked, d=date_str, e=exercise_type, rid=record_id: self.edit_workout(e, d, rid))
-                        tree.setItemWidget(record_item, 3, edit_btn)
+                        # Data pro kontextové menu
+                        record_item.setData(3, Qt.UserRole, {'date': date_str, 'record_id': record_id, 'exercise': exercise_type})
         
         except Exception as e:
             print(f"Chyba při update_exercise_tab pro {exercise_type}: {e}")

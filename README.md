@@ -123,6 +123,16 @@ Všechna data se ukládají lokálně v souboru `fitness_data.json` ve stejném 
 
 ## 📝 Changelog
 
+### v1.5c (26.10.2025 01:33 CEST) - OPRAVNÁ VERZE
+**Změny:**
+- 🔘 Odstraněn sloupec "Akce"
+- 🖱️ **Kontextové menu** (pravé tlačítko myši):
+  - Na záznamu: ✏️ Upravit / 🗑️ Smazat
+  - Na celém dni: 🗑️ Smazat všechny záznamy dne
+- 📊 Jednoduchá legenda kalendáře - jeden řádek bez rámečků
+
+---
+
 ### v1.5b (26.10.2025 01:28 CEST) - OPRAVNÁ VERZE
 **Opravy:**
 - ✅ Oprava legendy - jednoduchý design bez duplicitních boxů
@@ -421,5 +431,5 @@ Vytvořeno v roce 2025
 - [Issues](https://github.com/Safronus/FitnessApp/issues)
 
 ---
-**Poslední aktualizace:** 26.10.2025 01:28 CEST  
-**Aktuální verze:** 1.5b
+**Poslední aktualizace:** 26.10.2025 01:33 CEST  
+**Aktuální verze:** 1.5c
