@@ -2,13 +2,16 @@
 # -*- coding: utf-8 -*-
 """
 Fitness Tracker - Aplikace pro sledování cvičení s progresivními cíli
-Verze 1.4a
+Verze 1.4b
 
 Changelog:
-v1.4a (26.10.2025) - OPRAVNÁ VERZE
-- Oprava update_year_statistics() - správné zpracování list hodnot
-- Oprava porovnání list/int při výpočtu statistik
-- Oprava pádu aplikace při importu
+v1.4b (26.10.2025) - OPRAVNÁ VERZE
+- Oprava importu - aplikace se už neukončuje po přepsání dat
+- Refresh všech záložek a seznamu roků po importu
+- Lepší aktualizace UI po obou režimech importu
+
+v1.4a (26.10.2025)
+- Oprava update_year_statistics()
 
 v1.4 (26.10.2025)
 - Export a import celého cvičení
@@ -33,7 +36,7 @@ from PySide6.QtCore import Qt, QDate, QTimer
 from PySide6.QtGui import QColor
 
 # Verze aplikace
-VERSION = "1.4a"
+VERSION = "1.4b"
 VERSION_DATE = "26.10.2025"
 
 # Dark Theme Stylesheet
@@ -2503,16 +2506,29 @@ class FitnessTrackerApp(QMainWindow):
                             self.data['app_state'] = imported_data['app_state']
                         
                         self.save_data()
+                        self.update_all_year_selectors()
+                        
+                        # OPRAVA: Refresh všech záložek místo quit
+                        for exercise in ['kliky', 'dřepy', 'skrčky']:
+                            self.update_exercise_tab(exercise)
+                            self.refresh_exercise_calendar(exercise)
+                        
+                        self.refresh_add_tab_goals()
+                        
+                        # Refresh seznamu roků v nastavení
+                        self.years_list.clear()
+                        for y in self.get_available_years():
+                            year_workouts = sum(1 for date_str in self.data['workouts'].keys() 
+                                              if int(date_str.split('-')[0]) == y)
+                            item = QListWidgetItem(f"📆 Rok {y} ({year_workouts} dnů s cvičením)")
+                            item.setData(Qt.UserRole, y)
+                            self.years_list.addItem(item)
                         
                         self.show_message(
                             "Import dokončen",
                             "Data byla přepsána importovanými daty.\n\n"
-                            "Aplikace se nyní restartuje."
+                            "Aplikace byla obnovena s novými daty."
                         )
-                        
-                        # Restart
-                        self.close()
-                        QApplication.quit()
                         return
                 
                 elif msg.clickedButton() == merge_btn:
@@ -2555,6 +2571,15 @@ class FitnessTrackerApp(QMainWindow):
                         self.refresh_exercise_calendar(exercise)
                     
                     self.refresh_add_tab_goals()
+                    
+                    # Refresh seznamu roků v nastavení
+                    self.years_list.clear()
+                    for y in self.get_available_years():
+                        year_workouts = sum(1 for date_str in self.data['workouts'].keys() 
+                                          if int(date_str.split('-')[0]) == y)
+                        item = QListWidgetItem(f"📆 Rok {y} ({year_workouts} dnů s cvičením)")
+                        item.setData(Qt.UserRole, y)
+                        self.years_list.addItem(item)
                     
                     self.show_message(
                         "Import dokončen",

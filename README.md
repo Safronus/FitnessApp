@@ -123,6 +123,14 @@ Všechna data se ukládají lokálně v souboru `fitness_data.json` ve stejném 
 
 ## 📝 Changelog
 
+### v1.4b (26.10.2025) - OPRAVNÁ VERZE
+**Opravy:**
+- ✅ Oprava importu - aplikace se už neukončuje po přepsání dat
+- 🔄 Refresh všech záložek a seznamu roků po importu
+- 📊 Lepší aktualizace UI po obou režimech importu (Sloučit i Přepsat)
+
+---
+
 ### v1.4a (26.10.2025) - OPRAVNÁ VERZE
 **Opravy:**
 - ✅ Oprava update_year_statistics() - správné zpracování list hodnot
@@ -376,5 +384,5 @@ Vytvořeno v roce 2025
 - [Issues](https://github.com/Safronus/FitnessApp/issues)
 
 ---
-**Poslední aktualizace:** 26.10.2025 1:00:00
-**Aktuální verze:** 1.4a
+**Poslední aktualizace:** 26.10.2025 01:03 CEST  
+**Aktuální verze:** 1.4b
