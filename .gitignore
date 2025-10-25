@@ -1,1 +1,8 @@
 .DS_Store
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+fitness_data.json
+*.log
