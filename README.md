@@ -123,6 +123,14 @@ Všechna data se ukládají lokálně v souboru `fitness_data.json` ve stejném 
 
 ## 📝 Changelog
 
+### v1.5d (26.10.2025 01:41 CEST) - OPRAVNÁ VERZE
+**Vylepšení:**
+- ⬆️ Maximum 10000 pro přidání výkonu (místo 1000)
+- ✏️ Maximum 10000 pro editaci záznamu
+- 💾 Zachování stavu sbalení/rozbalení dnů po editaci nebo mazání záznamů
+
+---
+
 ### v1.5c (26.10.2025 01:33 CEST) - OPRAVNÁ VERZE
 **Změny:**
 - 🔘 Odstraněn sloupec "Akce"
@@ -431,5 +439,5 @@ Vytvořeno v roce 2025
 - [Issues](https://github.com/Safronus/FitnessApp/issues)
 
 ---
-**Poslední aktualizace:** 26.10.2025 01:33 CEST  
-**Aktuální verze:** 1.5c
+**Poslední aktualizace:** 26.10.2025 01:41 CEST  
+**Aktuální verze:** 1.5d
