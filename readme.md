@@ -24,8 +24,11 @@ Fitness Tracker je desktopová aplikace pro sledování pokroku v cvičení. Umo
 
 ## 📦 Instalace
 
+# Nainstaluj závislosti
+pip install PySide6
 
-
+# Spusť aplikaci
+python fitness_tracker.py
 
 ## 🚀 Použití
 
@@ -83,31 +86,39 @@ Všechna data se ukládají lokálně v souboru `fitness_data.json` ve stejném 
 ### Struktura dat
 
 {
-"version": "1.0.1b",
-"settings": {
-"start_date": "2025-10-24",
-"base_goals": {
-"kliky": 50,
-"dřepy": 20,
-"skrčky": 20
-},
-"weekly_increment": {
-"kliky": 10,
-"dřepy": 5,
-"skrčky": 10
-}
-},
-"workouts": {
-"2025-10-25": {
-"kliky": {
-"value": 50,
-"timestamp": "2025-10-25 14:30:45"
-}
-}
-}
+  "version": "1.0.1b",
+  "settings": {
+    "start_date": "2025-10-24",
+    "base_goals": {
+      "kliky": 50,
+      "dřepy": 20,
+      "skrčky": 20
+    },
+    "weekly_increment": {
+      "kliky": 10,
+      "dřepy": 5,
+      "skrčky": 10
+    }
+  },
+  "workouts": {
+    "2025-10-25": {
+      "kliky": {
+        "value": 50,
+        "timestamp": "2025-10-25 14:30:45"
+      }
+    }
+  }
 }
 
 ## 📝 Changelog
+
+### v1.0.1c (25.10.2025) - OPRAVNÁ VERZE
+**Opravy:**
+- ✅ Oprava vytváření nových roků - nyní se skutečně ukládají do dat
+- ✅ Rok zůstane v seznamu i po restartu aplikace
+- ✅ Přidané roky jsou nyní perzistentní
+
+---
 
 ### v1.0.1b (25.10.2025) - OPRAVNÁ VERZE
 **Opravy:**
@@ -183,4 +194,5 @@ Vytvořeno v roce 2025
 ---
 
 **Poslední aktualizace:** 25.10.2025  
-**Aktuální verze:** 1.0.1b
+**Aktuální verze:** 1.0.1c
+

@@ -2,9 +2,13 @@
 # -*- coding: utf-8 -*-
 """
 Fitness Tracker - Aplikace pro sledování cvičení s progresivními cíli
-Verze 1.0.1b
+Verze 1.0.1c
 
 Changelog:
+v1.0.1c (25.10.2025) - OPRAVNÁ VERZE
+- Oprava vytváření nových roků - nyní se skutečně ukládají do dat
+- Rok zůstane v seznamu i po restartu aplikace
+
 v1.0.1b (25.10.2025) - OPRAVNÁ VERZE
 - Oprava chybějící metody update_exercise_tab
 - Kompletní implementace všech metod
@@ -12,11 +16,11 @@ v1.0.1b (25.10.2025) - OPRAVNÁ VERZE
 - README.md s kompletní dokumentací
 
 v1.0.1a (25.10.2025) - OPRAVNÁ VERZE
-- Oprava KeyError: 'app_state' při zavírání
+- Oprava KeyError: 'app_state' při zavírání aplikace
 - Oprava ValueError při prázdném year selectoru
 - Dialog pro nastavení parametrů nového roku
 - Přepínač roků v záložce Nastavení
-- Vylepšená stabilita aplikace
+- Vylepšená stabilita a error handling
 
 v1.0.1 (25.10.2025)
 - Roční přehled integrovaný do každé záložky cvičení
@@ -24,16 +28,9 @@ v1.0.1 (25.10.2025)
 - Individuální kalendář pro každé cvičení
 
 v1.0.0 (25.10.2025)
-- Přidána správa roků v nastavení
-- Časové značky pro všechny záznamy
-- Verzování aplikace
-- Plná podpora kalendářních roků
-- Dark theme design
-- Editace a mazání záznamů
-- Náskok/skluz oproti plánu
-- Proporcionální první týden
-- Automatické ukládání stavu
+- První stabilní verze
 """
+
 
 import sys
 import json
@@ -50,7 +47,7 @@ from PySide6.QtCore import Qt, QDate, QTimer
 from PySide6.QtGui import QColor
 
 # Verze aplikace
-VERSION = "1.0.1b"
+VERSION = "1.0.1c"
 VERSION_DATE = "25.10.2025"
 
 # Dark Theme Stylesheet
@@ -966,6 +963,13 @@ class FitnessTrackerApp(QMainWindow):
                         QMessageBox.Information
                     )
                 
+                # OPRAVA: Vytvoření dummy záznamu pro rok, aby se uložil do dat
+                first_day_of_year = f"{year}-01-01"
+                if first_day_of_year not in self.data['workouts']:
+                    self.data['workouts'][first_day_of_year] = {}
+                
+                self.save_data()
+                
                 self.update_all_year_selectors()
                 
                 for exercise in ['kliky', 'dřepy', 'skrčky']:
@@ -985,7 +989,7 @@ class FitnessTrackerApp(QMainWindow):
                     f"Rok {year} byl přidán do sledování!\nMůžeš začít zaznamenávat svá cvičení.",
                     QMessageBox.Information
                 )
-    
+
     def delete_year_from_list(self):
         """Smaže vybraný rok ze seznamu"""
         selected_items = self.years_list.selectedItems()
