@@ -123,6 +123,7 @@ Všechna data se ukládají lokálně v souboru `fitness_data.json` ve stejném 
 
 ## 📝 Changelog
 
+<<<<<<< HEAD
 ### v1.6 (26.10.2025 01:49 CEST)
 **Nové funkce:**
 - 🎨 **Redesign záložky Nastavení:**
@@ -142,6 +143,8 @@ Všechna data se ukládají lokálně v souboru `fitness_data.json` ve stejném 
 
 ---
 
+=======
+>>>>>>> parent of 9d9ec65 (Fix v1.5d: Maximum 10000 + zachování stavu sbalení)
 ### v1.5c (26.10.2025 01:33 CEST) - OPRAVNÁ VERZE
 **Změny:**
 - 🔘 Odstraněn sloupec "Akce"
@@ -450,5 +453,10 @@ Vytvořeno v roce 2025
 - [Issues](https://github.com/Safronus/FitnessApp/issues)
 
 ---
+<<<<<<< HEAD
 **Poslední aktualizace:** 26.10.2025 01:49 CEST  
 **Aktuální verze:** 1.6
+=======
+**Poslední aktualizace:** 26.10.2025 01:33 CEST  
+**Aktuální verze:** 1.5c
+>>>>>>> parent of 9d9ec65 (Fix v1.5d: Maximum 10000 + zachování stavu sbalení)

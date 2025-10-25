@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Fitness Tracker - Aplikace pro sledování cvičení s progresivními cíli
+<<<<<<< HEAD
 Verze 1.6
 
 Changelog:
@@ -13,6 +14,19 @@ v1.6 (26.10.2025)
   - Lepší vizuální oddělení sekcí
 
 v1.5d - v1.0.0
+=======
+Verze 1.5c
+
+Changelog:
+v1.5c (26.10.2025) - OPRAVNÁ VERZE
+- Odstraněn sloupec "Akce"
+- Kontextové menu (pravé tlačítko):
+  - Na záznamu: Upravit / Smazat
+  - Na dni: Smazat všechny záznamy dne
+- Jednoduchá legenda - jeden řádek, barva + text
+
+v1.5b - v1.0.0
+>>>>>>> parent of 9d9ec65 (Fix v1.5d: Maximum 10000 + zachování stavu sbalení)
 - Předchozí verze
 """
 
@@ -34,7 +48,11 @@ from PySide6.QtCore import Qt, QDate, QTimer
 from PySide6.QtGui import QColor, QAction
 
 # Verze aplikace
+<<<<<<< HEAD
 VERSION = "1.6"
+=======
+VERSION = "1.5c"
+>>>>>>> parent of 9d9ec65 (Fix v1.5d: Maximum 10000 + zachování stavu sbalení)
 VERSION_DATE = "26.10.2025"
 
 # Dark Theme Stylesheet
@@ -869,7 +887,7 @@ class FitnessTrackerApp(QMainWindow):
         kliky_row = QHBoxLayout()
         kliky_row.addWidget(QLabel("💪 Kliky:"))
         self.kliky_spin = QSpinBox()
-        self.kliky_spin.setRange(0, 10000)
+        self.kliky_spin.setRange(0, 1000)
         self.kliky_spin.setValue(0)
         kliky_row.addWidget(self.kliky_spin)
         kliky_btn = QPushButton("✅ Přidat")
@@ -881,7 +899,7 @@ class FitnessTrackerApp(QMainWindow):
         drepy_row = QHBoxLayout()
         drepy_row.addWidget(QLabel("🦵 Dřepy:"))
         self.drepy_spin = QSpinBox()
-        self.drepy_spin.setRange(0, 10000)
+        self.drepy_spin.setRange(0, 1000)
         self.drepy_spin.setValue(0)
         drepy_row.addWidget(self.drepy_spin)
         drepy_btn = QPushButton("✅ Přidat")
@@ -893,7 +911,7 @@ class FitnessTrackerApp(QMainWindow):
         skrcky_row = QHBoxLayout()
         skrcky_row.addWidget(QLabel("🧘 Skrčky:"))
         self.skrcky_spin = QSpinBox()
-        self.skrcky_spin.setRange(0, 10000)
+        self.skrcky_spin.setRange(0, 1000)
         self.skrcky_spin.setValue(0)
         skrcky_row.addWidget(self.skrcky_spin)
         skrcky_btn = QPushButton("✅ Přidat")
@@ -2184,46 +2202,49 @@ class FitnessTrackerApp(QMainWindow):
         return total_performed, total_goal, goal_to_date
 
     def edit_workout(self, exercise_type, date_str, record_id):
-        """Upraví konkrétní záznam"""
-        if date_str not in self.data['workouts'] or exercise_type not in self.data['workouts'][date_str]:
-            self.show_message("Chyba", "Záznam nenalezen!", QMessageBox.Critical)
-            return
-        
+        """Otevře dialog pro editaci záznamu"""
         records = self.data['workouts'][date_str][exercise_type]
         
-        if isinstance(records, list):
-            record = next((r for r in records if r['id'] == record_id), None)
-        elif isinstance(records, dict) and records.get('id') == record_id:
-            record = records
-        else:
-            record = None
+        if not isinstance(records, list):
+            records = [records]
+        
+        record = next((r for r in records if r['id'] == record_id), None)
         
         if not record:
-            self.show_message("Chyba", "Záznam nenalezen!", QMessageBox.Critical)
+            self.show_message("Chyba", "Záznam nebyl nalezen!", QMessageBox.Warning)
             return
         
-        old_value = record['value']
+        current_value = record['value']
+        timestamp = record.get('timestamp', 'N/A')
         
-        new_value, ok = QInputDialog.getInt(
-            self,
-            "Upravit výkon",
-            f"Nový výkon pro {exercise_type} ({date_str}):",
-            old_value,
-            0,
-            10000,  # OPRAVA: Maximum 10000
-            1
-        )
+        dialog = EditWorkoutDialog(exercise_type, date_str, current_value, timestamp, self)
         
-        if ok and new_value != old_value:
-            record['value'] = new_value
-            record['timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        if dialog.exec():
+            if dialog.delete_requested:
+                self.data['workouts'][date_str][exercise_type] = [r for r in records if r['id'] != record_id]
+                
+                if not self.data['workouts'][date_str][exercise_type]:
+                    del self.data['workouts'][date_str][exercise_type]
+                
+                if not self.data['workouts'][date_str]:
+                    del self.data['workouts'][date_str]
+                
+                self.show_message("Smazáno", "Záznam byl smazán")
+            else:
+                new_value = dialog.get_value()
+                edit_timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                
+                for r in records:
+                    if r['id'] == record_id:
+                        r['value'] = new_value
+                        r['edited'] = edit_timestamp
+                        break
+                
+                self.show_message("Upraveno", f"Záznam byl upraven na: {new_value} {exercise_type}")
             
             self.save_data()
             self.update_exercise_tab(exercise_type)
             self.refresh_exercise_calendar(exercise_type)
-            self.refresh_add_tab_goals()
-            
-            self.show_message("Upraveno", f"Výkon upraven z {old_value} na {new_value}")
 
     def update_exercise_tab(self, exercise_type):
         """Aktualizuje statistiky a tree se sbalovacími dny"""
@@ -2241,15 +2262,6 @@ class FitnessTrackerApp(QMainWindow):
             
             tree = self.findChild(QTreeWidget, f"tree_{exercise_type}")
             if tree:
-                # NOVÉ: Uložit stav rozbalení
-                expanded_dates = set()
-                for i in range(tree.topLevelItemCount()):
-                    item = tree.topLevelItem(i)
-                    if item.isExpanded():
-                        date_text = item.text(0)
-                        date_str = date_text.split(' ', 1)[1] if ' ' in date_text else date_text
-                        expanded_dates.add(date_str)
-                
                 tree.clear()
                 
                 days_data = {}
@@ -2300,8 +2312,7 @@ class FitnessTrackerApp(QMainWindow):
                     day_item.setBackground(2, color)
                     day_item.setForeground(2, QColor(255, 255, 255))
                     
-                    # NOVÉ: Obnovit stav rozbalení
-                    day_item.setExpanded(date_str in expanded_dates)
+                    day_item.setExpanded(False)
                     
                     records_sorted = sorted(records, key=lambda x: x.get('timestamp', ''))
                     
@@ -2332,6 +2343,7 @@ class FitnessTrackerApp(QMainWindow):
                         
                         record_item.setForeground(2, QColor(255, 255, 255))
                         
+                        # Data pro kontextové menu
                         record_item.setData(3, Qt.UserRole, {'date': date_str, 'record_id': record_id, 'exercise': exercise_type})
         
         except Exception as e:
