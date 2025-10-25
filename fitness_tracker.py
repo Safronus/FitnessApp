@@ -2,15 +2,17 @@
 # -*- coding: utf-8 -*-
 """
 Fitness Tracker - Aplikace pro sledování cvičení s progresivními cíli
-Verze 1.5d
+Verze 1.6
 
 Changelog:
-v1.5d (26.10.2025) - OPRAVNÁ VERZE
-- Maximum 10000 pro přidání výkonu (místo 1000)
-- Maximum 10000 pro editaci záznamu
-- Zachování stavu sbalení/rozbalení dnů po editaci nebo mazání záznamů
+v1.6 (26.10.2025)
+- Redesign záložky Nastavení:
+  - Jednoduchý seznam roků (bez sekcí "Dostupné roky" a "tip")
+  - Zvýraznění aktuálního roku (🟢, tučně, tyrkysová barva)
+  - Nastavení cílů horizontálně vedle sebe (Datum | Cíle | Přírůstky)
+  - Lepší vizuální oddělení sekcí
 
-v1.5c - v1.0.0
+v1.5d - v1.0.0
 - Předchozí verze
 """
 
@@ -32,7 +34,7 @@ from PySide6.QtCore import Qt, QDate, QTimer
 from PySide6.QtGui import QColor, QAction
 
 # Verze aplikace
-VERSION = "1.5d"
+VERSION = "1.6"
 VERSION_DATE = "26.10.2025"
 
 # Dark Theme Stylesheet
@@ -1116,150 +1118,268 @@ class FitnessTrackerApp(QMainWindow):
         return widget
     
     def create_settings_tab(self):
+        """Vytvoří záložku nastavení s NOVÝM designem"""
         widget = QWidget()
-        layout = QVBoxLayout(widget)
+        main_layout = QVBoxLayout(widget)
+        main_layout.setSpacing(15)
         
+        # === SPRÁVA ROKŮ ===
         years_group = QGroupBox("📅 Správa roků")
+        years_group.setStyleSheet("""
+            QGroupBox {
+                font-size: 14px;
+                font-weight: bold;
+                color: #14919b;
+                border: 2px solid #0d7377;
+                border-radius: 5px;
+                padding-top: 15px;
+                margin-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                subcontrol-position: top left;
+                padding: 0 5px;
+            }
+        """)
         years_layout = QVBoxLayout()
         
-        available_years = self.get_available_years()
-        years_text = f"Dostupné roky: {', '.join(map(str, available_years))}"
-        
-        info_label = QLabel(years_text)
-        info_label.setStyleSheet("padding: 10px; color: #14919b;")
-        info_label.setWordWrap(True)
-        years_layout.addWidget(info_label)
-        
-        hint_label = QLabel("💡 Tip: Klikni na rok pro úpravu jeho nastavení")
-        hint_label.setStyleSheet("padding: 5px; color: #a0a0a0; font-size: 10px; font-style: italic;")
-        years_layout.addWidget(hint_label)
-        
-        self.years_list = QListWidget()
-        self.years_list.setMaximumHeight(150)
-        self.years_list.itemClicked.connect(self.on_year_selected_for_settings)
-        
-        for year in available_years:
-            year_workouts = sum(1 for date_str in self.data['workouts'].keys() 
-                              if int(date_str.split('-')[0]) == year)
-            
-            item = QListWidgetItem(f"📆 Rok {year} ({year_workouts} dnů s cvičením)")
-            item.setData(Qt.UserRole, year)
-            self.years_list.addItem(item)
-        
-        years_layout.addWidget(self.years_list)
-        
-        years_buttons = QHBoxLayout()
+        # Tlačítka pro přidání/smazání
+        years_buttons_layout = QHBoxLayout()
         
         add_year_btn = QPushButton("➕ Přidat nový rok")
-        add_year_btn.clicked.connect(self.add_custom_year)
-        years_buttons.addWidget(add_year_btn)
+        add_year_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #28a745;
+                color: white;
+                padding: 8px 15px;
+                font-size: 12px;
+            }
+            QPushButton:hover {
+                background-color: #218838;
+            }
+        """)
+        add_year_btn.clicked.connect(self.add_new_year)
+        years_buttons_layout.addWidget(add_year_btn)
         
         delete_year_btn = QPushButton("🗑️ Smazat vybraný rok")
         delete_year_btn.setStyleSheet("""
             QPushButton {
                 background-color: #dc3545;
                 color: white;
+                padding: 8px 15px;
+                font-size: 12px;
             }
             QPushButton:hover {
                 background-color: #c82333;
             }
         """)
-        delete_year_btn.clicked.connect(lambda: self.delete_year_from_list())
-        years_buttons.addWidget(delete_year_btn)
+        delete_year_btn.clicked.connect(self.delete_selected_year)
+        years_buttons_layout.addWidget(delete_year_btn)
         
-        # NOVÉ TLAČÍTKO - Vynulovat záznamy
         reset_year_btn = QPushButton("🔄 Vynulovat záznamy roku")
         reset_year_btn.setStyleSheet("""
             QPushButton {
-                background-color: #ff9800;
-                color: white;
+                background-color: #ffc107;
+                color: #000;
+                padding: 8px 15px;
+                font-size: 12px;
             }
             QPushButton:hover {
-                background-color: #e68900;
+                background-color: #e0a800;
             }
         """)
         reset_year_btn.clicked.connect(self.reset_year_workouts)
-        years_buttons.addWidget(reset_year_btn)
+        years_buttons_layout.addWidget(reset_year_btn)
         
-        years_layout.addLayout(years_buttons)
+        years_buttons_layout.addStretch()
+        
+        years_layout.addLayout(years_buttons_layout)
+        
+        # NOVÝ: Jednoduchý seznam roků
+        self.years_list = QListWidget()
+        self.years_list.setMaximumHeight(150)
+        self.years_list.setStyleSheet("""
+            QListWidget {
+                background-color: #1e1e1e;
+                border: 1px solid #3d3d3d;
+                padding: 5px;
+            }
+            QListWidget::item {
+                padding: 8px;
+                border-radius: 3px;
+                margin: 2px;
+            }
+            QListWidget::item:selected {
+                background-color: #0d7377;
+                color: white;
+            }
+            QListWidget::item:hover {
+                background-color: #2d2d2d;
+            }
+        """)
+        self.years_list.itemClicked.connect(self.on_year_selected)
+        
+        years_layout.addWidget(self.years_list)
         
         years_group.setLayout(years_layout)
-        layout.addWidget(years_group)
+        main_layout.addWidget(years_group)
         
-        self.current_year_label = QLabel()
-        self.current_year_label.setStyleSheet("""
-            background-color: #0d7377;
-            color: white;
-            padding: 8px;
-            border-radius: 5px;
-            font-weight: bold;
-            font-size: 13px;
+        # === NASTAVENÍ CÍLŮ PRO VYBRANÝ ROK ===
+        settings_group = QGroupBox("⚙️ Nastavení cílů pro vybraný rok")
+        settings_group.setStyleSheet("""
+            QGroupBox {
+                font-size: 14px;
+                font-weight: bold;
+                color: #14919b;
+                border: 2px solid #0d7377;
+                border-radius: 5px;
+                padding-top: 15px;
+                margin-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                subcontrol-position: top left;
+                padding: 0 5px;
+            }
         """)
-        self.current_year_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(self.current_year_label)
         
-        # SDRUŽENÁ SKUPINA: Nastavení cílů
-        goals_settings_group = QGroupBox("🎯 Nastavení cílů pro vybraný rok")
-        goals_settings_layout = QVBoxLayout()
+        # NOVÝ: Horizontální layout pro sekce
+        settings_main_layout = QVBoxLayout()
+        settings_horizontal = QHBoxLayout()
+        settings_horizontal.setSpacing(20)
         
-        # Startovní datum
-        date_layout = QFormLayout()
+        # === DATUM ZAHÁJENÍ ===
+        date_frame = QFrame()
+        date_frame.setStyleSheet("""
+            QFrame {
+                background-color: #2d2d2d;
+                border-radius: 5px;
+                padding: 10px;
+            }
+        """)
+        date_layout = QVBoxLayout(date_frame)
+        
+        date_title = QLabel("📅 Datum zahájení")
+        date_title.setStyleSheet("font-size: 13px; font-weight: bold; color: #14919b; padding-bottom: 5px;")
+        date_layout.addWidget(date_title)
+        
         self.start_date_edit = QDateEdit()
         self.start_date_edit.setCalendarPopup(True)
-        date_layout.addRow("📅 Datum zahájení:", self.start_date_edit)
-        goals_settings_layout.addLayout(date_layout)
+        self.start_date_edit.setStyleSheet("padding: 5px; font-size: 12px;")
+        date_layout.addWidget(self.start_date_edit)
         
-        # Základní cíle
-        base_label = QLabel("Základní cíle (na startovní datum):")
-        base_label.setStyleSheet("font-weight: bold; padding-top: 10px; color: #14919b;")
-        goals_settings_layout.addWidget(base_label)
+        settings_horizontal.addWidget(date_frame)
         
-        base_goals_layout = QFormLayout()
+        # === ZÁKLADNÍ CÍLE ===
+        goals_frame = QFrame()
+        goals_frame.setStyleSheet("""
+            QFrame {
+                background-color: #2d2d2d;
+                border-radius: 5px;
+                padding: 10px;
+            }
+        """)
+        goals_layout = QVBoxLayout(goals_frame)
         
-        self.base_kliky = QSpinBox()
-        self.base_kliky.setRange(0, 1000)
-        base_goals_layout.addRow("💪 Kliky:", self.base_kliky)
+        goals_title = QLabel("🎯 Základní cíle")
+        goals_title.setStyleSheet("font-size: 13px; font-weight: bold; color: #14919b; padding-bottom: 5px;")
+        goals_layout.addWidget(goals_title)
         
-        self.base_drepy = QSpinBox()
-        self.base_drepy.setRange(0, 1000)
-        base_goals_layout.addRow("🦵 Dřepy:", self.base_drepy)
+        self.kliky_goal_input = QSpinBox()
+        self.kliky_goal_input.setRange(0, 10000)
+        self.kliky_goal_input.setPrefix("Kliky: ")
+        self.kliky_goal_input.setStyleSheet("padding: 5px; font-size: 12px;")
+        goals_layout.addWidget(self.kliky_goal_input)
         
-        self.base_skrcky = QSpinBox()
-        self.base_skrcky.setRange(0, 1000)
-        base_goals_layout.addRow("🧘 Skrčky:", self.base_skrcky)
+        self.drepy_goal_input = QSpinBox()
+        self.drepy_goal_input.setRange(0, 10000)
+        self.drepy_goal_input.setPrefix("Dřepy: ")
+        self.drepy_goal_input.setStyleSheet("padding: 5px; font-size: 12px;")
+        goals_layout.addWidget(self.drepy_goal_input)
         
-        goals_settings_layout.addLayout(base_goals_layout)
+        self.skrcky_goal_input = QSpinBox()
+        self.skrcky_goal_input.setRange(0, 10000)
+        self.skrcky_goal_input.setPrefix("Skrčky: ")
+        self.skrcky_goal_input.setStyleSheet("padding: 5px; font-size: 12px;")
+        goals_layout.addWidget(self.skrcky_goal_input)
         
-        # Týdenní přírůstky
-        increment_label = QLabel("Týdenní přírůstky (za každý celý týden):")
-        increment_label.setStyleSheet("font-weight: bold; padding-top: 10px; color: #14919b;")
-        goals_settings_layout.addWidget(increment_label)
+        settings_horizontal.addWidget(goals_frame)
         
-        increment_layout = QFormLayout()
+        # === TÝDENNÍ PŘÍRŮSTKY ===
+        increments_frame = QFrame()
+        increments_frame.setStyleSheet("""
+            QFrame {
+                background-color: #2d2d2d;
+                border-radius: 5px;
+                padding: 10px;
+            }
+        """)
+        increments_layout = QVBoxLayout(increments_frame)
         
-        self.increment_kliky = QSpinBox()
-        self.increment_kliky.setRange(0, 100)
-        increment_layout.addRow("💪 Kliky (+týdně):", self.increment_kliky)
+        increments_title = QLabel("📈 Týdenní přírůstky")
+        increments_title.setStyleSheet("font-size: 13px; font-weight: bold; color: #14919b; padding-bottom: 5px;")
+        increments_layout.addWidget(increments_title)
         
-        self.increment_drepy = QSpinBox()
-        self.increment_drepy.setRange(0, 100)
-        increment_layout.addRow("🦵 Dřepy (+týdně):", self.increment_drepy)
+        self.kliky_increment_input = QSpinBox()
+        self.kliky_increment_input.setRange(0, 1000)
+        self.kliky_increment_input.setPrefix("Kliky: +")
+        self.kliky_increment_input.setStyleSheet("padding: 5px; font-size: 12px;")
+        increments_layout.addWidget(self.kliky_increment_input)
         
-        self.increment_skrcky = QSpinBox()
-        self.increment_skrcky.setRange(0, 100)
-        increment_layout.addRow("🧘 Skrčky (+týdně):", self.increment_skrcky)
+        self.drepy_increment_input = QSpinBox()
+        self.drepy_increment_input.setRange(0, 1000)
+        self.drepy_increment_input.setPrefix("Dřepy: +")
+        self.drepy_increment_input.setStyleSheet("padding: 5px; font-size: 12px;")
+        increments_layout.addWidget(self.drepy_increment_input)
         
-        goals_settings_layout.addLayout(increment_layout)
+        self.skrcky_increment_input = QSpinBox()
+        self.skrcky_increment_input.setRange(0, 1000)
+        self.skrcky_increment_input.setPrefix("Skrčky: +")
+        self.skrcky_increment_input.setStyleSheet("padding: 5px; font-size: 12px;")
+        increments_layout.addWidget(self.skrcky_increment_input)
         
-        goals_settings_group.setLayout(goals_settings_layout)
-        layout.addWidget(goals_settings_group)
+        settings_horizontal.addWidget(increments_frame)
         
+        settings_main_layout.addLayout(settings_horizontal)
+        
+        # Tlačítko uložit
         save_btn = QPushButton("💾 Uložit nastavení")
+        save_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #0d7377;
+                color: white;
+                padding: 10px;
+                font-size: 13px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #14919b;
+            }
+        """)
         save_btn.clicked.connect(self.save_settings)
-        layout.addWidget(save_btn)
+        settings_main_layout.addWidget(save_btn)
         
-        # NOVÁ SEKCE: Export/Import
+        settings_group.setLayout(settings_main_layout)
+        main_layout.addWidget(settings_group)
+        
+        # === EXPORT/IMPORT ===
         export_import_group = QGroupBox("💾 Záloha a obnova dat")
+        export_import_group.setStyleSheet("""
+            QGroupBox {
+                font-size: 14px;
+                font-weight: bold;
+                color: #14919b;
+                border: 2px solid #0d7377;
+                border-radius: 5px;
+                padding-top: 15px;
+                margin-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                subcontrol-position: top left;
+                padding: 0 5px;
+            }
+        """)
         export_import_layout = QVBoxLayout()
         
         export_import_info = QLabel(
@@ -1277,6 +1397,7 @@ class FitnessTrackerApp(QMainWindow):
             QPushButton {
                 background-color: #28a745;
                 color: white;
+                padding: 8px 15px;
             }
             QPushButton:hover {
                 background-color: #218838;
@@ -1290,6 +1411,7 @@ class FitnessTrackerApp(QMainWindow):
             QPushButton {
                 background-color: #17a2b8;
                 color: white;
+                padding: 8px 15px;
             }
             QPushButton:hover {
                 background-color: #138496;
@@ -1301,13 +1423,49 @@ class FitnessTrackerApp(QMainWindow):
         export_import_layout.addLayout(export_import_buttons)
         
         export_import_group.setLayout(export_import_layout)
-        layout.addWidget(export_import_group)
+        main_layout.addWidget(export_import_group)
         
-        layout.addStretch()
+        main_layout.addStretch()
         
-        self.load_year_settings_to_ui(self.current_settings_year)
+        self.refresh_years_list()
         
         return widget
+
+    def refresh_years_list(self):
+        """Obnoví seznam roků se zvýrazněním"""
+        self.years_list.clear()
+        
+        current_year = datetime.now().year
+        available_years = self.get_available_years()
+        
+        for year in available_years:
+            year_workouts = sum(1 for date_str in self.data['workouts'].keys() 
+                              if int(date_str.split('-')[0]) == year)
+            
+            # Ikony pro rozlišení
+            if year == current_year:
+                icon = "🟢"  # Aktuální rok
+            else:
+                icon = "📆"
+            
+            item = QListWidgetItem(f"{icon} Rok {year} ({year_workouts} dnů s cvičením)")
+            item.setData(Qt.UserRole, year)
+            
+            # NOVÉ: Zvýraznění aktuálního roku
+            if year == current_year:
+                item.setForeground(QColor(20, 145, 155))  # #14919b
+                font = item.font()
+                font.setBold(True)
+                item.setFont(font)
+            
+            self.years_list.addItem(item)
+        
+        # Automaticky vyber aktuální rok
+        for i in range(self.years_list.count()):
+            item = self.years_list.item(i)
+            if item.data(Qt.UserRole) == current_year:
+                self.years_list.setCurrentItem(item)
+                break
 
     def reset_year_workouts(self):
         """Vynuluje všechny záznamy pro vybraný rok (ponechá nastavení)"""
