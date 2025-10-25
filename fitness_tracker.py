@@ -2,26 +2,24 @@
 # -*- coding: utf-8 -*-
 """
 Fitness Tracker - Aplikace pro sledování cvičení s progresivními cíli
-Verze 1.2a
+Verze 1.3
 
 Changelog:
-v1.2a (25.10.2025)
-- Odstranění sloupců "Cíl" a "✓" z tabulek v záložkách cvičení
-- Redesign záložky "Přidat výkon" - každá kategorie má vlastní pole + tlačítko
-- Přidání přehledu dnešních cílů do záložky přidávání
-- Tlačítko "Přidat všechny najednou"
-- Datum vždy aktuální (bez možnosti změny)
+v1.3 (25.10.2025)
+- Více záznamů za den (nepřepisování)
+- Každý záznam má vlastní řádek v tabulce
+- Checkboxy pro výběr záznamů
+- Hromadné mazání vybraných záznamů
+- Editace a mazání jednotlivých záznamů
+- Migrace dat na nový formát s lists
 
-v1.2 (25.10.2025)
-- Centralizované přidávání cvičení
-- Gradientní kalendář podle výkonu
-
-v1.1e - v1.0.0
+v1.2b - v1.0.0
 - Předchozí verze
 """
 
 import sys
 import json
+import uuid  # NOVÝ IMPORT
 from datetime import datetime, timedelta
 from pathlib import Path
 from PySide6.QtWidgets import (
@@ -35,8 +33,8 @@ from PySide6.QtCore import Qt, QDate, QTimer
 from PySide6.QtGui import QColor
 
 # Verze aplikace
-VERSION = "1.2a"
-VERSION_DATE = "25.10.2025"
+VERSION = "1.3"
+VERSION_DATE = "26.10.2025"
 
 # Dark Theme Stylesheet
 DARK_THEME = """
@@ -506,21 +504,38 @@ class FitnessTrackerApp(QMainWindow):
             }
     
     def migrate_data(self):
-        """Migrace starých dat na nový formát s timestampy"""
+        """Migrace starých dat na nový formát s timestampy a lists"""
         migrated = False
+        
         for date_str, workouts in self.data['workouts'].items():
             for exercise, value in list(workouts.items()):
+                # Migrace z single value na dict
                 if isinstance(value, (int, float)):
-                    workouts[exercise] = {
+                    workouts[exercise] = [{
                         'value': int(value),
-                        'timestamp': f"{date_str} 12:00:00"
-                    }
+                        'timestamp': f"{date_str} 12:00:00",
+                        'id': str(uuid.uuid4())
+                    }]
                     migrated = True
+                # Migrace z single dict na list
+                elif isinstance(value, dict) and 'value' in value:
+                    workouts[exercise] = [{
+                        'value': value['value'],
+                        'timestamp': value.get('timestamp', f"{date_str} 12:00:00"),
+                        'id': str(uuid.uuid4())
+                    }]
+                    migrated = True
+                # Už je list - zkontroluj že má všechny záznamy ID
+                elif isinstance(value, list):
+                    for record in value:
+                        if 'id' not in record:
+                            record['id'] = str(uuid.uuid4())
+                            migrated = True
         
         if migrated:
             self.save_data()
-            print("Data byla migrována na nový formát s timestampy")
-    
+            print("Data byla migrována na nový formát s multiple records")
+
     def migrate_to_year_settings(self):
         """Migrace starého formátu settings na year_settings"""
         if 'year_settings' not in self.data:
@@ -679,11 +694,18 @@ class FitnessTrackerApp(QMainWindow):
         if selected_date_str not in self.data['workouts']:
             self.data['workouts'][selected_date_str] = {}
         
+        if exercise_type not in self.data['workouts'][selected_date_str]:
+            self.data['workouts'][selected_date_str][exercise_type] = []
+        
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        self.data['workouts'][selected_date_str][exercise_type] = {
+        
+        new_record = {
             'value': value,
-            'timestamp': timestamp
+            'timestamp': timestamp,
+            'id': str(uuid.uuid4())
         }
+        
+        self.data['workouts'][selected_date_str][exercise_type].append(new_record)
         
         self.save_data()
         
@@ -725,24 +747,36 @@ class FitnessTrackerApp(QMainWindow):
         added = []
         
         if kliky_val > 0:
-            self.data['workouts'][selected_date_str]['kliky'] = {
+            if 'kliky' not in self.data['workouts'][selected_date_str]:
+                self.data['workouts'][selected_date_str]['kliky'] = []
+            
+            self.data['workouts'][selected_date_str]['kliky'].append({
                 'value': kliky_val,
-                'timestamp': timestamp
-            }
+                'timestamp': timestamp,
+                'id': str(uuid.uuid4())
+            })
             added.append(f"kliky: {kliky_val}")
         
         if drepy_val > 0:
-            self.data['workouts'][selected_date_str]['dřepy'] = {
+            if 'dřepy' not in self.data['workouts'][selected_date_str]:
+                self.data['workouts'][selected_date_str]['dřepy'] = []
+            
+            self.data['workouts'][selected_date_str]['dřepy'].append({
                 'value': drepy_val,
-                'timestamp': timestamp
-            }
+                'timestamp': timestamp,
+                'id': str(uuid.uuid4())
+            })
             added.append(f"dřepy: {drepy_val}")
         
         if skrcky_val > 0:
-            self.data['workouts'][selected_date_str]['skrčky'] = {
+            if 'skrčky' not in self.data['workouts'][selected_date_str]:
+                self.data['workouts'][selected_date_str]['skrčky'] = []
+            
+            self.data['workouts'][selected_date_str]['skrčky'].append({
                 'value': skrcky_val,
-                'timestamp': timestamp
-            }
+                'timestamp': timestamp,
+                'id': str(uuid.uuid4())
+            })
             added.append(f"skrčky: {skrcky_val}")
         
         self.save_data()
@@ -883,22 +917,20 @@ class FitnessTrackerApp(QMainWindow):
         for exercise in ['kliky', 'dřepy', 'skrčky']:
             goal = self.calculate_goal(exercise, selected_date_str)
             
+            current_value = 0
             if selected_date_str in self.data['workouts'] and exercise in self.data['workouts'][selected_date_str]:
-                workout_data = self.data['workouts'][selected_date_str][exercise]
-                if isinstance(workout_data, dict):
-                    current_value = workout_data['value']
-                else:
-                    current_value = workout_data
-                
-                if current_value >= goal:
-                    status = f"✅ Splněno ({current_value}/{goal})"
-                    color = "#32c766"
-                elif current_value > 0:
-                    status = f"⏳ Rozpracováno ({current_value}/{goal})"
-                    color = "#FFD700"
-                else:
-                    status = f"❌ Nesplněno (0/{goal})"
-                    color = "#ff6b6b"
+                records = self.data['workouts'][selected_date_str][exercise]
+                if isinstance(records, list):
+                    current_value = sum(r['value'] for r in records)
+                elif isinstance(records, dict):
+                    current_value = records.get('value', 0)
+            
+            if current_value >= goal:
+                status = f"✅ Splněno ({current_value}/{goal})"
+                color = "#32c766"
+            elif current_value > 0:
+                status = f"⏳ Rozpracováno ({current_value}/{goal})"
+                color = "#FFD700"
             else:
                 status = f"❌ Nesplněno (0/{goal})"
                 color = "#ff6b6b"
@@ -1482,11 +1514,32 @@ class FitnessTrackerApp(QMainWindow):
         
         left_layout.addWidget(goals_frame)
         
-        # TABULKA zůstává
+        # Tlačítka pro hromadné akce
+        bulk_actions_layout = QHBoxLayout()
+        
+        delete_selected_btn = QPushButton("🗑️ Smazat vybrané")
+        delete_selected_btn.setObjectName(f"delete_selected_{exercise_type}")
+        delete_selected_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #dc3545;
+                color: white;
+            }
+            QPushButton:hover {
+                background-color: #c82333;
+            }
+        """)
+        delete_selected_btn.clicked.connect(lambda: self.delete_selected_records(exercise_type))
+        bulk_actions_layout.addWidget(delete_selected_btn)
+        
+        bulk_actions_layout.addStretch()
+        
+        left_layout.addLayout(bulk_actions_layout)
+        
+        # TABULKA s checkboxy
         table = QTableWidget()
         table.setObjectName(f"table_{exercise_type}")
-        table.setColumnCount(3)
-        table.setHorizontalHeaderLabels(["Datum", "Čas", "Výkon"])
+        table.setColumnCount(4)
+        table.setHorizontalHeaderLabels(["☑️", "Datum", "Čas", "Výkon"])
         
         table.verticalHeader().setDefaultSectionSize(30)
         table.verticalHeader().setMinimumSectionSize(30)
@@ -1494,7 +1547,8 @@ class FitnessTrackerApp(QMainWindow):
         header = table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(2, QHeaderView.Stretch)
+        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(3, QHeaderView.Stretch)
         
         left_layout.addWidget(table)
         
@@ -1558,7 +1612,54 @@ class FitnessTrackerApp(QMainWindow):
         self.refresh_exercise_calendar(exercise_type)
         
         return widget
-    
+
+    def delete_selected_records(self, exercise_type):
+        """Smaže vybrané záznamy"""
+        table = self.findChild(QTableWidget, f"table_{exercise_type}")
+        if not table:
+            return
+        
+        selected_ids = []
+        for row in range(table.rowCount()):
+            checkbox = table.cellWidget(row, 0)
+            if checkbox and checkbox.isChecked():
+                record_id = table.item(row, 1).data(Qt.UserRole)
+                date_str = table.item(row, 1).text()
+                selected_ids.append((date_str, record_id))
+        
+        if not selected_ids:
+            self.show_message("Chyba", "Nevybral jsi žádné záznamy!", QMessageBox.Warning)
+            return
+        
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Potvrzení smazání")
+        msg.setText(f"Opravdu chceš smazat {len(selected_ids)} záznamů?")
+        msg.setIcon(QMessageBox.Warning)
+        msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        
+        yes_btn = msg.button(QMessageBox.Yes)
+        yes_btn.setText("Ano, smazat")
+        no_btn = msg.button(QMessageBox.No)
+        no_btn.setText("Ne, zrušit")
+        
+        if msg.exec() == QMessageBox.Yes:
+            for date_str, record_id in selected_ids:
+                if date_str in self.data['workouts'] and exercise_type in self.data['workouts'][date_str]:
+                    records = self.data['workouts'][date_str][exercise_type]
+                    if isinstance(records, list):
+                        self.data['workouts'][date_str][exercise_type] = [r for r in records if r['id'] != record_id]
+                        
+                        if not self.data['workouts'][date_str][exercise_type]:
+                            del self.data['workouts'][date_str][exercise_type]
+                        
+                        if not self.data['workouts'][date_str]:
+                            del self.data['workouts'][date_str]
+            
+            self.save_data()
+            self.update_exercise_tab(exercise_type)
+            self.refresh_exercise_calendar(exercise_type)
+            self.show_message("Smazáno", f"{len(selected_ids)} záznamů bylo smazáno")
+
     def update_exercise_tab_and_calendar(self, exercise_type):
         """Bezpečná aktualizace"""
         try:
@@ -1646,11 +1747,12 @@ class FitnessTrackerApp(QMainWindow):
         for date_str, workouts in self.data['workouts'].items():
             workout_year = int(date_str.split('-')[0])
             if workout_year == year and exercise_type in workouts:
-                workout_data = workouts[exercise_type]
-                if isinstance(workout_data, dict):
-                    total_performed += workout_data['value']
-                else:
-                    total_performed += workout_data
+                records = workouts[exercise_type]
+                
+                if isinstance(records, list):
+                    total_performed += sum(r['value'] for r in records)
+                elif isinstance(records, dict):
+                    total_performed += records.get('value', 0)
         
         today = datetime.now()
         if year == today.year:
@@ -1669,23 +1771,31 @@ class FitnessTrackerApp(QMainWindow):
             goal_to_date = 0
         
         return total_performed, total_goal, goal_to_date
-    
-    def edit_workout(self, exercise_type, date_str):
+
+    def edit_workout(self, exercise_type, date_str, record_id):
         """Otevře dialog pro editaci záznamu"""
-        workout_data = self.data['workouts'][date_str][exercise_type]
+        records = self.data['workouts'][date_str][exercise_type]
         
-        if isinstance(workout_data, dict):
-            current_value = workout_data['value']
-            timestamp = workout_data.get('timestamp', 'N/A')
-        else:
-            current_value = workout_data
-            timestamp = None
+        if not isinstance(records, list):
+            records = [records]
+        
+        record = next((r for r in records if r['id'] == record_id), None)
+        
+        if not record:
+            self.show_message("Chyba", "Záznam nebyl nalezen!", QMessageBox.Warning)
+            return
+        
+        current_value = record['value']
+        timestamp = record.get('timestamp', 'N/A')
         
         dialog = EditWorkoutDialog(exercise_type, date_str, current_value, timestamp, self)
         
         if dialog.exec():
             if dialog.delete_requested:
-                del self.data['workouts'][date_str][exercise_type]
+                self.data['workouts'][date_str][exercise_type] = [r for r in records if r['id'] != record_id]
+                
+                if not self.data['workouts'][date_str][exercise_type]:
+                    del self.data['workouts'][date_str][exercise_type]
                 
                 if not self.data['workouts'][date_str]:
                     del self.data['workouts'][date_str]
@@ -1694,17 +1804,19 @@ class FitnessTrackerApp(QMainWindow):
             else:
                 new_value = dialog.get_value()
                 edit_timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                self.data['workouts'][date_str][exercise_type] = {
-                    'value': new_value,
-                    'timestamp': timestamp if timestamp else edit_timestamp,
-                    'edited': edit_timestamp
-                }
+                
+                for r in records:
+                    if r['id'] == record_id:
+                        r['value'] = new_value
+                        r['edited'] = edit_timestamp
+                        break
+                
                 self.show_message("Upraveno", f"Záznam byl upraven na: {new_value} {exercise_type}")
             
             self.save_data()
             self.update_exercise_tab(exercise_type)
             self.refresh_exercise_calendar(exercise_type)
-    
+
     def update_exercise_tab(self, exercise_type):
         """Aktualizuje statistiky a tabulku"""
         try:
@@ -1787,35 +1899,50 @@ class FitnessTrackerApp(QMainWindow):
             if table:
                 table.setRowCount(0)
                 
-                selected_year_workouts = []
+                # Sesbírat všechny záznamy
+                all_records = []
                 for date_str in self.data['workouts'].keys():
                     workout_year = int(date_str.split('-')[0])
                     if workout_year == selected_year and exercise_type in self.data['workouts'][date_str]:
-                        selected_year_workouts.append(date_str)
+                        records = self.data['workouts'][date_str][exercise_type]
+                        
+                        if isinstance(records, list):
+                            for record in records:
+                                all_records.append((date_str, record))
+                        elif isinstance(records, dict):
+                            all_records.append((date_str, records))
                 
-                sorted_dates = sorted(selected_year_workouts, reverse=True)
+                # Seřadit podle data a času
+                all_records.sort(key=lambda x: (x[0], x[1].get('timestamp', '')), reverse=True)
                 
-                for date_str in sorted_dates:
-                    workout_data = self.data['workouts'][date_str][exercise_type]
-                    
-                    if isinstance(workout_data, dict):
-                        value = workout_data['value']
-                        timestamp = workout_data.get('timestamp', 'N/A')
-                        time_only = timestamp.split(' ')[1] if ' ' in timestamp else timestamp
-                    else:
-                        value = workout_data
-                        time_only = 'N/A'
+                for date_str, record in all_records:
+                    value = record['value']
+                    timestamp = record.get('timestamp', 'N/A')
+                    time_only = timestamp.split(' ')[1] if ' ' in timestamp else timestamp
+                    record_id = record.get('id', str(uuid.uuid4()))
                     
                     row = table.rowCount()
                     table.insertRow(row)
                     
-                    table.setItem(row, 0, QTableWidgetItem(date_str))
-                    table.setItem(row, 1, QTableWidgetItem(time_only))
-                    table.setItem(row, 2, QTableWidgetItem(str(value)))
-
+                    # Checkbox
+                    checkbox = QCheckBox()
+                    checkbox_widget = QWidget()
+                    checkbox_layout = QHBoxLayout(checkbox_widget)
+                    checkbox_layout.addWidget(checkbox)
+                    checkbox_layout.setAlignment(Qt.AlignCenter)
+                    checkbox_layout.setContentsMargins(0, 0, 0, 0)
+                    table.setCellWidget(row, 0, checkbox_widget)
+                    
+                    # Datum (s ID v UserRole)
+                    date_item = QTableWidgetItem(date_str)
+                    date_item.setData(Qt.UserRole, record_id)
+                    table.setItem(row, 1, date_item)
+                    
+                    table.setItem(row, 2, QTableWidgetItem(time_only))
+                    table.setItem(row, 3, QTableWidgetItem(str(value)))
         except Exception as e:
             print(f"Chyba při update_exercise_tab pro {exercise_type}: {e}")
-    
+
     def refresh_exercise_calendar(self, exercise_type):
         """Vytvoří roční kalendář"""
         try:
@@ -1932,54 +2059,53 @@ class FitnessTrackerApp(QMainWindow):
 
     def get_day_color_gradient(self, date_str, date, today, start_date, exercise_type):
         """Vrátí gradientní barvu podle výkonu a tooltip"""
-        # Před začátkem
         if date < start_date:
             return '#000000', "Před začátkem cvičení"
         
-        # Budoucnost = automaticky skluz (červená)
         if date > today:
             goal = self.calculate_goal(exercise_type, date_str)
             return '#8B0000', f"Budoucí den\nCíl: {goal}"
         
-        # Výpočet cíle
         goal = self.calculate_goal(exercise_type, date_str)
         
-        # Zjistit výkon
         if date_str in self.data['workouts']:
             workout = self.data['workouts'][date_str]
             if exercise_type in workout:
-                workout_data = workout[exercise_type]
-                if isinstance(workout_data, dict):
-                    value = workout_data['value']
+                records = workout[exercise_type]
+                
+                # Sečti všechny záznamy za den
+                if isinstance(records, list):
+                    value = sum(r['value'] for r in records)
+                    count = len(records)
+                elif isinstance(records, dict):
+                    value = records.get('value', 0)
+                    count = 1
                 else:
-                    value = workout_data
+                    value = 0
+                    count = 0
                 
                 difference = value - goal
                 
-                # GRADIENT podle rozdílu
-                if difference >= goal:  # Náskok větší než 100%
-                    color = '#006400'  # Tmavě zelená
+                if difference >= goal:
+                    color = '#006400'
                     status = "Velký náskok"
-                elif difference > 0:  # Náskok menší
-                    # Gradient mezi světle a středně zelenou
+                elif difference > 0:
                     intensity = min(difference / goal, 1.0)
                     green_val = int(144 + (100 - 144) * intensity)
                     color = f'#{0:02x}{green_val:02x}{0:02x}'
                     status = f"Náskok +{difference}"
-                elif difference == 0:  # Přesně
-                    color = '#FFD700'  # Žlutá
+                elif difference == 0:
+                    color = '#FFD700'
                     status = "Přesně podle plánu"
-                elif difference >= -goal * 0.5:  # Skluz do 50%
-                    # Gradient mezi světle a středně červenou
+                elif difference >= -goal * 0.5:
                     intensity = abs(difference) / (goal * 0.5)
                     red_val = int(107 + (255 - 107) * (1 - intensity))
                     color = f'#ff{red_val:02x}{red_val:02x}'
                     status = f"Skluz {difference}"
-                else:  # Velký skluz
-                    color = '#8B0000'  # Tmavě červená
+                else:
+                    color = '#8B0000'
                     status = f"Velký skluz {difference}"
                 
-                # Výpočet celkového skluzu/náskoku do konce roku
                 year = date.year
                 end_of_year = datetime(year, 12, 31).date()
                 
@@ -1992,10 +2118,9 @@ class FitnessTrackerApp(QMainWindow):
                 else:
                     total_status = f"\n📊 Celkový stav k 31.12.: Přesně"
                 
-                tooltip = f"{date_str}\nVýkon: {value}\nCíl: {goal}\n{status}{total_status}"
+                tooltip = f"{date_str}\nVýkon: {value} ({count}× zápis)\nCíl: {goal}\n{status}{total_status}"
                 return color, tooltip
         
-        # Necvičil
         year = date.year
         end_of_year = datetime(year, 12, 31).date()
         total_diff = self.calculate_total_difference_to_date(exercise_type, date, end_of_year)
@@ -2020,17 +2145,16 @@ class FitnessTrackerApp(QMainWindow):
         while current_date <= to_date:
             date_str = current_date.strftime('%Y-%m-%d')
             
-            # Cíl
             goal = self.calculate_goal(exercise_type, date_str)
             total_goal += goal
             
-            # Výkon
             if date_str in self.data['workouts'] and exercise_type in self.data['workouts'][date_str]:
-                workout_data = self.data['workouts'][date_str][exercise_type]
-                if isinstance(workout_data, dict):
-                    total_performed += workout_data['value']
-                else:
-                    total_performed += workout_data
+                records = self.data['workouts'][date_str][exercise_type]
+                
+                if isinstance(records, list):
+                    total_performed += sum(r['value'] for r in records)
+                elif isinstance(records, dict):
+                    total_performed += records.get('value', 0)
             
             current_date += timedelta(days=1)
         
