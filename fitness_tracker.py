@@ -2,37 +2,39 @@
 # -*- coding: utf-8 -*-
 """
 Fitness Tracker - Aplikace pro sledování cvičení s progresivními cíli
-Verze 1.1c
+Verze 1.1d
 
 Changelog:
+v1.1d (25.10.2025) - OPRAVNÁ VERZE
+- Oprava create_month_calendar_for_exercise() - poslední settings reference
+- Kompletní odstranění všech odkazů na staré settings
+- Plně funkční per-year nastavení bez jakýchkoliv chyb
+
 v1.1c (25.10.2025) - OPRAVNÁ VERZE
-- Oprava get_goal_calculation_text() - poslední reference na staré settings
-- Kompletní migrace všech funkcí na year_settings
-- Stabilní verze pro per-year nastavení
+- Oprava get_goal_calculation_text()
+- Kompletní migrace na year_settings
 
 v1.1b (25.10.2025) - OPRAVNÁ VERZE
-- Oprava KeyError: 'settings' v get_available_years()
-- Oprava diagnostiky pro nový formát year_settings
+- Oprava get_available_years()
+- Oprava diagnostiky
 
 v1.1a (25.10.2025)
-- Nastavení specifická pro rok (datum začátku, cíle, přírůstky)
-- Každý rok má vlastní konfiguraci
+- Nastavení specifická pro rok
 
 v1.1 (25.10.2025)
 - Přidána záložka "O aplikaci"
-- Zjednodušené přepínání roku
 
 v1.0.1c (25.10.2025)
 - Oprava vytváření nových roků
 
 v1.0.1b (25.10.2025)
-- Oprava chybějící metody update_exercise_tab
+- Oprava chybějící metody
 
 v1.0.1a (25.10.2025)
 - Oprava KeyError při zavírání
 
 v1.0.1 (25.10.2025)
-- Roční přehled integrovaný do cvičení
+- Roční přehled integrovaný
 
 v1.0.0 (25.10.2025)
 - První stabilní verze
@@ -53,7 +55,7 @@ from PySide6.QtCore import Qt, QDate, QTimer
 from PySide6.QtGui import QColor
 
 # Verze aplikace
-VERSION = "1.1b"
+VERSION = "1.1d"
 VERSION_DATE = "25.10.2025"
 
 # Dark Theme Stylesheet
@@ -1743,7 +1745,10 @@ class FitnessTrackerApp(QMainWindow):
         days_in_month = last_day.day
         
         today = datetime.now().date()
-        start_date = datetime.strptime(self.data['settings']['start_date'], '%Y-%m-%d').date()
+        
+        # OPRAVA: Získej nastavení pro daný rok
+        settings = self.get_year_settings(year)
+        start_date = datetime.strptime(settings['start_date'], '%Y-%m-%d').date()
         
         row = 1
         col = first_weekday
@@ -1769,7 +1774,7 @@ class FitnessTrackerApp(QMainWindow):
         
         group.setLayout(layout)
         return group
-    
+
     def get_day_color_for_exercise(self, date_str, date, today, start_date, exercise_type):
         """Určí barvu dne"""
         if date < start_date:
