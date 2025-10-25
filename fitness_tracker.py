@@ -662,25 +662,25 @@ class FitnessTrackerApp(QMainWindow):
         layout.addWidget(self.tabs)
         
         self.tabs.addTab(self.create_add_workout_tab(), "➕ Přidat výkon")
-        self.tabs.addTab(self.create_settings_tab(), "⚙️ Nastavení")
         self.tabs.addTab(self.create_exercise_tab('kliky', '💪'), "💪 Kliky")
         self.tabs.addTab(self.create_exercise_tab('dřepy', '🦵'), "🦵 Dřepy")
         self.tabs.addTab(self.create_exercise_tab('skrčky', '🧘'), "🧘 Skrčky")
+        self.tabs.addTab(self.create_settings_tab(), "⚙️ Nastavení")
         self.tabs.addTab(self.create_about_tab(), "ℹ️ O aplikaci")
- 
+
     def add_single_workout(self, exercise_type, value):
         """Přidá výkon pro jednu kategorii"""
         if value == 0:
             self.show_message("Chyba", f"Zadej nenulovou hodnotu pro {exercise_type}!", QMessageBox.Warning)
             return
         
-        today_str = datetime.now().strftime('%Y-%m-%d')
+        selected_date_str = self.add_date_edit.date().toString('yyyy-MM-dd')
         
-        if today_str not in self.data['workouts']:
-            self.data['workouts'][today_str] = {}
+        if selected_date_str not in self.data['workouts']:
+            self.data['workouts'][selected_date_str] = {}
         
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        self.data['workouts'][today_str][exercise_type] = {
+        self.data['workouts'][selected_date_str][exercise_type] = {
             'value': value,
             'timestamp': timestamp
         }
@@ -692,9 +692,8 @@ class FitnessTrackerApp(QMainWindow):
             self.update_exercise_tab(exercise)
             self.refresh_exercise_calendar(exercise)
         
-        # Refresh přehledu cílů v záložce přidat
-        self.tabs.setCurrentIndex(0)  # Přepni na přidat
-        self.tabs.setCurrentIndex(0)  # Refresh
+        # Refresh přehledu cílů
+        self.refresh_add_tab_goals()
         
         self.show_message("Přidáno", f"Výkon byl zaznamenán: {value} {exercise_type}")
         
@@ -716,31 +715,31 @@ class FitnessTrackerApp(QMainWindow):
             self.show_message("Chyba", "Zadej alespoň jednu nenulovou hodnotu!", QMessageBox.Warning)
             return
         
-        today_str = datetime.now().strftime('%Y-%m-%d')
+        selected_date_str = self.add_date_edit.date().toString('yyyy-MM-dd')
         
-        if today_str not in self.data['workouts']:
-            self.data['workouts'][today_str] = {}
+        if selected_date_str not in self.data['workouts']:
+            self.data['workouts'][selected_date_str] = {}
         
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         
         added = []
         
         if kliky_val > 0:
-            self.data['workouts'][today_str]['kliky'] = {
+            self.data['workouts'][selected_date_str]['kliky'] = {
                 'value': kliky_val,
                 'timestamp': timestamp
             }
             added.append(f"kliky: {kliky_val}")
         
         if drepy_val > 0:
-            self.data['workouts'][today_str]['dřepy'] = {
+            self.data['workouts'][selected_date_str]['dřepy'] = {
                 'value': drepy_val,
                 'timestamp': timestamp
             }
             added.append(f"dřepy: {drepy_val}")
         
         if skrcky_val > 0:
-            self.data['workouts'][today_str]['skrčky'] = {
+            self.data['workouts'][selected_date_str]['skrčky'] = {
                 'value': skrcky_val,
                 'timestamp': timestamp
             }
@@ -754,8 +753,7 @@ class FitnessTrackerApp(QMainWindow):
             self.refresh_exercise_calendar(exercise)
         
         # Refresh přehledu
-        self.tabs.setCurrentIndex(0)
-        self.tabs.setCurrentIndex(0)
+        self.refresh_add_tab_goals()
         
         self.show_message("Přidáno", f"Výkony zaznamenány:\n" + "\n".join(added))
         
@@ -769,27 +767,35 @@ class FitnessTrackerApp(QMainWindow):
         widget = QWidget()
         layout = QVBoxLayout(widget)
         
-        title_label = QLabel("➕ Přidání dnešního výkonu")
+        title_label = QLabel("➕ Přidání výkonu")
         title_label.setStyleSheet("font-size: 18px; font-weight: bold; color: #14919b; padding: 10px;")
         layout.addWidget(title_label)
         
-        # Dnešní datum (informativně)
-        today_label = QLabel(f"📅 Datum: {datetime.now().strftime('%d.%m.%Y (%A)')}")
-        today_label.setStyleSheet("font-size: 14px; padding: 5px; color: #a0a0a0;")
-        layout.addWidget(today_label)
+        # Výběr data
+        date_row = QHBoxLayout()
+        date_row.addWidget(QLabel("📅 Datum:"))
+        self.add_date_edit = QDateEdit()
+        self.add_date_edit.setDate(QDate.currentDate())
+        self.add_date_edit.setCalendarPopup(True)
+        self.add_date_edit.dateChanged.connect(self.refresh_add_tab_goals)
+        date_row.addWidget(self.add_date_edit)
+        date_row.addStretch()
+        layout.addLayout(date_row)
         
-        # Přehled dnešních cílů
-        goals_group = QGroupBox("🎯 Dnešní cíle")
+        # Přehled cílů pro zvolené datum
+        goals_group = QGroupBox("🎯 Cíle pro zvolené datum")
         goals_layout = QVBoxLayout()
+        goals_layout.setObjectName("add_goals_layout")
         
-        today_str = datetime.now().strftime('%Y-%m-%d')
+        self.add_goals_labels = {}
+        
+        selected_date_str = self.add_date_edit.date().toString('yyyy-MM-dd')
         
         for exercise in ['kliky', 'dřepy', 'skrčky']:
-            goal = self.calculate_goal(exercise, today_str)
+            goal = self.calculate_goal(exercise, selected_date_str)
             
-            # Zjisti, zda už bylo dnes přidáno
-            if today_str in self.data['workouts'] and exercise in self.data['workouts'][today_str]:
-                workout_data = self.data['workouts'][today_str][exercise]
+            if selected_date_str in self.data['workouts'] and exercise in self.data['workouts'][selected_date_str]:
+                workout_data = self.data['workouts'][selected_date_str][exercise]
                 if isinstance(workout_data, dict):
                     current_value = workout_data['value']
                 else:
@@ -798,15 +804,20 @@ class FitnessTrackerApp(QMainWindow):
                 if current_value >= goal:
                     status = f"✅ Splněno ({current_value}/{goal})"
                     color = "#32c766"
-                else:
+                elif current_value > 0:
                     status = f"⏳ Rozpracováno ({current_value}/{goal})"
                     color = "#FFD700"
+                else:
+                    status = f"❌ Nesplněno (0/{goal})"
+                    color = "#ff6b6b"
             else:
                 status = f"❌ Nesplněno (0/{goal})"
                 color = "#ff6b6b"
             
             goal_label = QLabel(f"{exercise.capitalize()}: {status}")
             goal_label.setStyleSheet(f"font-size: 13px; padding: 5px; color: {color}; font-weight: bold;")
+            goal_label.setObjectName(f"goal_label_{exercise}")
+            self.add_goals_labels[exercise] = goal_label
             goals_layout.addWidget(goal_label)
         
         goals_group.setLayout(goals_layout)
@@ -864,7 +875,38 @@ class FitnessTrackerApp(QMainWindow):
         layout.addStretch()
         
         return widget
-    
+
+    def refresh_add_tab_goals(self):
+        """Aktualizuje přehled cílů při změně data"""
+        selected_date_str = self.add_date_edit.date().toString('yyyy-MM-dd')
+        
+        for exercise in ['kliky', 'dřepy', 'skrčky']:
+            goal = self.calculate_goal(exercise, selected_date_str)
+            
+            if selected_date_str in self.data['workouts'] and exercise in self.data['workouts'][selected_date_str]:
+                workout_data = self.data['workouts'][selected_date_str][exercise]
+                if isinstance(workout_data, dict):
+                    current_value = workout_data['value']
+                else:
+                    current_value = workout_data
+                
+                if current_value >= goal:
+                    status = f"✅ Splněno ({current_value}/{goal})"
+                    color = "#32c766"
+                elif current_value > 0:
+                    status = f"⏳ Rozpracováno ({current_value}/{goal})"
+                    color = "#FFD700"
+                else:
+                    status = f"❌ Nesplněno (0/{goal})"
+                    color = "#ff6b6b"
+            else:
+                status = f"❌ Nesplněno (0/{goal})"
+                color = "#ff6b6b"
+            
+            if exercise in self.add_goals_labels:
+                self.add_goals_labels[exercise].setText(f"{exercise.capitalize()}: {status}")
+                self.add_goals_labels[exercise].setStyleSheet(f"font-size: 13px; padding: 5px; color: {color}; font-weight: bold;")
+
     def on_tab_changed(self, index):
         try:
             tab_name = self.tabs.tabText(index)
@@ -1108,51 +1150,61 @@ class FitnessTrackerApp(QMainWindow):
         self.current_year_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.current_year_label)
         
-        date_group = QGroupBox("Startovní datum")
-        date_layout = QFormLayout()
+        # SDRUŽENÁ SKUPINA: Nastavení cílů
+        goals_settings_group = QGroupBox("🎯 Nastavení cílů pro vybraný rok")
+        goals_settings_layout = QVBoxLayout()
         
+        # Startovní datum
+        date_layout = QFormLayout()
         self.start_date_edit = QDateEdit()
         self.start_date_edit.setCalendarPopup(True)
-        date_layout.addRow("Datum zahájení:", self.start_date_edit)
+        date_layout.addRow("📅 Datum zahájení:", self.start_date_edit)
+        goals_settings_layout.addLayout(date_layout)
         
-        date_group.setLayout(date_layout)
-        layout.addWidget(date_group)
+        # Základní cíle
+        base_label = QLabel("Základní cíle (na startovní datum):")
+        base_label.setStyleSheet("font-weight: bold; padding-top: 10px; color: #14919b;")
+        goals_settings_layout.addWidget(base_label)
         
-        base_goals_group = QGroupBox("Základní cíle (na startovní datum)")
         base_goals_layout = QFormLayout()
         
         self.base_kliky = QSpinBox()
         self.base_kliky.setRange(0, 1000)
-        base_goals_layout.addRow("Kliky:", self.base_kliky)
+        base_goals_layout.addRow("💪 Kliky:", self.base_kliky)
         
         self.base_drepy = QSpinBox()
         self.base_drepy.setRange(0, 1000)
-        base_goals_layout.addRow("Dřepy:", self.base_drepy)
+        base_goals_layout.addRow("🦵 Dřepy:", self.base_drepy)
         
         self.base_skrcky = QSpinBox()
         self.base_skrcky.setRange(0, 1000)
-        base_goals_layout.addRow("Skrčky:", self.base_skrcky)
+        base_goals_layout.addRow("🧘 Skrčky:", self.base_skrcky)
         
-        base_goals_group.setLayout(base_goals_layout)
-        layout.addWidget(base_goals_group)
+        goals_settings_layout.addLayout(base_goals_layout)
         
-        increment_group = QGroupBox("Týdenní přírůstky (za každý celý týden)")
+        # Týdenní přírůstky
+        increment_label = QLabel("Týdenní přírůstky (za každý celý týden):")
+        increment_label.setStyleSheet("font-weight: bold; padding-top: 10px; color: #14919b;")
+        goals_settings_layout.addWidget(increment_label)
+        
         increment_layout = QFormLayout()
         
         self.increment_kliky = QSpinBox()
         self.increment_kliky.setRange(0, 100)
-        increment_layout.addRow("Kliky (+týdně):", self.increment_kliky)
+        increment_layout.addRow("💪 Kliky (+týdně):", self.increment_kliky)
         
         self.increment_drepy = QSpinBox()
         self.increment_drepy.setRange(0, 100)
-        increment_layout.addRow("Dřepy (+týdně):", self.increment_drepy)
+        increment_layout.addRow("🦵 Dřepy (+týdně):", self.increment_drepy)
         
         self.increment_skrcky = QSpinBox()
         self.increment_skrcky.setRange(0, 100)
-        increment_layout.addRow("Skrčky (+týdně):", self.increment_skrcky)
+        increment_layout.addRow("🧘 Skrčky (+týdně):", self.increment_skrcky)
         
-        increment_group.setLayout(increment_layout)
-        layout.addWidget(increment_group)
+        goals_settings_layout.addLayout(increment_layout)
+        
+        goals_settings_group.setLayout(goals_settings_layout)
+        layout.addWidget(goals_settings_group)
         
         save_btn = QPushButton("💾 Uložit nastavení")
         save_btn.clicked.connect(self.save_settings)
@@ -1163,7 +1215,7 @@ class FitnessTrackerApp(QMainWindow):
         self.load_year_settings_to_ui(self.current_settings_year)
         
         return widget
-    
+
     def load_year_settings_to_ui(self, year):
         """Načte nastavení pro daný rok do UI"""
         self.current_settings_year = year
@@ -1790,26 +1842,39 @@ class FitnessTrackerApp(QMainWindow):
                       'Červenec', 'Srpen', 'Září', 'Říjen', 'Listopad', 'Prosinec']
             
             months_grid = QGridLayout()
-            months_grid.setSpacing(5)
+            months_grid.setSpacing(8)
+            months_grid.setContentsMargins(5, 5, 5, 5)
             
             for month_num in range(1, 13):
                 month_widget = self.create_month_calendar_for_exercise(selected_year, month_num, months[month_num-1], exercise_type)
+                month_widget.setMinimumWidth(180)
                 row = (month_num - 1) // 3
                 col = (month_num - 1) % 3
                 months_grid.addWidget(month_widget, row, col)
+            
+            # Responsive columns
+            for col in range(3):
+                months_grid.setColumnStretch(col, 1)
             
             calendar_layout.addLayout(months_grid)
             
             self.update_year_statistics(exercise_type, selected_year)
         except Exception as e:
             print(f"Chyba při refresh_exercise_calendar pro {exercise_type}: {e}")
-    
+
     def create_month_calendar_for_exercise(self, year, month, month_name, exercise_type):
         """Vytvoří kalendář měsíce s GRADIENTNÍMI BARVAMI"""
         group = QGroupBox(f"{month_name}")
-        group.setStyleSheet("QGroupBox { font-size: 11px; }")
+        group.setStyleSheet("""
+            QGroupBox { 
+                font-size: 11px; 
+                background-color: #2d2d2d;
+                border: 1px solid #3d3d3d;
+            }
+        """)
         layout = QGridLayout()
-        layout.setSpacing(1)
+        layout.setSpacing(2)
+        layout.setContentsMargins(5, 5, 5, 5)
         
         days = ['Po', 'Út', 'St', 'Čt', 'Pá', 'So', 'Ne']
         for col, day in enumerate(days):
@@ -1844,7 +1909,7 @@ class FitnessTrackerApp(QMainWindow):
             day_label.setFixedSize(25, 25)
             day_label.setFrameStyle(QFrame.Box)
             
-            # NOVÁ LOGIKA: Gradientní barvy
+            # Gradientní barvy
             color, tooltip_text = self.get_day_color_gradient(date_str, date.date(), today, start_date, exercise_type)
             
             # Zvýraznění dnešního dne
@@ -1864,9 +1929,9 @@ class FitnessTrackerApp(QMainWindow):
         
         group.setLayout(layout)
         return group
-    
+
     def get_day_color_gradient(self, date_str, date, today, start_date, exercise_type):
-        """NOVÁ FUNKCE: Vrátí gradientní barvu podle výkonu a tooltip"""
+        """Vrátí gradientní barvu podle výkonu a tooltip"""
         # Před začátkem
         if date < start_date:
             return '#000000', "Před začátkem cvičení"
@@ -1914,14 +1979,63 @@ class FitnessTrackerApp(QMainWindow):
                     color = '#8B0000'  # Tmavě červená
                     status = f"Velký skluz {difference}"
                 
-                tooltip = f"{date_str}\nVýkon: {value}\nCíl: {goal}\n{status}"
+                # Výpočet celkového skluzu/náskoku do konce roku
+                year = date.year
+                end_of_year = datetime(year, 12, 31).date()
+                
+                total_diff = self.calculate_total_difference_to_date(exercise_type, date, end_of_year)
+                
+                if total_diff > 0:
+                    total_status = f"\n📊 Celkový náskok k 31.12.: +{total_diff}"
+                elif total_diff < 0:
+                    total_status = f"\n📊 Celkový skluz k 31.12.: {total_diff}"
+                else:
+                    total_status = f"\n📊 Celkový stav k 31.12.: Přesně"
+                
+                tooltip = f"{date_str}\nVýkon: {value}\nCíl: {goal}\n{status}{total_status}"
                 return color, tooltip
         
         # Necvičil
-        color = '#FF6B6B'  # Červená
-        tooltip = f"{date_str}\nNecvičil\nCíl: {goal}\nSkluz: -{goal}"
+        year = date.year
+        end_of_year = datetime(year, 12, 31).date()
+        total_diff = self.calculate_total_difference_to_date(exercise_type, date, end_of_year)
+        
+        if total_diff > 0:
+            total_status = f"\n📊 Celkový náskok k 31.12.: +{total_diff}"
+        elif total_diff < 0:
+            total_status = f"\n📊 Celkový skluz k 31.12.: {total_diff}"
+        else:
+            total_status = f"\n📊 Celkový stav k 31.12.: Přesně"
+        
+        color = '#FF6B6B'
+        tooltip = f"{date_str}\nNecvičil\nCíl: {goal}\nSkluz: -{goal}{total_status}"
         return color, tooltip
-    
+
+    def calculate_total_difference_to_date(self, exercise_type, from_date, to_date):
+        """Vypočítá celkový skluz/náskok od daného data do zadaného data"""
+        total_performed = 0
+        total_goal = 0
+        
+        current_date = from_date
+        while current_date <= to_date:
+            date_str = current_date.strftime('%Y-%m-%d')
+            
+            # Cíl
+            goal = self.calculate_goal(exercise_type, date_str)
+            total_goal += goal
+            
+            # Výkon
+            if date_str in self.data['workouts'] and exercise_type in self.data['workouts'][date_str]:
+                workout_data = self.data['workouts'][date_str][exercise_type]
+                if isinstance(workout_data, dict):
+                    total_performed += workout_data['value']
+                else:
+                    total_performed += workout_data
+            
+            current_date += timedelta(days=1)
+        
+        return total_performed - total_goal
+
     def update_year_statistics(self, exercise_type, year):
         """Aktualizuje statistiky roku"""
         stats_label = self.findChild(QLabel, f"stats_year_label_{exercise_type}")
