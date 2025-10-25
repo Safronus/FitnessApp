@@ -2,21 +2,22 @@
 # -*- coding: utf-8 -*-
 """
 Fitness Tracker - Aplikace pro sledování cvičení s progresivními cíli
-Verze 1.1d
+Verze 1.1e
 
 Changelog:
+v1.1e (25.10.2025) - OPRAVNÁ VERZE
+- Oprava zobrazení cílů pro budoucí/minulé roky v záložkách cvičení
+- Kompletní mazání roku včetně year_settings
+- Rok po smazání zmizí ze všech seznamů a selectorů
+
 v1.1d (25.10.2025) - OPRAVNÁ VERZE
-- Oprava create_month_calendar_for_exercise() - poslední settings reference
-- Kompletní odstranění všech odkazů na staré settings
-- Plně funkční per-year nastavení bez jakýchkoliv chyb
+- Oprava kalendáře - poslední settings reference
 
 v1.1c (25.10.2025) - OPRAVNÁ VERZE
-- Oprava get_goal_calculation_text()
 - Kompletní migrace na year_settings
 
 v1.1b (25.10.2025) - OPRAVNÁ VERZE
 - Oprava get_available_years()
-- Oprava diagnostiky
 
 v1.1a (25.10.2025)
 - Nastavení specifická pro rok
@@ -31,13 +32,13 @@ v1.0.1b (25.10.2025)
 - Oprava chybějící metody
 
 v1.0.1a (25.10.2025)
-- Oprava KeyError při zavírání
+- Oprava KeyError
 
 v1.0.1 (25.10.2025)
-- Roční přehled integrovaný
+- Roční přehled
 
 v1.0.0 (25.10.2025)
-- První stabilní verze
+- První verze
 """
 
 import sys
@@ -55,7 +56,7 @@ from PySide6.QtCore import Qt, QDate, QTimer
 from PySide6.QtGui import QColor
 
 # Verze aplikace
-VERSION = "1.1d"
+VERSION = "1.1e"
 VERSION_DATE = "25.10.2025"
 
 # Dark Theme Stylesheet
@@ -769,6 +770,7 @@ class FitnessTrackerApp(QMainWindow):
         no_btn.setText("Ne, zrušit")
         
         if msg.exec() == QMessageBox.Yes:
+            # Smaž workout data
             dates_to_delete = []
             for date_str in self.data['workouts'].keys():
                 if int(date_str.split('-')[0]) == year:
@@ -776,6 +778,11 @@ class FitnessTrackerApp(QMainWindow):
             
             for date_str in dates_to_delete:
                 del self.data['workouts'][date_str]
+            
+            # NOVÉ: Smaž year_settings pro tento rok
+            year_str = str(year)
+            if year_str in self.data['year_settings']:
+                del self.data['year_settings'][year_str]
             
             self.save_data()
             self.update_all_year_selectors()
@@ -785,7 +792,7 @@ class FitnessTrackerApp(QMainWindow):
             
             for exercise in ['kliky', 'dřepy', 'skrčky']:
                 self.update_exercise_tab(exercise)
-    
+
     def update_all_year_selectors(self):
         """Aktualizuje všechny year selectory"""
         available_years = self.get_available_years()
@@ -1122,14 +1129,20 @@ class FitnessTrackerApp(QMainWindow):
         year = selected_items[0].data(Qt.UserRole)
         self.delete_year_data(year)
         
+        # Refresh seznamu roků
         self.years_list.clear()
-        for y in self.get_available_years():
+        available_years = self.get_available_years()
+        for y in available_years:
             year_workouts = sum(1 for date_str in self.data['workouts'].keys() 
                               if int(date_str.split('-')[0]) == y)
             item = QListWidgetItem(f"📆 Rok {y} ({year_workouts} dnů s cvičením)")
             item.setData(Qt.UserRole, y)
             self.years_list.addItem(item)
-    
+        
+        # NOVÉ: Pokud existují roky, nastav první z nich
+        if available_years:
+            self.load_year_settings_to_ui(available_years[0])
+
     def show_diagnostics(self):
         """Zobrazí diagnostické okno"""
         diag_window = QWidget()
@@ -1583,14 +1596,30 @@ class FitnessTrackerApp(QMainWindow):
             today = datetime.now()
             today_str = today.strftime('%Y-%m-%d')
             
-            today_goal = self.calculate_goal(exercise_type, today_str)
-            today_goal_label = self.findChild(QLabel, f"today_goal_label_{exercise_type}")
-            if today_goal_label:
-                today_goal_label.setText(f"🎯 Dnešní cíl: {today_goal}")
+            # OPRAVA: Pokud zobrazujeme budoucí rok, zobraz cíl pro 1.1. toho roku
+            if selected_year > today.year:
+                display_date_str = f"{selected_year}-01-01"
+                today_goal = self.calculate_goal(exercise_type, display_date_str)
+                today_goal_label = self.findChild(QLabel, f"today_goal_label_{exercise_type}")
+                if today_goal_label:
+                    today_goal_label.setText(f"🎯 Cíl pro {selected_year}: {today_goal}")
+            elif selected_year < today.year:
+                # Pro minulé roky zobraz poslední den roku
+                display_date_str = f"{selected_year}-12-31"
+                today_goal = self.calculate_goal(exercise_type, display_date_str)
+                today_goal_label = self.findChild(QLabel, f"today_goal_label_{exercise_type}")
+                if today_goal_label:
+                    today_goal_label.setText(f"🎯 Cíl {selected_year} (31.12.): {today_goal}")
+            else:
+                # Aktuální rok - zobraz dnešní cíl
+                today_goal = self.calculate_goal(exercise_type, today_str)
+                today_goal_label = self.findChild(QLabel, f"today_goal_label_{exercise_type}")
+                if today_goal_label:
+                    today_goal_label.setText(f"🎯 Dnešní cíl: {today_goal}")
             
             calc_label = self.findChild(QLabel, f"calc_label_{exercise_type}")
             if calc_label:
-                calc_text = self.get_goal_calculation_text(exercise_type, today_str)
+                calc_text = self.get_goal_calculation_text(exercise_type, display_date_str if selected_year != today.year else today_str)
                 calc_label.setText(calc_text)
             
             total_performed, total_yearly_goal, goal_to_date = self.calculate_yearly_progress(exercise_type, selected_year)
