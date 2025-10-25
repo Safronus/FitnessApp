@@ -2,14 +2,16 @@
 # -*- coding: utf-8 -*-
 """
 Fitness Tracker - Aplikace pro sledování cvičení s progresivními cíli
-Verze 1.4
+Verze 1.4a
 
 Changelog:
+v1.4a (26.10.2025) - OPRAVNÁ VERZE
+- Oprava update_year_statistics() - správné zpracování list hodnot
+- Oprava porovnání list/int při výpočtu statistik
+- Oprava pádu aplikace při importu
+
 v1.4 (26.10.2025)
-- Export celého cvičení do JSON souboru (všechny roky, záznamy, nastavení)
-- Import z JSON souboru s možností sloučení nebo přepsání dat
-- Nová sekce "Záloha a obnova dat" v záložce Nastavení
-- Automatické pojmenování zálohy s časovým razítkem
+- Export a import celého cvičení
 
 v1.3f - v1.0.0
 - Předchozí verze
@@ -31,7 +33,7 @@ from PySide6.QtCore import Qt, QDate, QTimer
 from PySide6.QtGui import QColor
 
 # Verze aplikace
-VERSION = "1.4"
+VERSION = "1.4a"
 VERSION_DATE = "26.10.2025"
 
 # Dark Theme Stylesheet
@@ -2334,51 +2336,76 @@ class FitnessTrackerApp(QMainWindow):
         
         return total_performed - total_goal
 
-    def update_year_statistics(self, exercise_type, year):
-        """Aktualizuje statistiky roku"""
-        stats_label = self.findChild(QLabel, f"stats_year_label_{exercise_type}")
-        if not stats_label:
-            return
-        
-        year_workouts = {}
-        for date_str, data in self.data['workouts'].items():
-            workout_year = int(date_str.split('-')[0])
-            if workout_year == year and exercise_type in data:
-                year_workouts[date_str] = data
-        
-        total_days = len(year_workouts)
-        
-        days_achieved = 0
-        for date_str in year_workouts.keys():
-            workout_data = year_workouts[date_str][exercise_type]
-            if isinstance(workout_data, dict):
-                value = workout_data['value']
-            else:
-                value = workout_data
+    def update_year_statistics(self, exercise_type, selected_year):
+        """Aktualizuje statistiky pod kalendářem"""
+        try:
+            stats_label = self.findChild(QLabel, f"stats_year_label_{exercise_type}")
+            if not stats_label:
+                return
             
-            goal = self.calculate_goal(exercise_type, date_str)
-            if value >= goal:
-                days_achieved += 1
-        
-        today = datetime.now()
-        if year == today.year:
-            days_in_year = (today - datetime(year, 1, 1)).days + 1
-        elif year < today.year:
-            days_in_year = 365 + (1 if year % 4 == 0 and (year % 100 != 0 or year % 400 == 0) else 0)
-        else:
-            days_in_year = 0
-        
-        if days_in_year > 0:
-            activity_percent = (total_days / days_in_year) * 100
-            achievement_percent = (days_achieved / total_days * 100) if total_days > 0 else 0
-        else:
-            activity_percent = 0
-            achievement_percent = 0
-        
-        stats_label.setText(
-            f"📊 Rok {year}: {total_days} dnů s cvičením ({activity_percent:.1f}%) | "
-            f"Splněno cílů: {days_achieved}/{total_days} ({achievement_percent:.1f}%)"
-        )
+            total_days = 0
+            days_met = 0
+            days_partial = 0
+            days_missed = 0
+            
+            start_date = datetime(selected_year, 1, 1).date()
+            end_date = datetime(selected_year, 12, 31).date()
+            today = datetime.now().date()
+            
+            settings = self.get_year_settings(selected_year)
+            settings_start_date = datetime.strptime(settings['start_date'], '%Y-%m-%d').date()
+            
+            current_date = max(start_date, settings_start_date)
+            end_calc_date = min(end_date, today)
+            
+            while current_date <= end_calc_date:
+                date_str = current_date.strftime('%Y-%m-%d')
+                goal = self.calculate_goal(exercise_type, date_str)
+                
+                # OPRAVA: Ujisti se že goal je int
+                if not isinstance(goal, int):
+                    goal = int(goal) if goal else 0
+                
+                total_days += 1
+                
+                if date_str in self.data['workouts'] and exercise_type in self.data['workouts'][date_str]:
+                    workout_data = self.data['workouts'][date_str][exercise_type]
+                    
+                    # OPRAVA: Správné zpracování value
+                    if isinstance(workout_data, list):
+                        value = sum(r['value'] for r in workout_data)
+                    elif isinstance(workout_data, dict):
+                        value = workout_data.get('value', 0)
+                    else:
+                        value = 0
+                    
+                    if value >= goal:
+                        days_met += 1
+                    elif value > 0:
+                        days_partial += 1
+                    else:
+                        days_missed += 1
+                else:
+                    days_missed += 1
+                
+                current_date += timedelta(days=1)
+            
+            met_pct = (days_met / total_days * 100) if total_days > 0 else 0
+            partial_pct = (days_partial / total_days * 100) if total_days > 0 else 0
+            missed_pct = (days_missed / total_days * 100) if total_days > 0 else 0
+            
+            stats_text = (
+                f"📊 Statistiky roku {selected_year} (do {end_calc_date.strftime('%d.%m.')}): "
+                f"✅ Splněno: {days_met} ({met_pct:.1f}%) | "
+                f"⏳ Částečně: {days_partial} ({partial_pct:.1f}%) | "
+                f"❌ Nesplněno: {days_missed} ({missed_pct:.1f}%)"
+            )
+            
+            stats_label.setText(stats_text)
+        except Exception as e:
+            print(f"Chyba v update_year_statistics pro {exercise_type}: {e}")
+            import traceback
+            traceback.print_exc()
 
     def export_data(self):
         """Export celého cvičení do JSON souboru"""

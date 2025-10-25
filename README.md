@@ -123,6 +123,14 @@ Všechna data se ukládají lokálně v souboru `fitness_data.json` ve stejném 
 
 ## 📝 Changelog
 
+### v1.4a (26.10.2025) - OPRAVNÁ VERZE
+**Opravy:**
+- ✅ Oprava update_year_statistics() - správné zpracování list hodnot
+- 📊 Oprava porovnání list/int při výpočtu statistik roku
+- 💥 Oprava pádu aplikace při importu dat
+
+---
+
 ### v1.4 (26.10.2025)
 **Nové funkce:**
 - 📤 Export celého cvičení do JSON souboru
@@ -368,5 +376,5 @@ Vytvořeno v roce 2025
 - [Issues](https://github.com/Safronus/FitnessApp/issues)
 
 ---
-**Poslední aktualizace:** 26.10.2025  
-**Aktuální verze:** 1.4
+**Poslední aktualizace:** 26.10.2025 1:00:00
+**Aktuální verze:** 1.4a
