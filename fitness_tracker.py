@@ -2,15 +2,18 @@
 # -*- coding: utf-8 -*-
 """
 Fitness Tracker - Aplikace pro sledování cvičení s progresivními cíli
-Verze 1.3d
+Verze 1.3e
 
 Changelog:
-v1.3d (26.10.2025) - OPRAVNÁ VERZE
-- Vypnutí auto-refresh (řešení problému s odznačováním checkboxů)
-- Oprava porovnání v get_day_color_gradient() - kontrola typu goal
-- Změna názvů sloupců: "Datum cvičení" a "Čas přidání"
+v1.3e (26.10.2025) - OPRAVNÁ VERZE
+- Oprava "stínového" kalendáře - lepší styling scroll area
+- Nový design měsíčního kalendáře (větší čísla, menší názvy dnů)
+- Fixní velikost kalendáře pro konzistentní zobrazení
+- Skluz do konce roku i pro budoucí dny
+- Oprava porovnání v calculate_total_difference_to_date()
+- Kalendář v 4 sloupcích místo 3
 
-v1.3c - v1.0.0
+v1.3d - v1.0.0
 - Předchozí verze
 """
 
@@ -30,7 +33,7 @@ from PySide6.QtCore import Qt, QDate, QTimer
 from PySide6.QtGui import QColor
 
 # Verze aplikace
-VERSION = "1.3d"
+VERSION = "1.3e"
 VERSION_DATE = "26.10.2025"
 
 # Dark Theme Stylesheet
@@ -1607,7 +1610,7 @@ class FitnessTrackerApp(QMainWindow):
         table = QTableWidget()
         table.setObjectName(f"table_{exercise_type}")
         table.setColumnCount(5)
-        table.setHorizontalHeaderLabels(["☑️", "Datum cvičení", "Čas přidání", "Výkon", "Akce"])  # OPRAVA: Nové názvy
+        table.setHorizontalHeaderLabels(["☑️", "Datum cvičení", "Čas přidání", "Výkon", "Akce"])
         
         table.verticalHeader().setDefaultSectionSize(30)
         table.verticalHeader().setMinimumSectionSize(30)
@@ -1621,6 +1624,7 @@ class FitnessTrackerApp(QMainWindow):
         
         left_layout.addWidget(table)
         
+        # OPRAVA: Pravý panel BEZ ScrollArea
         right_panel = QWidget()
         right_layout = QVBoxLayout(right_panel)
         right_layout.setContentsMargins(0, 0, 0, 0)
@@ -1656,13 +1660,15 @@ class FitnessTrackerApp(QMainWindow):
         
         right_layout.addWidget(legend_frame)
         
+        # OPRAVA: Scroll area s kalendářem
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll.setStyleSheet("QScrollArea { border: none; background-color: #1e1e1e; }")
         
         calendar_widget = QWidget()
+        calendar_widget.setStyleSheet("background-color: #1e1e1e;")
         calendar_layout = QVBoxLayout(calendar_widget)
+        calendar_layout.setContentsMargins(0, 0, 0, 0)
         
         self.exercise_calendar_widgets[exercise_type] = calendar_layout
         
@@ -2049,45 +2055,55 @@ class FitnessTrackerApp(QMainWindow):
                       'Červenec', 'Srpen', 'Září', 'Říjen', 'Listopad', 'Prosinec']
             
             months_grid = QGridLayout()
-            months_grid.setSpacing(8)
+            months_grid.setSpacing(10)
             months_grid.setContentsMargins(5, 5, 5, 5)
             
             for month_num in range(1, 13):
                 month_widget = self.create_month_calendar_for_exercise(selected_year, month_num, months[month_num-1], exercise_type)
-                month_widget.setMinimumWidth(180)
-                row = (month_num - 1) // 3
-                col = (month_num - 1) % 3
+                row = (month_num - 1) // 4  # OPRAVA: 4 sloupce
+                col = (month_num - 1) % 4
                 months_grid.addWidget(month_widget, row, col)
             
-            # Responsive columns
-            for col in range(3):
-                months_grid.setColumnStretch(col, 1)
-            
             calendar_layout.addLayout(months_grid)
+            calendar_layout.addStretch()  # OPRAVA: Stretch místo scrollu
             
             self.update_year_statistics(exercise_type, selected_year)
         except Exception as e:
             print(f"Chyba při refresh_exercise_calendar pro {exercise_type}: {e}")
+            import traceback
+            traceback.print_exc()
 
     def create_month_calendar_for_exercise(self, year, month, month_name, exercise_type):
         """Vytvoří kalendář měsíce s GRADIENTNÍMI BARVAMI"""
         group = QGroupBox(f"{month_name}")
         group.setStyleSheet("""
             QGroupBox { 
-                font-size: 11px; 
-                background-color: #2d2d2d;
-                border: 1px solid #3d3d3d;
+                font-size: 12px;
+                font-weight: bold;
+                background-color: #1e1e1e;
+                border: 2px solid #0d7377;
+                border-radius: 5px;
+                padding-top: 15px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                subcontrol-position: top center;
+                padding: 2px 5px;
+                color: #14919b;
             }
         """)
+        group.setFixedSize(220, 200)  # OPRAVA: Fixní velikost
+        
         layout = QGridLayout()
-        layout.setSpacing(2)
-        layout.setContentsMargins(5, 5, 5, 5)
+        layout.setSpacing(3)
+        layout.setContentsMargins(8, 8, 8, 8)
         
         days = ['Po', 'Út', 'St', 'Čt', 'Pá', 'So', 'Ne']
         for col, day in enumerate(days):
             label = QLabel(day)
             label.setAlignment(Qt.AlignCenter)
-            label.setStyleSheet("font-weight: bold; padding: 2px; color: #e0e0e0; font-size: 9px;")
+            label.setStyleSheet("font-weight: bold; padding: 2px; color: #a0a0a0; font-size: 9px;")
+            label.setFixedHeight(15)  # OPRAVA: Menší výška
             layout.addWidget(label, 0, col)
         
         first_day = datetime(year, month, 1)
@@ -2113,7 +2129,7 @@ class FitnessTrackerApp(QMainWindow):
             
             day_label = QLabel(str(day))
             day_label.setAlignment(Qt.AlignCenter)
-            day_label.setFixedSize(25, 25)
+            day_label.setFixedSize(28, 24)  # OPRAVA: Větší pole
             day_label.setFrameStyle(QFrame.Box)
             
             # Gradientní barvy
@@ -2123,7 +2139,7 @@ class FitnessTrackerApp(QMainWindow):
             border_style = "border: 2px solid #87CEEB;" if date.date() == today else "border: 1px solid #3d3d3d;"
             
             day_label.setStyleSheet(
-                f"background-color: {color}; font-weight: bold; color: #ffffff; {border_style} font-size: 9px;"
+                f"background-color: {color}; font-weight: bold; color: #ffffff; {border_style} font-size: 11px;"  # OPRAVA: Větší font
             )
             day_label.setToolTip(tooltip_text)
             
@@ -2225,20 +2241,29 @@ class FitnessTrackerApp(QMainWindow):
         total_performed = 0
         total_goal = 0
         
+        today = datetime.now().date()
+        
         current_date = from_date
         while current_date <= to_date:
             date_str = current_date.strftime('%Y-%m-%d')
             
             goal = self.calculate_goal(exercise_type, date_str)
+            
+            # OPRAVA: Ujisti se že goal je int
+            if not isinstance(goal, int):
+                goal = int(goal) if goal else 0
+            
             total_goal += goal
             
-            if date_str in self.data['workouts'] and exercise_type in self.data['workouts'][date_str]:
-                records = self.data['workouts'][date_str][exercise_type]
-                
-                if isinstance(records, list):
-                    total_performed += sum(r['value'] for r in records)
-                elif isinstance(records, dict):
-                    total_performed += records.get('value', 0)
+            # Výkon pouze do dnešního dne (budoucnost = 0)
+            if current_date <= today:
+                if date_str in self.data['workouts'] and exercise_type in self.data['workouts'][date_str]:
+                    records = self.data['workouts'][date_str][exercise_type]
+                    
+                    if isinstance(records, list):
+                        total_performed += sum(r['value'] for r in records)
+                    elif isinstance(records, dict):
+                        total_performed += records.get('value', 0)
             
             current_date += timedelta(days=1)
         
