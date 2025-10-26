@@ -2,15 +2,17 @@
 # -*- coding: utf-8 -*-
 """
 Fitness Tracker - Aplikace pro sledování cvičení s progresivními cíli
-Verze 1.5d
+Verze 1.6
 
 Changelog:
-v1.5d (26.10.2025) - OPRAVNÁ VERZE
-- Maximum 10000 pro přidání výkonu (místo 1000)
-- Maximum 10000 pro editaci záznamu
-- Zachování stavu sbalení/rozbalení dnů po editaci nebo mazání záznamů
+v1.6 (26.10.2025)
+- Vylepšení záložky Nastavení:
+  - Odstranění sekce "Dostupné roky" a "tip"
+  - Lepší indikace zvoleného roku (zvýraznění v seznamu)
+  - Nastavení cílů ve 3 sloupcích vedle sebe (Datum, Základní cíle, Přírůstky)
+  - Přehlednější design s lepšími rámečky
 
-v1.5c - v1.0.0
+v1.5d - v1.0.0
 - Předchozí verze
 """
 
@@ -32,7 +34,7 @@ from PySide6.QtCore import Qt, QDate, QTimer
 from PySide6.QtGui import QColor, QAction
 
 # Verze aplikace
-VERSION = "1.5d"
+VERSION = "1.6"
 VERSION_DATE = "26.10.2025"
 
 # Dark Theme Stylesheet
@@ -1116,38 +1118,53 @@ class FitnessTrackerApp(QMainWindow):
         return widget
     
     def create_settings_tab(self):
+        """Vytvoří záložku s nastavením"""
         widget = QWidget()
         layout = QVBoxLayout(widget)
         
+        # NOVÁ SEKCE: Správa roků - jednoduchá
         years_group = QGroupBox("📅 Správa roků")
+        years_group.setStyleSheet("""
+            QGroupBox {
+                background-color: #2d2d2d;
+                border: 2px solid #0d7377;
+                border-radius: 5px;
+                padding: 15px;
+                font-weight: bold;
+                color: #14919b;
+            }
+        """)
         years_layout = QVBoxLayout()
         
-        available_years = self.get_available_years()
-        years_text = f"Dostupné roky: {', '.join(map(str, available_years))}"
-        
-        info_label = QLabel(years_text)
-        info_label.setStyleSheet("padding: 10px; color: #14919b;")
-        info_label.setWordWrap(True)
-        years_layout.addWidget(info_label)
-        
-        hint_label = QLabel("💡 Tip: Klikni na rok pro úpravu jeho nastavení")
-        hint_label.setStyleSheet("padding: 5px; color: #a0a0a0; font-size: 10px; font-style: italic;")
-        years_layout.addWidget(hint_label)
-        
+        # Seznam roků - BEZ info textu
         self.years_list = QListWidget()
         self.years_list.setMaximumHeight(150)
         self.years_list.itemClicked.connect(self.on_year_selected_for_settings)
+        self.years_list.setStyleSheet("""
+            QListWidget::item {
+                padding: 10px;
+                border-bottom: 1px solid #3d3d3d;
+            }
+            QListWidget::item:selected {
+                background-color: #0d7377;
+                color: white;
+                font-weight: bold;
+            }
+            QListWidget::item:hover {
+                background-color: #3d3d3d;
+            }
+        """)
         
+        available_years = self.get_available_years()
         for year in available_years:
-            year_workouts = sum(1 for date_str in self.data['workouts'].keys() 
-                              if int(date_str.split('-')[0]) == year)
-            
+            year_workouts = sum(1 for date_str in self.data['workouts'].keys() if int(date_str.split('-')[0]) == year)
             item = QListWidgetItem(f"📆 Rok {year} ({year_workouts} dnů s cvičením)")
             item.setData(Qt.UserRole, year)
             self.years_list.addItem(item)
         
         years_layout.addWidget(self.years_list)
         
+        # Tlačítka
         years_buttons = QHBoxLayout()
         
         add_year_btn = QPushButton("➕ Přidat nový rok")
@@ -1167,7 +1184,6 @@ class FitnessTrackerApp(QMainWindow):
         delete_year_btn.clicked.connect(lambda: self.delete_year_from_list())
         years_buttons.addWidget(delete_year_btn)
         
-        # NOVÉ TLAČÍTKO - Vynulovat záznamy
         reset_year_btn = QPushButton("🔄 Vynulovat záznamy roku")
         reset_year_btn.setStyleSheet("""
             QPushButton {
@@ -1182,84 +1198,124 @@ class FitnessTrackerApp(QMainWindow):
         years_buttons.addWidget(reset_year_btn)
         
         years_layout.addLayout(years_buttons)
-        
         years_group.setLayout(years_layout)
         layout.addWidget(years_group)
         
+        # Indikace upravovaného roku - jemnější
         self.current_year_label = QLabel()
         self.current_year_label.setStyleSheet("""
-            background-color: #0d7377;
-            color: white;
-            padding: 8px;
+            background-color: #2d2d2d;
+            color: #14919b;
+            padding: 10px;
             border-radius: 5px;
             font-weight: bold;
             font-size: 13px;
+            border: 2px solid #0d7377;
         """)
         self.current_year_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.current_year_label)
         
-        # SDRUŽENÁ SKUPINA: Nastavení cílů
+        # NOVÁ SEKCE: Nastavení cílů - 3 sekce vedle sebe
         goals_settings_group = QGroupBox("🎯 Nastavení cílů pro vybraný rok")
-        goals_settings_layout = QVBoxLayout()
+        goals_settings_group.setStyleSheet("""
+            QGroupBox {
+                background-color: #2d2d2d;
+                border: 2px solid #0d7377;
+                border-radius: 5px;
+                padding: 15px;
+                font-weight: bold;
+                color: #14919b;
+            }
+        """)
+        goals_main_layout = QHBoxLayout()
         
-        # Startovní datum
-        date_layout = QFormLayout()
+        # 1. SLOUPEC: Startovní datum
+        date_section = QVBoxLayout()
+        date_label = QLabel("📅 Startovní datum")
+        date_label.setStyleSheet("font-weight: bold; padding: 5px; color: #14919b; font-size: 12px;")
+        date_section.addWidget(date_label)
+        
         self.start_date_edit = QDateEdit()
         self.start_date_edit.setCalendarPopup(True)
-        date_layout.addRow("📅 Datum zahájení:", self.start_date_edit)
-        goals_settings_layout.addLayout(date_layout)
+        self.start_date_edit.setStyleSheet("padding: 8px;")
+        date_section.addWidget(self.start_date_edit)
+        date_section.addStretch()
         
-        # Základní cíle
-        base_label = QLabel("Základní cíle (na startovní datum):")
-        base_label.setStyleSheet("font-weight: bold; padding-top: 10px; color: #14919b;")
-        goals_settings_layout.addWidget(base_label)
+        goals_main_layout.addLayout(date_section)
+        
+        # 2. SLOUPEC: Základní cíle
+        base_section = QVBoxLayout()
+        base_label = QLabel("🎯 Základní cíle")
+        base_label.setStyleSheet("font-weight: bold; padding: 5px; color: #14919b; font-size: 12px;")
+        base_section.addWidget(base_label)
         
         base_goals_layout = QFormLayout()
+        base_goals_layout.setSpacing(8)
         
         self.base_kliky = QSpinBox()
         self.base_kliky.setRange(0, 1000)
-        base_goals_layout.addRow("💪 Kliky:", self.base_kliky)
+        base_goals_layout.addRow("Kliky:", self.base_kliky)
         
         self.base_drepy = QSpinBox()
         self.base_drepy.setRange(0, 1000)
-        base_goals_layout.addRow("🦵 Dřepy:", self.base_drepy)
+        base_goals_layout.addRow("Dřepy:", self.base_drepy)
         
         self.base_skrcky = QSpinBox()
         self.base_skrcky.setRange(0, 1000)
-        base_goals_layout.addRow("🧘 Skrčky:", self.base_skrcky)
+        base_goals_layout.addRow("Skrčky:", self.base_skrcky)
         
-        goals_settings_layout.addLayout(base_goals_layout)
+        base_section.addLayout(base_goals_layout)
+        base_section.addStretch()
         
-        # Týdenní přírůstky
-        increment_label = QLabel("Týdenní přírůstky (za každý celý týden):")
-        increment_label.setStyleSheet("font-weight: bold; padding-top: 10px; color: #14919b;")
-        goals_settings_layout.addWidget(increment_label)
+        goals_main_layout.addLayout(base_section)
+        
+        # 3. SLOUPEC: Týdenní přírůstky
+        increment_section = QVBoxLayout()
+        increment_label = QLabel("📈 Týdenní přírůstky")
+        increment_label.setStyleSheet("font-weight: bold; padding: 5px; color: #14919b; font-size: 12px;")
+        increment_section.addWidget(increment_label)
         
         increment_layout = QFormLayout()
+        increment_layout.setSpacing(8)
         
         self.increment_kliky = QSpinBox()
         self.increment_kliky.setRange(0, 100)
-        increment_layout.addRow("💪 Kliky (+týdně):", self.increment_kliky)
+        increment_layout.addRow("Kliky/týden:", self.increment_kliky)
         
         self.increment_drepy = QSpinBox()
         self.increment_drepy.setRange(0, 100)
-        increment_layout.addRow("🦵 Dřepy (+týdně):", self.increment_drepy)
+        increment_layout.addRow("Dřepy/týden:", self.increment_drepy)
         
         self.increment_skrcky = QSpinBox()
         self.increment_skrcky.setRange(0, 100)
-        increment_layout.addRow("🧘 Skrčky (+týdně):", self.increment_skrcky)
+        increment_layout.addRow("Skrčky/týden:", self.increment_skrcky)
         
-        goals_settings_layout.addLayout(increment_layout)
+        increment_section.addLayout(increment_layout)
+        increment_section.addStretch()
         
-        goals_settings_group.setLayout(goals_settings_layout)
+        goals_main_layout.addLayout(increment_section)
+        
+        goals_settings_group.setLayout(goals_main_layout)
         layout.addWidget(goals_settings_group)
         
+        # Tlačítko uložit
         save_btn = QPushButton("💾 Uložit nastavení")
         save_btn.clicked.connect(self.save_settings)
+        save_btn.setStyleSheet("padding: 10px; font-size: 14px;")
         layout.addWidget(save_btn)
         
-        # NOVÁ SEKCE: Export/Import
+        # Export/Import
         export_import_group = QGroupBox("💾 Záloha a obnova dat")
+        export_import_group.setStyleSheet("""
+            QGroupBox {
+                background-color: #2d2d2d;
+                border: 2px solid #0d7377;
+                border-radius: 5px;
+                padding: 15px;
+                font-weight: bold;
+                color: #14919b;
+            }
+        """)
         export_import_layout = QVBoxLayout()
         
         export_import_info = QLabel(
@@ -1277,6 +1333,7 @@ class FitnessTrackerApp(QMainWindow):
             QPushButton {
                 background-color: #28a745;
                 color: white;
+                padding: 8px;
             }
             QPushButton:hover {
                 background-color: #218838;
@@ -1290,6 +1347,7 @@ class FitnessTrackerApp(QMainWindow):
             QPushButton {
                 background-color: #17a2b8;
                 color: white;
+                padding: 8px;
             }
             QPushButton:hover {
                 background-color: #138496;
@@ -1305,7 +1363,9 @@ class FitnessTrackerApp(QMainWindow):
         
         layout.addStretch()
         
-        self.load_year_settings_to_ui(self.current_settings_year)
+        # Načíst aktuální rok
+        if available_years:
+            self.load_year_settings_to_ui(datetime.now().year)
         
         return widget
 

@@ -123,6 +123,20 @@ Všechna data se ukládají lokálně v souboru `fitness_data.json` ve stejném 
 
 ## 📝 Changelog
 
+### v1.6 (26.10.2025 02:23 CEST)
+**Vylepšení:**
+- 🎨 **Vylepšení záložky Nastavení:**
+  - Odstraněna sekce "Dostupné roky" a "tip" text
+  - Lepší zvýraznění zvoleného roku v seznamu
+  - Indikace upravovaného roku jemnějším stylem (bez tlačítka)
+  - Nastavení cílů ve 3 sloupcích vedle sebe:
+    - 📅 Startovní datum
+    - 🎯 Základní cíle
+    - 📈 Týdenní přírůstky
+  - Přehlednější design s lepšími rámečky a sekcemi
+
+---
+
 ### v1.5d (26.10.2025 01:41 CEST) - OPRAVNÁ VERZE
 **Vylepšení:**
 - ⬆️ Maximum 10000 pro přidání výkonu (místo 1000)
@@ -439,5 +453,5 @@ Vytvořeno v roce 2025
 - [Issues](https://github.com/Safronus/FitnessApp/issues)
 
 ---
-**Poslední aktualizace:** 26.10.2025 01:41 CEST  
-**Aktuální verze:** 1.5d
+**Poslední aktualizace:** 26.10.2025 02:23 CEST  
+**Aktuální verze:** 1.6
