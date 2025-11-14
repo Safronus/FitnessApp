@@ -1991,6 +1991,7 @@ class FitnessTrackerApp(QMainWindow):
         year_selector_layout = QHBoxLayout()
         year_selector_layout.addWidget(QLabel(f"📅 Zobrazit rok:"))
         year_selector = QComboBox()
+        year_selector.setMinimumWidth(80)  # **NOVĚ: Minimální šířka pro viditelnost roků**
         
         available_years = self.get_available_years()
         if available_years:
@@ -2003,7 +2004,6 @@ class FitnessTrackerApp(QMainWindow):
         year_selector_layout.addWidget(year_selector)
         year_selector_layout.addStretch()
         left_layout.addLayout(year_selector_layout)
-        
         # Cíle frame (den, týden, měsíc, zbytek roku)
         goals_frame = QFrame()
         goals_frame.setStyleSheet("""

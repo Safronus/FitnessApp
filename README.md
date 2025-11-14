@@ -122,6 +122,9 @@ Všechna data se ukládají lokálně v souboru `fitness_data.json` ve stejném 
 
 
 ## 📝 Changelog
+### v1.8g (14.11.2025)
+- **Oprava UI**: Rozšířen year selector, aby byly vidět celé roky v rozbalovacím seznamu
+
 ### v1.8f (14.11.2025)
 - **Vylepšení**: Přehled pro jiné roky než aktuální nyní zobrazuje roční souhrn
   - **Aktuální rok**: DNES/TÝDEN/MĚSÍC/ZBYTEK ROKU
@@ -511,7 +514,5 @@ Vytvořeno v roce 2025
 - [Issues](https://github.com/Safronus/FitnessApp/issues)
 
 ---
-**Poslední aktualizace:** 14.11.2025 22:48 CET  
-**Aktuální verze:** 1.8e
-
-
+**Poslední aktualizace:** 14.11.2025 23:00 CET  
+**Aktuální verze:** 1.8g
