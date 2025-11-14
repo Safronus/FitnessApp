@@ -605,7 +605,7 @@ class NewYearWizardDialog(QDialog):
         }
         
         self.setWindowTitle(f"🧙‍♂️ Průvodce vytvořením roku {year}")
-        self.setMinimumSize(700, 800)  # ← OPRAVA: Zvýšeno z 500 na 600
+        self.setMinimumSize(700, 750)  # ← OPRAVA: Zvýšeno z 500 na 600
         
         layout = QVBoxLayout(self)
         
@@ -678,9 +678,8 @@ class NewYearWizardDialog(QDialog):
         layout.addStretch()
         return page
 
-    
     def create_analysis_page(self):
-        """Stránka 2: Analýza předchozího roku"""
+        """Stránka 2: Analýza předchozího roku - vylepšená verze"""
         page = QWidget()
         layout = QVBoxLayout(page)
         
@@ -688,22 +687,34 @@ class NewYearWizardDialog(QDialog):
         title.setStyleSheet("font-size: 18px; font-weight: bold; color: #14919b;")
         layout.addWidget(title)
         
+        # **VYLEPŠENÍ: Větší textové pole bez max výšky**
         self.analysis_text = QTextEdit()
         self.analysis_text.setReadOnly(True)
-        self.analysis_text.setMaximumHeight(300)
-        self.analysis_text.setStyleSheet("background-color: #2d2d2d; border: 1px solid #3d3d3d; font-family: monospace;")
+        # Odstraněno: setMaximumHeight → využije veškerý volný prostor
+        self.analysis_text.setStyleSheet("""
+            QTextEdit {
+                background-color: #2d2d2d;
+                border: 2px solid #3d3d3d;
+                border-radius: 5px;
+                font-family: 'Courier New', monospace;
+                font-size: 13px;
+                padding: 10px;
+            }
+        """)
         layout.addWidget(self.analysis_text)
         
         # Analýza
         self.perform_analysis()
         
-        layout.addStretch()
         return page
     
+    
     def perform_analysis(self):
-        """Provede analýzu předchozího roku"""
+        """Provede analýzu předchozího roku - vylepšená s barevnými indikacemi"""
         previous_year = self.year - 1
-        analysis_text = f"🔍 <b>Analýza roku {previous_year}:</b><br><br>"
+        
+        analysis_html = f"<div style='font-size: 14px;'>"
+        analysis_html += f"<h2 style='color: #14919b;'>🔍 Analýza roku {previous_year}</h2><br>"
         
         found_data = False
         
@@ -713,17 +724,75 @@ class NewYearWizardDialog(QDialog):
             
             if analysis and analysis["days_count"] > 0:
                 found_data = True
-                analysis_text += f"<b>{config['icon']} {config['name']}:</b><br>"
-                analysis_text += f"  • Dní s tréninkem: {analysis['days_count']}<br>"
-                analysis_text += f"  • Průměr/den: {analysis['avg_daily']:.1f}<br>"
-                analysis_text += f"  • Průměr (posl. 3 měs.): {analysis['avg_last_3_months']:.1f}<br>"
-                analysis_text += f"  • Finální cíl: {analysis['final_goal']}<br><br>"
+                
+                # **NOVĚ: Najít začátek a konec cvičení**
+                first_date = None
+                last_date = None
+                
+                for date_str in sorted(self.parent_app.data.get("workouts", {}).keys()):
+                    date_obj = datetime.strptime(date_str, "%Y-%m-%d").date()
+                    if date_obj.year != previous_year:
+                        continue
+                    
+                    if exercise_id in self.parent_app.data["workouts"][date_str]:
+                        if not first_date:
+                            first_date = date_obj
+                        last_date = date_obj
+                
+                # **VÝPOČET: Celý rok?**
+                year_start = datetime(previous_year, 1, 1).date()
+                year_end = datetime(previous_year, 12, 31).date()
+                
+                is_full_year = (first_date and first_date <= datetime(previous_year, 1, 15).date() and 
+                               last_date and last_date >= datetime(previous_year, 12, 15).date())
+                
+                # **BAREVNÁ INDIKACE**
+                if is_full_year:
+                    status_color = "#32c766"  # Zelená
+                    status_icon = "✅"
+                    status_text = "Celý rok"
+                elif analysis["days_count"] >= 100:
+                    status_color = "#FFD700"  # Žlutá
+                    status_icon = "🟡"
+                    status_text = "Částečný rok"
+                else:
+                    status_color = "#ff6b6b"  # Červená
+                    status_icon = "🔴"
+                    status_text = "Málo dat"
+                
+                # **FORMÁTOVÁNÍ VÝSTUPU**
+                analysis_html += f"<div style='border: 2px solid {status_color}; border-radius: 5px; padding: 15px; margin: 10px 0; background-color: #1e1e1e;'>"
+                analysis_html += f"<h3 style='color: {status_color}; margin: 0;'>{status_icon} {config['icon']} {config['name']}</h3>"
+                
+                analysis_html += f"<table style='width: 100%; margin-top: 10px; color: #e0e0e0;'>"
+                analysis_html += f"<tr><td style='padding: 5px;'><b>Status:</b></td><td style='color: {status_color};'>{status_text}</td></tr>"
+                
+                if first_date and last_date:
+                    analysis_html += f"<tr><td style='padding: 5px;'><b>Začátek:</b></td><td>{first_date.strftime('%d.%m.%Y')}</td></tr>"
+                    analysis_html += f"<tr><td style='padding: 5px;'><b>Konec:</b></td><td>{last_date.strftime('%d.%m.%Y')}</td></tr>"
+                    
+                    # Délka tréninku
+                    training_days = (last_date - first_date).days
+                    analysis_html += f"<tr><td style='padding: 5px;'><b>Délka:</b></td><td>{training_days} dní</td></tr>"
+                
+                analysis_html += f"<tr><td style='padding: 5px;'><b>Dní s tréninkem:</b></td><td><span style='color: #14919b; font-weight: bold;'>{analysis['days_count']}</span></td></tr>"
+                analysis_html += f"<tr><td style='padding: 5px;'><b>Průměr/den:</b></td><td>{analysis['avg_daily']:.1f}</td></tr>"
+                analysis_html += f"<tr><td style='padding: 5px;'><b>Průměr (posl. 3 měs.):</b></td><td><span style='color: #32c766; font-weight: bold;'>{analysis['avg_last_3_months']:.1f}</span></td></tr>"
+                analysis_html += f"<tr><td style='padding: 5px;'><b>Finální cíl:</b></td><td>{analysis['final_goal']}</td></tr>"
+                analysis_html += "</table>"
+                
+                analysis_html += "</div>"
         
         if not found_data:
-            analysis_text += f"❌ Nenašel jsem dostatek dat z roku {previous_year}.<br><br>"
-            analysis_text += f"💡 Cíle budou nastaveny podle tvého fitness levelu."
+            analysis_html += f"<div style='border: 2px solid #ff6b6b; border-radius: 5px; padding: 20px; margin: 10px 0; background-color: #1e1e1e; text-align: center;'>"
+            analysis_html += f"<h3 style='color: #ff6b6b;'>❌ Nenašel jsem dostatek dat z roku {previous_year}</h3>"
+            analysis_html += f"<p style='color: #a0a0a0; margin-top: 10px;'>💡 Cíle budou nastaveny podle tvého fitness levelu a preferencí.</p>"
+            analysis_html += "</div>"
         
-        self.analysis_text.setHtml(analysis_text)
+        analysis_html += "</div>"
+        
+        self.analysis_text.setHtml(analysis_html)
+
     
     def create_fitness_level_page(self):
         """Stránka 3: Fitness level"""
@@ -909,30 +978,56 @@ class NewYearWizardDialog(QDialog):
         
         return page
 
-    
     def create_summary_page(self):
-        """Stránka 5: Souhrn a doporučení"""
+        """Stránka 5: Souhrn a doporučení - vylepšená verze"""
         page = QWidget()
         layout = QVBoxLayout(page)
         
-        title = QLabel("✅ Tvé nové cíle pro rok " + str(self.year))
+        title = QLabel(f"✅ Tvé nové cíle pro rok {self.year}")
         title.setStyleSheet("font-size: 18px; font-weight: bold; color: #14919b;")
         layout.addWidget(title)
         
+        # **VYLEPŠENÍ: Větší textové pole, využije celou výšku**
         self.summary_text = QTextEdit()
         self.summary_text.setReadOnly(True)
-        self.summary_text.setStyleSheet("background-color: #2d2d2d; border: 1px solid #3d3d3d; font-family: monospace;")
+        # Odstraněno: setMaximumHeight
+        self.summary_text.setStyleSheet("""
+            QTextEdit {
+                background-color: #2d2d2d;
+                border: 2px solid #0d7377;
+                border-radius: 5px;
+                font-family: 'Courier New', monospace;
+                font-size: 13px;
+                padding: 10px;
+            }
+        """)
         layout.addWidget(self.summary_text)
         
-        layout.addStretch()
         return page
     
+    
     def generate_summary(self):
-        """Vygeneruje souhrn doporučení"""
-        summary_html = f"<b>🎯 Doporučené cíle pro rok {self.year}:</b><br><br>"
+        """Vygeneruje souhrn doporučení - vylepšená verze"""
+        summary_html = f"<div style='font-size: 14px;'>"
+        summary_html += f"<h2 style='color: #14919b;'>🎯 Doporučené cíle pro rok {self.year}</h2><br>"
         
         self.recommendations = {}
         
+        # **Informace o zvolených parametrech**
+        fitness_name = SmartGoalCalculator.FITNESS_LEVELS[self.answers["fitness_level"]]["name"]
+        time_name = SmartGoalCalculator.TIME_AVAILABILITY[self.answers["time_availability"]]["name"]
+        goal_name = SmartGoalCalculator.GOAL_TYPES[self.answers["goal_type"]]["name"]
+        
+        summary_html += f"<div style='border: 2px solid #14919b; border-radius: 5px; padding: 15px; margin-bottom: 20px; background-color: #1e1e1e;'>"
+        summary_html += f"<h3 style='color: #14919b; margin: 0;'>📋 Tvůj profil</h3>"
+        summary_html += f"<table style='width: 100%; margin-top: 10px; color: #e0e0e0;'>"
+        summary_html += f"<tr><td style='padding: 5px;'><b>Fitness level:</b></td><td>{fitness_name}</td></tr>"
+        summary_html += f"<tr><td style='padding: 5px;'><b>Dostupný čas:</b></td><td>{time_name}</td></tr>"
+        summary_html += f"<tr><td style='padding: 5px;'><b>Hlavní cíl:</b></td><td>{goal_name}</td></tr>"
+        summary_html += "</table>"
+        summary_html += "</div>"
+        
+        # **Cíle pro každé cvičení**
         for exercise_id in self.parent_app.get_active_exercises():
             config = self.parent_app.get_exercise_config(exercise_id)
             
@@ -946,18 +1041,39 @@ class NewYearWizardDialog(QDialog):
             
             self.recommendations[exercise_id] = goals
             
-            summary_html += f"<b>{config['icon']} {config['name']}:</b><br>"
-            summary_html += f"  • Základní cíl (1. týden): <span style='color: #32c766;'>{goals['base_goal']}</span> opakování/den<br>"
-            summary_html += f"  • Týdenní přírůstek: <span style='color: #FFD700;'>+{goals['weekly_increment']}</span> opakování<br>"
-            
             # Vypočti finální cíl
             final_goal = goals['base_goal'] + (52 * goals['weekly_increment'])
-            summary_html += f"  • Finální cíl (52. týden): <span style='color: #0d7377;'>{final_goal}</span> opakování/den<br>"
-            summary_html += f"  • Metoda: {goals['method']}<br><br>"
+            
+            # Barevná indikace podle metody
+            if goals['method'] == "history_based":
+                border_color = "#32c766"
+                method_icon = "📊"
+                method_text = "Založeno na historii"
+            else:
+                border_color = "#FFD700"
+                method_icon = "⚙️"
+                method_text = "Založeno na fitness levelu"
+            
+            summary_html += f"<div style='border: 2px solid {border_color}; border-radius: 5px; padding: 15px; margin: 10px 0; background-color: #1e1e1e;'>"
+            summary_html += f"<h3 style='color: {border_color}; margin: 0;'>{config['icon']} {config['name']}</h3>"
+            
+            summary_html += f"<table style='width: 100%; margin-top: 10px; color: #e0e0e0;'>"
+            summary_html += f"<tr><td style='padding: 5px; width: 50%;'><b>Základní cíl (1. týden):</b></td><td style='color: #32c766; font-weight: bold; font-size: 16px;'>{goals['base_goal']} opakování/den</td></tr>"
+            summary_html += f"<tr><td style='padding: 5px;'><b>Týdenní přírůstek:</b></td><td style='color: #FFD700; font-weight: bold;'>+{goals['weekly_increment']} opakování</td></tr>"
+            summary_html += f"<tr><td style='padding: 5px;'><b>Finální cíl (52. týden):</b></td><td style='color: #0d7377; font-weight: bold; font-size: 16px;'>{final_goal} opakování/den</td></tr>"
+            summary_html += f"<tr><td style='padding: 5px;'><b>Metoda výpočtu:</b></td><td style='color: {border_color};'>{method_icon} {method_text}</td></tr>"
+            summary_html += "</table>"
+            
+            summary_html += "</div>"
         
-        summary_html += "<br><i>💡 Tyto hodnoty můžeš kdykoliv upravit v Nastavení.</i>"
+        summary_html += "<br><div style='text-align: center; color: #a0a0a0; font-style: italic;'>"
+        summary_html += "💡 Tyto hodnoty můžeš kdykoliv upravit v Nastavení."
+        summary_html += "</div>"
+        
+        summary_html += "</div>"
         
         self.summary_text.setHtml(summary_html)
+
     
     def set_fitness_level(self, level):
         """Nastaví fitness level"""
