@@ -354,6 +354,111 @@ QToolTip {
 }
 """
 
+class YearCreationModeDialog(QDialog):
+    """Dialog pro výběr způsobu vytvoření roku"""
+    
+    def __init__(self, year, parent=None):
+        super().__init__(parent)
+        self.year = year
+        self.mode = None  # "wizard", "classic", "copy"
+        
+        self.setWindowTitle(f"Vytvoření roku {year}")
+        self.setMinimumWidth(500)
+        
+        layout = QVBoxLayout(self)
+        
+        # Titulek
+        title = QLabel(f"🎯 Jak chceš vytvořit rok {year}?")
+        title.setStyleSheet("font-size: 18px; font-weight: bold; color: #14919b; padding: 15px;")
+        layout.addWidget(title)
+        
+        # **OPTION 1: Smart Wizard**
+        wizard_btn = QPushButton("🧙‍♂️ Smart Year Wizard (Doporučeno)")
+        wizard_btn.setMinimumHeight(80)
+        wizard_btn.setStyleSheet("""
+            QPushButton {
+                padding: 15px;
+                font-size: 14px;
+                text-align: left;
+                background-color: #0d7377;
+                border: 2px solid #14919b;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #14919b;
+            }
+        """)
+        wizard_desc = QLabel("   💡 Inteligentní průvodce s analýzou historie a personalizovaným doporučením")
+        wizard_desc.setStyleSheet("font-size: 11px; color: #a0a0a0; padding-left: 20px;")
+        wizard_btn.clicked.connect(lambda: self.select_mode("wizard"))
+        layout.addWidget(wizard_btn)
+        layout.addWidget(wizard_desc)
+        
+        layout.addSpacing(10)
+        
+        # **OPTION 2: Zkopírovat minulý rok**
+        copy_btn = QPushButton("📋 Zkopírovat z předchozího roku")
+        copy_btn.setMinimumHeight(60)
+        copy_btn.setStyleSheet("""
+            QPushButton {
+                padding: 12px;
+                font-size: 13px;
+                text-align: left;
+                background-color: #2d2d2d;
+                border: 2px solid #3d3d3d;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #3d3d3d;
+            }
+        """)
+        copy_desc = QLabel("   Rychlé vytvoření s nastavením z minulého roku")
+        copy_desc.setStyleSheet("font-size: 11px; color: #a0a0a0; padding-left: 20px;")
+        copy_btn.clicked.connect(lambda: self.select_mode("copy"))
+        layout.addWidget(copy_btn)
+        layout.addWidget(copy_desc)
+        
+        layout.addSpacing(10)
+        
+        # **OPTION 3: Výchozí nastavení**
+        classic_btn = QPushButton("🆕 Výchozí nastavení")
+        classic_btn.setMinimumHeight(60)
+        classic_btn.setStyleSheet("""
+            QPushButton {
+                padding: 12px;
+                font-size: 13px;
+                text-align: left;
+                background-color: #2d2d2d;
+                border: 2px solid #3d3d3d;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #3d3d3d;
+            }
+        """)
+        classic_desc = QLabel("   Začít s defaultními cíli (50 kliků, 20 dřepů, 20 skrčků)")
+        classic_desc.setStyleSheet("font-size: 11px; color: #a0a0a0; padding-left: 20px;")
+        classic_btn.clicked.connect(lambda: self.select_mode("classic"))
+        layout.addWidget(classic_btn)
+        layout.addWidget(classic_desc)
+        
+        layout.addSpacing(20)
+        
+        # Tlačítko Zrušit
+        cancel_btn = QPushButton("Zrušit")
+        cancel_btn.clicked.connect(self.reject)
+        layout.addWidget(cancel_btn)
+    
+    def select_mode(self, mode):
+        """Vybere mód a zavře dialog"""
+        self.mode = mode
+        self.accept()
+    
+    def get_mode(self):
+        """Vrátí vybraný mód"""
+        return self.mode
+
+
 class SmartGoalCalculator:
     """Chytrý kalkulátor cílů pro nový rok"""
     
@@ -500,14 +605,14 @@ class NewYearWizardDialog(QDialog):
         }
         
         self.setWindowTitle(f"🧙‍♂️ Průvodce vytvořením roku {year}")
-        self.setMinimumSize(700, 500)
+        self.setMinimumSize(700, 800)  # ← OPRAVA: Zvýšeno z 500 na 600
         
         layout = QVBoxLayout(self)
         
         # Progress bar
         self.progress_bar = QProgressBar()
-        self.progress_bar.setMaximum(5)
-        self.progress_bar.setValue(0)
+        self.progress_bar.setMaximum(100)  # ← ZMĚNA: 100% místo 5
+        self.progress_bar.setValue(0)      # ← Začíná na 0%
         layout.addWidget(self.progress_bar)
         
         # Stack widget pro stránky
@@ -560,11 +665,11 @@ class NewYearWizardDialog(QDialog):
             f"Tento wizard ti pomůže nastavit <b>optimální cíle</b> pro rok {self.year} "
             f"na základě tvého fitness levelu, dostupného času a cílů.\n\n"
             f"<b>Proces má 5 kroků:</b>\n"
-            f"1️⃣ Analýza předchozího roku\n"
-            f"2️⃣ Výběr fitness levelu\n"
-            f"3️⃣ Nastavení preferencí\n"
-            f"4️⃣ Chytré doporučení\n"
-            f"5️⃣ Finální konfirmace"
+            f"1️⃣ Uvítání a přehled\n"
+            f"2️⃣ Analýza předchozího roku\n"
+            f"3️⃣ Výběr fitness levelu\n"
+            f"4️⃣ Nastavení preferencí (čas + cíl)\n"
+            f"5️⃣ Chytré doporučení a potvrzení"
         )
         intro.setWordWrap(True)
         intro.setStyleSheet("font-size: 13px; padding: 20px; background-color: #2d2d2d; border-radius: 5px;")
@@ -572,6 +677,7 @@ class NewYearWizardDialog(QDialog):
         
         layout.addStretch()
         return page
+
     
     def create_analysis_page(self):
         """Stránka 2: Analýza předchozího roku"""
@@ -663,35 +769,67 @@ class NewYearWizardDialog(QDialog):
         return page
     
     def create_preferences_page(self):
-        """Stránka 4: Preference (čas + cíl)"""
+        """Stránka 4: Preference (čás + cíl) - se scrollem"""
         page = QWidget()
-        layout = QVBoxLayout(page)
+        main_layout = QVBoxLayout(page)
         
         title = QLabel("⚙️ Tvoje preference")
-        title.setStyleSheet("font-size: 18px; font-weight: bold; color: #14919b;")
-        layout.addWidget(title)
+        title.setStyleSheet("font-size: 18px; font-weight: bold; color: #14919b; padding-bottom: 10px;")
+        main_layout.addWidget(title)
         
-        # Čas
-        time_label = QLabel("⏰ Kolik času můžeš trénovat?")
-        time_label.setStyleSheet("font-size: 14px; font-weight: bold; padding-top: 10px;")
-        layout.addWidget(time_label)
+        # **SCROLL AREA**
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setStyleSheet("QScrollArea { border: none; }")
+        
+        scroll_widget = QWidget()
+        layout = QVBoxLayout(scroll_widget)
+        
+        # **SEKCE 1: ČAS**
+        time_group = QGroupBox("⏰ Kolik času můžeš trénovat týdně?")
+        time_group.setStyleSheet("""
+            QGroupBox {
+                font-size: 14px;
+                font-weight: bold;
+                background-color: #1e1e1e;
+                border: 2px solid #0d7377;
+                border-radius: 5px;
+                padding-top: 15px;
+                margin-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px;
+                color: #14919b;
+            }
+        """)
+        time_group_layout = QVBoxLayout()
         
         self.time_buttons = QWidget()
         time_layout = QVBoxLayout(self.time_buttons)
+        time_layout.setSpacing(8)
         
         for time_id, time_data in SmartGoalCalculator.TIME_AVAILABILITY.items():
             btn = QPushButton(time_data["name"])
             btn.setCheckable(True)
+            btn.setMinimumHeight(45)
             btn.setStyleSheet("""
                 QPushButton {
-                    padding: 10px;
+                    padding: 12px;
                     font-size: 13px;
+                    text-align: left;
                     background-color: #2d2d2d;
                     border: 2px solid #3d3d3d;
+                    border-radius: 5px;
+                }
+                QPushButton:hover {
+                    background-color: #3d3d3d;
                 }
                 QPushButton:checked {
                     background-color: #0d7377;
                     border: 2px solid #14919b;
+                    font-weight: bold;
                 }
             """)
             btn.clicked.connect(lambda checked, t=time_id: self.set_time_availability(t))
@@ -701,29 +839,55 @@ class NewYearWizardDialog(QDialog):
             
             time_layout.addWidget(btn)
         
-        layout.addWidget(self.time_buttons)
+        time_group_layout.addWidget(self.time_buttons)
+        time_group.setLayout(time_group_layout)
+        layout.addWidget(time_group)
         
-        # Cíl
-        goal_label = QLabel("🎯 Jaký je tvůj hlavní cíl?")
-        goal_label.setStyleSheet("font-size: 14px; font-weight: bold; padding-top: 20px;")
-        layout.addWidget(goal_label)
+        # **SEKCE 2: CÍL**
+        goal_group = QGroupBox("🎯 Jaký je tvůj hlavní cíl?")
+        goal_group.setStyleSheet("""
+            QGroupBox {
+                font-size: 14px;
+                font-weight: bold;
+                background-color: #1e1e1e;
+                border: 2px solid #0d7377;
+                border-radius: 5px;
+                padding-top: 15px;
+                margin-top: 15px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px;
+                color: #14919b;
+            }
+        """)
+        goal_group_layout = QVBoxLayout()
         
         self.goal_buttons = QWidget()
         goal_layout = QVBoxLayout(self.goal_buttons)
+        goal_layout.setSpacing(8)
         
         for goal_id, goal_data in SmartGoalCalculator.GOAL_TYPES.items():
             btn = QPushButton(goal_data["name"])
             btn.setCheckable(True)
+            btn.setMinimumHeight(45)
             btn.setStyleSheet("""
                 QPushButton {
-                    padding: 10px;
+                    padding: 12px;
                     font-size: 13px;
+                    text-align: left;
                     background-color: #2d2d2d;
                     border: 2px solid #3d3d3d;
+                    border-radius: 5px;
+                }
+                QPushButton:hover {
+                    background-color: #3d3d3d;
                 }
                 QPushButton:checked {
                     background-color: #0d7377;
                     border: 2px solid #14919b;
+                    font-weight: bold;
                 }
             """)
             btn.clicked.connect(lambda checked, g=goal_id: self.set_goal_type(g))
@@ -733,9 +897,18 @@ class NewYearWizardDialog(QDialog):
             
             goal_layout.addWidget(btn)
         
-        layout.addWidget(self.goal_buttons)
+        goal_group_layout.addWidget(self.goal_buttons)
+        goal_group.setLayout(goal_group_layout)
+        layout.addWidget(goal_group)
+        
         layout.addStretch()
+        
+        # **Přidání scroll widgetu do scroll area**
+        scroll_area.setWidget(scroll_widget)
+        main_layout.addWidget(scroll_area)
+        
         return page
+
     
     def create_summary_page(self):
         """Stránka 5: Souhrn a doporučení"""
@@ -787,26 +960,53 @@ class NewYearWizardDialog(QDialog):
         self.summary_text.setHtml(summary_html)
     
     def set_fitness_level(self, level):
+        """Nastaví fitness level"""
         self.answers["fitness_level"] = level
-        # Uncheck ostatní
+        # Uncheck všechny tlačítka
         for btn in self.fitness_buttons.findChildren(QPushButton):
             btn.setChecked(False)
-        sender = self.sender()
-        sender.setChecked(True)
+        # Najdi a check správné tlačítko
+        for btn in self.fitness_buttons.findChildren(QPushButton):
+            # Lambda nemá sender(), musíme najít tlačítko jinak
+            if btn.isCheckable():
+                # Zkontroluj, které tlačítko odpovídá levelu
+                if level == "beginner" and "🟢" in btn.text():
+                    btn.setChecked(True)
+                elif level == "intermediate" and "🟡" in btn.text():
+                    btn.setChecked(True)
+                elif level == "advanced" and "🔴" in btn.text():
+                    btn.setChecked(True)
     
     def set_time_availability(self, time):
+        """Nastaví dostupný čas"""
         self.answers["time_availability"] = time
+        # Uncheck všechny
         for btn in self.time_buttons.findChildren(QPushButton):
             btn.setChecked(False)
-        sender = self.sender()
-        sender.setChecked(True)
+        # Check správné tlačítko
+        for btn in self.time_buttons.findChildren(QPushButton):
+            if time == "low" and "3×" in btn.text():
+                btn.setChecked(True)
+            elif time == "medium" and "5×" in btn.text():
+                btn.setChecked(True)
+            elif time == "high" and "Každý den" in btn.text():
+                btn.setChecked(True)
     
     def set_goal_type(self, goal):
+        """Nastaví hlavní cíl"""
         self.answers["goal_type"] = goal
+        # Uncheck všechny
         for btn in self.goal_buttons.findChildren(QPushButton):
             btn.setChecked(False)
-        sender = self.sender()
-        sender.setChecked(True)
+        # Check správné tlačítko
+        for btn in self.goal_buttons.findChildren(QPushButton):
+            if goal == "muscle" and "🏋️" in btn.text():
+                btn.setChecked(True)
+            elif goal == "weight_loss" and "🔥" in btn.text():
+                btn.setChecked(True)
+            elif goal == "endurance" and "💪" in btn.text():
+                btn.setChecked(True)
+
     
     def show_page(self, index):
         """Zobrazí stránku podle indexu"""
@@ -819,7 +1019,10 @@ class NewYearWizardDialog(QDialog):
         self.pages[index].setVisible(True)
         
         self.current_page = index
-        self.progress_bar.setValue(index + 1)
+        
+        # **OPRAVA: Progress bar 0% → 100%**
+        progress_percent = int((index / (len(self.pages) - 1)) * 100) if len(self.pages) > 1 else 0
+        self.progress_bar.setValue(progress_percent)
         
         # Navigační tlačítka
         self.back_btn.setEnabled(index > 0)
@@ -831,6 +1034,7 @@ class NewYearWizardDialog(QDialog):
         else:
             self.next_btn.setVisible(True)
             self.finish_btn.setVisible(False)
+
     
     def go_next(self):
         if self.current_page < len(self.pages) - 1:
@@ -2500,90 +2704,132 @@ class FitnessTrackerApp(QMainWindow):
         self.show_message("Uloženo", f"Nastavení pro rok {self.current_settings_year} bylo uloženo!", QMessageBox.Information)
 
     def add_custom_year(self):
-        """Dialog pro přidání libovolného roku - nyní s wizardem"""
+        """Dialog pro přidání libovolného roku - s výběrem módu"""
         current_year = datetime.now().year
         year, ok = QInputDialog.getInt(
             self,
             "Přidat rok",
             "Zadej rok, který chceš přidat do sledování:",
-            current_year + 1,  # Defaultně příští rok
+            current_year + 1,
             2000,
             2100,
             1
         )
         
-        if ok:
-            year_str = str(year)
-            
-            # Zkontrolovat, zda rok již existuje
-            if year_str in self.data["year_settings"]:
-                self.show_message(
-                    "Informace",
-                    f"Rok {year} již existuje v nastavení.",
-                    QMessageBox.Information
-                )
-                return
-            
-            # Spustit Smart Year Wizard
+        if not ok:
+            return
+        
+        year_str = str(year)
+        
+        # Zkontrolovat, zda rok již existuje
+        if year_str in self.data["year_settings"]:
+            self.show_message(
+                "Informace",
+                f"Rok {year} již existuje v nastavení.",
+                QMessageBox.Information
+            )
+            return
+        
+        # **NOVĚ: Dialog pro výběr módu**
+        mode_dialog = YearCreationModeDialog(year, self)
+        
+        if not mode_dialog.exec():
+            # **OPRAVA: Zrušení mode dialogu**
+            return
+        
+        mode = mode_dialog.get_mode()
+        
+        if not mode:
+            # **OPRAVA: Žádný mód nebyl vybrán**
+            return
+        
+        # **INICIALIZACE success_message**
+        success_message = ""
+        year_created = False
+        
+        if mode == "wizard":
+            # **SMART WIZARD**
             wizard = NewYearWizardDialog(year, self)
             
             if wizard.exec():
-                # Získat doporučení z wizardu
                 recommendations = wizard.get_recommendations()
                 
-                # Vytvořit year_settings s doporučenými hodnotami
                 self.data["year_settings"][year_str] = {
                     "start_date": f"{year}-01-01",
                     "base_goals": {},
                     "weekly_increment": {}
                 }
                 
-                # Aplikovat doporučení pro každé cvičení
                 for exercise_id, goals in recommendations.items():
                     self.data["year_settings"][year_str]["base_goals"][exercise_id] = goals["base_goal"]
                     self.data["year_settings"][year_str]["weekly_increment"][exercise_id] = goals["weekly_increment"]
                 
-                self.save_data()
-                self.update_all_year_selectors()
+                success_message = f"Rok {year} vytvořen pomocí Smart Wizardu!"
+                year_created = True
+            else:
+                # **OPRAVA: Wizard byl zrušen, nic nevytvářej**
+                return
+        
+        elif mode == "copy":
+            # **ZKOPÍROVAT Z MINULÉHO ROKU**
+            previous_year = year - 1
+            previous_year_str = str(previous_year)
+            
+            if previous_year_str in self.data["year_settings"]:
+                previous_settings = self.data["year_settings"][previous_year_str]
                 
-                # Automaticky přepnout na nový rok ve všech záložkách
-                for exercise in self.get_active_exercises():
-                    if exercise in self.exercise_year_selectors:
-                        self.exercise_year_selectors[exercise].setCurrentText(str(year))
+                self.data["year_settings"][year_str] = {
+                    "start_date": f"{year}-01-01",
+                    "base_goals": previous_settings["base_goals"].copy(),
+                    "weekly_increment": previous_settings["weekly_increment"].copy()
+                }
                 
-                # Refresh VŠECH záložek, grafů a přehledů
-                for exercise in self.get_active_exercises():
-                    self.update_exercise_tab(exercise)
-                    self.refresh_exercise_calendar(exercise)
-                    # Refresh grafu
-                    if exercise in self.chart_modes:
-                        current_mode = self.chart_modes[exercise]
-                        self.update_performance_chart(exercise, current_mode)
-                
-                # Refresh seznamu roků v nastavení
-                self.years_list.clear()
-                for y in self.get_available_years():
-                    year_workouts = sum(1 for date_str in self.data["workouts"].keys() if int(date_str.split("-")[0]) == y)
-                    item = QListWidgetItem(f"📅 Rok {y} ({year_workouts} dní s cvičením)")
-                    item.setData(Qt.UserRole, y)
-                    self.years_list.addItem(item)
-                
-                # Načíst nastavení nového roku do UI
-                self.load_year_settings_to_ui(year)
-                
-                # Shrnutí
-                summary_text = f"Rok {year} byl vytvořen s těmito cíly:\n\n"
-                for exercise_id, goals in recommendations.items():
-                    config = self.get_exercise_config(exercise_id)
-                    summary_text += f"{config['icon']} {config['name']}:\n"
-                    summary_text += f"  • Základní cíl: {goals['base_goal']}\n"
-                    summary_text += f"  • Týdenní přírůstek: {goals['weekly_increment']}\n\n"
-                
-                self.show_message(
-                    "🎉 Rok vytvořen!",
-                    summary_text,
-                    QMessageBox.Information
-                )
+                success_message = f"Rok {year} vytvořen zkopírováním z roku {previous_year}!"
+                year_created = True
+            else:
+                # Fallback na výchozí
+                self.data["year_settings"][year_str] = self.create_default_year_settings(year)
+                success_message = f"Rok {year} vytvořen s výchozím nastavením (minulý rok neexistuje)!"
+                year_created = True
+        
+        else:  # mode == "classic"
+            # **VÝCHOZÍ NASTAVENÍ**
+            self.data["year_settings"][year_str] = self.create_default_year_settings(year)
+            success_message = f"Rok {year} vytvořen s výchozím nastavením!"
+            year_created = True
+        
+        # **KONTROLA: Pokud rok nebyl vytvořen, ukonči**
+        if not year_created:
+            return
+        
+        # **Společné kroky pro všechny módy**
+        self.save_data()
+        self.update_all_year_selectors()
+        
+        # Přepnout na nový rok
+        for exercise in self.get_active_exercises():
+            if exercise in self.exercise_year_selectors:
+                self.exercise_year_selectors[exercise].setCurrentText(str(year))
+        
+        # Refresh všeho
+        for exercise in self.get_active_exercises():
+            self.update_exercise_tab(exercise)
+            self.refresh_exercise_calendar(exercise)
+            if exercise in self.chart_modes:
+                current_mode = self.chart_modes[exercise]
+                self.update_performance_chart(exercise, current_mode)
+        
+        # Refresh v nastavení
+        self.years_list.clear()
+        for y in self.get_available_years():
+            year_workouts = sum(1 for date_str in self.data["workouts"].keys() if int(date_str.split("-")[0]) == y)
+            item = QListWidgetItem(f"📅 Rok {y} ({year_workouts} dní s cvičením)")
+            item.setData(Qt.UserRole, y)
+            self.years_list.addItem(item)
+        
+        self.load_year_settings_to_ui(year)
+        
+        self.show_message("🎉 Úspěch!", success_message, QMessageBox.Information)
 
     
     def delete_year_from_list(self):
