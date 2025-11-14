@@ -122,6 +122,13 @@ Všechna data se ukládají lokálně v souboru `fitness_data.json` ve stejném 
 
 
 ## 📝 Changelog
+### v1.8b (14.11.2025)
+- **Vylepšení grafů**: Všechny módy (týden/měsíc/rok) respektují startovní datum
+  - Graf neobsahuje dny před `start_date` z nastavení roku
+  - Vertikální zelená čára označuje začátek cvičení
+  - Popisek "Start DD.MM." u začátku cvičení
+  - Titulek grafu zobrazuje skutečné datum začátku pro měsíc
+
 ### v1.8a (14.11.2025)
 - **Oprava**: Roční graf nyní respektuje startovní datum z nastavení roku
   - Pokud je nastavený začátek jiný než 1.1., graf začíná od tohoto data
@@ -480,6 +487,7 @@ Vytvořeno v roce 2025
 - [Issues](https://github.com/Safronus/FitnessApp/issues)
 
 ---
-**Poslední aktualizace:** 14.11.2025 22:31 CET  
-**Aktuální verze:** 1.8a
+**Poslední aktualizace:** 14.11.2025 22:34 CET  
+**Aktuální verze:** 1.8b
+
 
