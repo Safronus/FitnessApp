@@ -1764,18 +1764,18 @@ class FitnessTrackerApp(QMainWindow):
         # Iniciální vykreslení
         self.update_performance_chart(exercisetype, "weekly")
 
-    def update_performance_chart(self, exercisetype, mode):
+    def update_performance_chart(self, exercise_type, mode):
         """Aktualizuje graf výkonu podle zvoleného módu"""
-        if exercisetype not in self.chart_figures:
+        if exercise_type not in self.chart_figures:
             return
         
         # Update módu a toggle tlačítek
-        self.chart_modes[exercisetype] = mode
-        if exercisetype in self.chart_mode_buttons:
-            for btn_mode, btn in self.chart_mode_buttons[exercisetype].items():
+        self.chart_modes[exercise_type] = mode
+        if exercise_type in self.chart_mode_buttons:
+            for btn_mode, btn in self.chart_mode_buttons[exercise_type].items():
                 btn.setChecked(btn_mode == mode)
         
-        fig = self.chart_figures[exercisetype]
+        fig = self.chart_figures[exercise_type]
         fig.clear()
         
         ax = fig.add_subplot(111)
@@ -1805,8 +1805,8 @@ class FitnessTrackerApp(QMainWindow):
         
         else:  # yearly
             # Získat vybraný rok z selektoru
-            if exercisetype in self.exercise_year_selectors:
-                selector = self.exercise_year_selectors[exercisetype]
+            if exercise_type in self.exercise_year_selectors:
+                selector = self.exercise_year_selectors[exercise_type]
                 if selector and selector.currentText():
                     selected_year = int(selector.currentText())
                 else:
@@ -1814,10 +1814,25 @@ class FitnessTrackerApp(QMainWindow):
             else:
                 selected_year = today.year
             
-            start_date = datetime(selected_year, 1, 1).date()
+            # **NOVĚ: Respektovat start_date z year_settings**
+            year_settings = self.get_year_settings(selected_year)
+            settings_start_date_str = year_settings.get("start_date", f"{selected_year}-01-01")
+            settings_start_date = datetime.strptime(settings_start_date_str, "%Y-%m-%d").date()
+            
+            # Pokud je start_date v daném roce, použij ho; jinak 1.1.
+            if settings_start_date.year == selected_year:
+                start_date = settings_start_date
+            else:
+                start_date = datetime(selected_year, 1, 1).date()
+            
             end_date = datetime(selected_year, 12, 31).date()
+            
+            # Omezení na dnešek, pokud je selected_year aktuální rok
+            if selected_year == today.year and today < end_date:
+                end_date = today
+            
             date_range = [start_date + timedelta(days=i) for i in range((end_date - start_date).days + 1)]
-            title = f"Celý rok {selected_year}"
+            title = f"Celý rok {selected_year} (od {start_date.strftime('%d.%m.')})"
             xlabel_format = "%m/%y"
         
         # Sbírat data
@@ -1834,8 +1849,8 @@ class FitnessTrackerApp(QMainWindow):
             
             # Výkon
             perf = 0
-            if date_str in self.data["workouts"] and exercisetype in self.data["workouts"][date_str]:
-                records = self.data["workouts"][date_str][exercisetype]
+            if date_str in self.data["workouts"] and exercise_type in self.data["workouts"][date_str]:
+                records = self.data["workouts"][date_str][exercise_type]
                 if isinstance(records, list):
                     perf = sum(r["value"] for r in records)
                 elif isinstance(records, dict):
@@ -1843,7 +1858,7 @@ class FitnessTrackerApp(QMainWindow):
             performed.append(perf)
             
             # Cíl
-            goal = self.calculate_goal(exercisetype, date_str)
+            goal = self.calculate_goal(exercise_type, date_str)
             goals.append(goal if isinstance(goal, int) else 0)
         
         if not dates:
@@ -1886,7 +1901,7 @@ class FitnessTrackerApp(QMainWindow):
                 text.set_color('#e0e0e0')
         
         fig.tight_layout()
-        self.chart_canvases[exercisetype].draw()
+        self.chart_canvases[exercise_type].draw()
 
     
     def create_exercise_tab(self, exercise_type, icon):

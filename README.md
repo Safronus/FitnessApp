@@ -122,6 +122,11 @@ Všechna data se ukládají lokálně v souboru `fitness_data.json` ve stejném 
 
 
 ## 📝 Changelog
+### v1.8a (14.11.2025)
+- **Oprava**: Roční graf nyní respektuje startovní datum z nastavení roku
+  - Pokud je nastavený začátek jiný než 1.1., graf začíná od tohoto data
+  - Titulek grafu zobrazuje skutečné datum začátku
+
 ### v1.8 (14.11.2025)
 - **Nová funkcionalita**: Grafy výkonu v záložkách jednotlivých cvičení
   - Vizualizace skutečného výkonu (sloupcový graf) a cílů (čárový graf)
@@ -144,10 +149,6 @@ Všechna data se ukládají lokálně v souboru `fitness_data.json` ve stejném 
   - Dřepy: 5, 10, 15, 20
   - Skrčky: 10, 15, 20, 30, 40
 - Umožňují okamžité přidání přednastavených hodnot bez nutnosti zadávat do SpinBox
-
-### v1.6 (26.10.2025)
-...
-
 
 ### v1.6 (26.10.2025 02:23 CEST)
 **Vylepšení:**
@@ -479,5 +480,6 @@ Vytvořeno v roce 2025
 - [Issues](https://github.com/Safronus/FitnessApp/issues)
 
 ---
-**Poslední aktualizace:** 14.11.2025 22:15 CET  
-**Aktuální verze:** 1.8
+**Poslední aktualizace:** 14.11.2025 22:31 CET  
+**Aktuální verze:** 1.8a
+
