@@ -122,6 +122,13 @@ Všechna data se ukládají lokálně v souboru `fitness_data.json` ve stejném 
 
 
 ## 📝 Changelog
+### v1.8e (14.11.2025)
+- **Oprava**: Vytváření nových roků nyní funguje správně
+  - Nový rok se vytvoří **bez záznamů** (čistý start)
+  - Startovní datum automaticky nastaveno na **1.1.{rok}**
+  - Všechny záložky, grafy a přehledy se okamžitě aktualizují po vytvoření/změně roku
+  - Oprava zobrazení budoucích roků bez dat
+
 ### v1.8d (14.11.2025)
 - **Oprava**: Sekce DNES/TÝDEN/MĚSÍC/ZBYTEK ROKU nyní respektují vybraný rok
   - Pro historické roky zobrazují data z konce roku nebo posledního záznamu
@@ -498,6 +505,7 @@ Vytvořeno v roce 2025
 - [Issues](https://github.com/Safronus/FitnessApp/issues)
 
 ---
-**Poslední aktualizace:** 14.11.2025 22:41 CET  
-**Aktuální verze:** 1.8d
+**Poslední aktualizace:** 14.11.2025 22:48 CET  
+**Aktuální verze:** 1.8e
+
 

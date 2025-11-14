@@ -1537,7 +1537,6 @@ class FitnessTrackerApp(QMainWindow):
     def add_custom_year(self):
         """Dialog pro přidání libovolného roku"""
         current_year = datetime.now().year
-        
         year, ok = QInputDialog.getInt(
             self,
             "Přidat rok",
@@ -1549,43 +1548,72 @@ class FitnessTrackerApp(QMainWindow):
         )
         
         if ok:
+            year_str = str(year)
+            
+            # **OPRAVA: Zkontrolovat, zda rok již existuje**
+            if year_str in self.data["year_settings"]:
+                self.show_message(
+                    "Informace",
+                    f"Rok {year} již existuje v nastavení.",
+                    QMessageBox.Information
+                )
+                return
+            
             dialog = NewYearDialog(year, self)
             
             if dialog.exec():
-                if not dialog.use_current:
-                    self.show_message(
-                        "Informace",
-                        f"Rok {year} byl přidán s výchozím nastavením.\n"
-                        "Můžeš ho upravit kliknutím na rok v seznamu.",
-                        QMessageBox.Information
-                    )
+                if dialog.use_current:
+                    # Použít aktuální nastavení z jiného roku
+                    current_year_settings = self.get_year_settings(current_year)
+                    self.data["year_settings"][year_str] = {
+                        "start_date": f"{year}-01-01",  # **VŽDY 1.1. pro nový rok**
+                        "base_goals": current_year_settings["base_goals"].copy(),
+                        "weekly_increment": current_year_settings["weekly_increment"].copy()
+                    }
+                else:
+                    # Nové výchozí nastavení
+                    self.data["year_settings"][year_str] = {
+                        "start_date": f"{year}-01-01",  # **VŽDY 1.1. pro nový rok**
+                        "base_goals": {"kliky": 50, "dřepy": 20, "skrčky": 20},
+                        "weekly_increment": {"kliky": 10, "dřepy": 5, "skrčky": 10}
+                    }
                 
-                first_day_of_year = f"{year}-01-01"
-                if first_day_of_year not in self.data['workouts']:
-                    self.data['workouts'][first_day_of_year] = {}
-                
-                self.get_year_settings(year)
+                # **OPRAVA: NETVOŘIT ŽÁDNÉ ZÁZNAMY!**
+                # (Odstraněno vytváření prvního dne s prázdnými záznamy)
                 
                 self.save_data()
                 self.update_all_year_selectors()
                 
-                for exercise in ['kliky', 'dřepy', 'skrčky']:
+                # **OPRAVA: Automaticky přepnout na nový rok ve všech záložkách**
+                for exercise in ["kliky", "dřepy", "skrčky"]:
                     if exercise in self.exercise_year_selectors:
                         self.exercise_year_selectors[exercise].setCurrentText(str(year))
                 
+                # **NOVĚ: Refresh VŠECH záložek, grafů a přehledů**
+                for exercise in ["kliky", "dřepy", "skrčky"]:
+                    self.update_exercise_tab(exercise)
+                    self.refresh_exercise_calendar(exercise)
+                    # Refresh grafu
+                    if exercise in self.chart_modes:
+                        current_mode = self.chart_modes[exercise]
+                        self.update_performance_chart(exercise, current_mode)
+                
+                # Refresh seznamu roků v nastavení
                 self.years_list.clear()
                 for y in self.get_available_years():
-                    year_workouts = sum(1 for date_str in self.data['workouts'].keys() 
-                                      if int(date_str.split('-')[0]) == y)
-                    item = QListWidgetItem(f"📆 Rok {y} ({year_workouts} dnů s cvičením)")
+                    year_workouts = sum(1 for date_str in self.data["workouts"].keys() if int(date_str.split("-")[0]) == y)
+                    item = QListWidgetItem(f"📅 Rok {y} ({year_workouts} dní s cvičením)")
                     item.setData(Qt.UserRole, y)
                     self.years_list.addItem(item)
                 
+                # Načíst nastavení nového roku do UI
                 self.load_year_settings_to_ui(year)
                 
                 self.show_message(
                     "Úspěch",
-                    f"Rok {year} byl přidán do sledování!\nMůžeš začít zaznamenávat svá cvičení.",
+                    f"Rok {year} byl přidán do sledování!\n\n"
+                    f"Startovní datum: 1.1.{year}\n"
+                    f"Můžeš začít zaznamenávat své cvičení.",
                     QMessageBox.Information
                 )
     
@@ -2326,8 +2354,14 @@ class FitnessTrackerApp(QMainWindow):
                 if selector and selector.currentText():
                     self.update_exercise_tab(exercise_type)
                     self.refresh_exercise_calendar(exercise_type)
+                    
+                    # **NOVĚ: Refresh grafu při změně roku**
+                    if exercise_type in self.chart_modes:
+                        current_mode = self.chart_modes[exercise_type]
+                        self.update_performance_chart(exercise_type, current_mode)
         except Exception as e:
             print(f"Chyba při aktualizaci záložky {exercise_type}: {e}")
+
     
     def calculate_goal(self, exercise_type, date_str):
         """Vypočítá cíl pro daný den"""
@@ -2592,12 +2626,12 @@ class FitnessTrackerApp(QMainWindow):
             today = datetime.now().date()
             today_str = today.strftime("%Y-%m-%d")
             
-            # **OPRAVA: Pro vybraný rok != aktuální rok, použij poslední den s daty nebo 31.12.**
+            # **OPRAVA: Pro vybraný rok != aktuální rok**
             if selected_year == today.year:
                 current_date = today
                 current_date_str = today_str
             else:
-                # Pro jiný rok: najdi poslední den s daty nebo použij 31.12.
+                # Pro jiný rok: najdi poslední den s daty nebo použij 31.12. (nebo dnešek pro budoucí roky)
                 last_date_with_data = None
                 year_end = datetime(selected_year, 12, 31).date()
                 
@@ -2609,11 +2643,19 @@ class FitnessTrackerApp(QMainWindow):
                             last_date_with_data = date_obj
                             break
                 
-                # Pokud existují data, použij poslední datum; jinak konec roku
-                if last_date_with_data:
-                    current_date = min(last_date_with_data, year_end)
+                # **OPRAVA: Pro budoucí roky bez dat, použij start_date**
+                if not last_date_with_data:
+                    settings = self.get_year_settings(selected_year)
+                    settings_start_date = datetime.strptime(settings.get("start_date", f"{selected_year}-01-01"), "%Y-%m-%d").date()
+                    
+                    if selected_year > today.year:
+                        # Budoucí rok - použij start_date nebo dnešek
+                        current_date = max(settings_start_date, today) if settings_start_date <= today else settings_start_date
+                    else:
+                        # Minulý rok bez dat - použij konec roku
+                        current_date = min(year_end, today)
                 else:
-                    current_date = year_end
+                    current_date = min(last_date_with_data, year_end)
                 
                 # Ale nikdy nepřekročit dnešek
                 if current_date > today:
