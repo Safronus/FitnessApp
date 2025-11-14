@@ -864,14 +864,26 @@ class FitnessTrackerApp(QMainWindow):
         add_group = QGroupBox("➕ Zadat výkon")
         add_layout = QVBoxLayout()
         
+        # Společné styly pro všechna hlavní tlačítka "Přidat"
+        main_button_style = "font-size: 12px; padding: 8px; min-height: 35px; background-color: #0d7377;"
+        # Společné styly pro rychlá tlačítka
+        quick_button_style = "font-size: 11px; padding: 8px; min-height: 35px; background-color: #2a4d50; color: #b0b0b0;"
+        
         # Kliky
         kliky_row = QHBoxLayout()
-        kliky_row.addWidget(QLabel("💪 Kliky:"))
+        kliky_label = QLabel("💪 Kliky:")
+        kliky_label.setFixedWidth(80)
+        kliky_row.addWidget(kliky_label)
+        
         self.kliky_spin = QSpinBox()
         self.kliky_spin.setRange(0, 10000)
         self.kliky_spin.setValue(0)
+        self.kliky_spin.setFixedWidth(100)
         kliky_row.addWidget(self.kliky_spin)
+        
         kliky_btn = QPushButton("Přidat")
+        kliky_btn.setStyleSheet(main_button_style)
+        kliky_btn.setFixedWidth(80)
         kliky_btn.clicked.connect(lambda: self.add_single_workout("kliky", self.kliky_spin.value()))
         kliky_row.addWidget(kliky_btn)
         
@@ -879,7 +891,7 @@ class FitnessTrackerApp(QMainWindow):
         for quick_val in [10, 15, 20]:
             quick_btn = QPushButton(str(quick_val))
             quick_btn.setFixedWidth(50)
-            quick_btn.setStyleSheet("font-size: 11px; padding: 5px;")
+            quick_btn.setStyleSheet(quick_button_style)
             quick_btn.clicked.connect(lambda checked, val=quick_val: self.add_single_workout("kliky", val))
             kliky_row.addWidget(quick_btn)
         
@@ -888,12 +900,19 @@ class FitnessTrackerApp(QMainWindow):
         
         # Dřepy
         drepy_row = QHBoxLayout()
-        drepy_row.addWidget(QLabel("🦵 Dřepy:"))
+        drepy_label = QLabel("🦵 Dřepy:")
+        drepy_label.setFixedWidth(80)
+        drepy_row.addWidget(drepy_label)
+        
         self.drepy_spin = QSpinBox()
         self.drepy_spin.setRange(0, 10000)
         self.drepy_spin.setValue(0)
+        self.drepy_spin.setFixedWidth(100)
         drepy_row.addWidget(self.drepy_spin)
+        
         drepy_btn = QPushButton("Přidat")
+        drepy_btn.setStyleSheet(main_button_style)
+        drepy_btn.setFixedWidth(80)
         drepy_btn.clicked.connect(lambda: self.add_single_workout("dřepy", self.drepy_spin.value()))
         drepy_row.addWidget(drepy_btn)
         
@@ -901,7 +920,7 @@ class FitnessTrackerApp(QMainWindow):
         for quick_val in [5, 10, 15, 20]:
             quick_btn = QPushButton(str(quick_val))
             quick_btn.setFixedWidth(50)
-            quick_btn.setStyleSheet("font-size: 11px; padding: 5px;")
+            quick_btn.setStyleSheet(quick_button_style)
             quick_btn.clicked.connect(lambda checked, val=quick_val: self.add_single_workout("dřepy", val))
             drepy_row.addWidget(quick_btn)
         
@@ -910,12 +929,19 @@ class FitnessTrackerApp(QMainWindow):
         
         # Skrčky
         skrcky_row = QHBoxLayout()
-        skrcky_row.addWidget(QLabel("🧘 Skrčky:"))
+        skrcky_label = QLabel("🧘 Skrčky:")
+        skrcky_label.setFixedWidth(80)
+        skrcky_row.addWidget(skrcky_label)
+        
         self.skrcky_spin = QSpinBox()
         self.skrcky_spin.setRange(0, 10000)
         self.skrcky_spin.setValue(0)
+        self.skrcky_spin.setFixedWidth(100)
         skrcky_row.addWidget(self.skrcky_spin)
+        
         skrcky_btn = QPushButton("Přidat")
+        skrcky_btn.setStyleSheet(main_button_style)
+        skrcky_btn.setFixedWidth(80)
         skrcky_btn.clicked.connect(lambda: self.add_single_workout("skrčky", self.skrcky_spin.value()))
         skrcky_row.addWidget(skrcky_btn)
         
@@ -923,7 +949,7 @@ class FitnessTrackerApp(QMainWindow):
         for quick_val in [10, 15, 20, 30, 40]:
             quick_btn = QPushButton(str(quick_val))
             quick_btn.setFixedWidth(50)
-            quick_btn.setStyleSheet("font-size: 11px; padding: 5px;")
+            quick_btn.setStyleSheet(quick_button_style)
             quick_btn.clicked.connect(lambda checked, val=quick_val: self.add_single_workout("skrčky", val))
             skrcky_row.addWidget(quick_btn)
         
@@ -941,6 +967,7 @@ class FitnessTrackerApp(QMainWindow):
         
         layout.addStretch()
         return widget
+
 
 
     def refresh_add_tab_goals(self):
