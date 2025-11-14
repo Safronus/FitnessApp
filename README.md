@@ -34,6 +34,12 @@ Fitness Tracker je desktopová aplikace pro sledování pokroku v cvičení. Umo
 - Dynamické záložky podle aktivních cvičení
 
 ## 📝 Changelog
+### v2.0.5 (14.11.2025)
+- **Oprava**: Všechny hardcoded reference na cvičení nahrazeny dynamickým načítáním
+  - refresh_add_tab_goals() nyní používá get_active_exercises()
+  - on_tab_changed() a auto_refresh() dynamicky hledají cvičení
+  - Oprava zobrazení dat pro Dřepy a Skrčky
+
 ### v2.0.3 (14.11.2025)
 - **Vylepšení**: Dialog přidání cvičení nyní umožňuje nastavit základní cíl a týdenní přírůstek
   - Základní cíl: počet opakování pro 1. týden

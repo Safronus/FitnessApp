@@ -549,10 +549,13 @@ class AddExerciseDialog(QDialog):
         return {
             "name": self.name_input.text().strip(),
             "icon": self.icon_input.text().strip() or "🏋️",
-            "order": 999,  # Na konec
+            "order": 999,
             "active": True,
-            "quick_buttons": quick_buttons
+            "quick_buttons": quick_buttons,
+            "base_goal": self.base_goal_spin.value(),  # ← MUSÍ BÝT
+            "weekly_increment": self.weekly_increment_spin.value()  # ← MUSÍ BÝT
         }
+
 
 class EditExerciseDialog(QDialog):
     """Dialog pro editaci existujícího cvičení"""
@@ -726,9 +729,9 @@ class FitnessTrackerApp(QMainWindow):
             if "exercises" not in self.data:
                 self.data["exercises"] = {}
             
-            # **Extrahuj cíle z dialogu**
-            base_goal = exercise_data.pop("base_goal")
-            weekly_increment = exercise_data.pop("weekly_increment")
+            # **BEZPEČNÉ extrahování cílů z dialogu (s fallback)**
+            base_goal = exercise_data.pop("base_goal", 50)  # Výchozí 50
+            weekly_increment = exercise_data.pop("weekly_increment", 10)  # Výchozí 10
             
             self.data["exercises"][exercise_id] = exercise_data
             
@@ -747,7 +750,6 @@ class FitnessTrackerApp(QMainWindow):
             
             self.show_message("Úspěch", f"Cvičení '{exercise_data['name']}' bylo přidáno!\n\nZákladní cíl: {base_goal}\nTýdenní přírůstek: {weekly_increment}\n\nRestartuj aplikaci pro zobrazení nové záložky.", QMessageBox.Information)
 
-    
     def edit_exercise(self, exercise_id):
         """Edituje existující cvičení"""
         if "exercises" not in self.data or exercise_id not in self.data["exercises"]:
@@ -1382,61 +1384,65 @@ class FitnessTrackerApp(QMainWindow):
 
     def refresh_add_tab_goals(self):
         """Aktualizuje přehled cílů při změně data"""
-        selected_date_str = self.add_date_edit.date().toString('yyyy-MM-dd')
+        selected_date_str = self.add_date_edit.date().toString("yyyy-MM-dd")
         
-        for exercise in ['kliky', 'dřepy', 'skrčky']:
-            goal = self.calculate_goal(exercise, selected_date_str)
+        # **OPRAVENO: Dynamicky získat aktivní cvičení**
+        for exercise_id in self.get_active_exercises():
+            goal = self.calculate_goal(exercise_id, selected_date_str)
             
             current_value = 0
-            if selected_date_str in self.data['workouts'] and exercise in self.data['workouts'][selected_date_str]:
-                records = self.data['workouts'][selected_date_str][exercise]
+            if selected_date_str in self.data["workouts"] and exercise_id in self.data["workouts"][selected_date_str]:
+                records = self.data["workouts"][selected_date_str][exercise_id]
                 if isinstance(records, list):
-                    current_value = sum(r['value'] for r in records)
+                    current_value = sum(r["value"] for r in records)
                 elif isinstance(records, dict):
-                    current_value = records.get('value', 0)
+                    current_value = records.get("value", 0)
             
             if current_value >= goal:
                 status = f"✅ Splněno ({current_value}/{goal})"
                 color = "#32c766"
             elif current_value > 0:
-                status = f"⏳ Rozpracováno ({current_value}/{goal})"
+                status = f"🔄 Rozpracováno ({current_value}/{goal})"
                 color = "#FFD700"
             else:
                 status = f"❌ Nesplněno (0/{goal})"
                 color = "#ff6b6b"
             
-            if exercise in self.add_goals_labels:
-                self.add_goals_labels[exercise].setText(f"{exercise.capitalize()}: {status}")
-                self.add_goals_labels[exercise].setStyleSheet(f"font-size: 13px; padding: 5px; color: {color}; font-weight: bold;")
+            if exercise_id in self.add_goals_labels:
+                config = self.get_exercise_config(exercise_id)
+                self.add_goals_labels[exercise_id].setText(f"{config['icon']} {config['name']}: {status}")
+                self.add_goals_labels[exercise_id].setStyleSheet(f"font-size: 13px; padding: 5px; color: {color}; font-weight: bold;")
 
     def on_tab_changed(self, index):
+        """Refresh při přepnutí záložky"""
         try:
             tab_name = self.tabs.tabText(index)
-            if "💪" in tab_name:
-                self.update_exercise_tab('kliky')
-                self.refresh_exercise_calendar('kliky')
-            elif "🦵" in tab_name:
-                self.update_exercise_tab('dřepy')
-                self.refresh_exercise_calendar('dřepy')
-            elif "🧘" in tab_name:
-                self.update_exercise_tab('skrčky')
-                self.refresh_exercise_calendar('skrčky')
+            
+            # **OPRAVENO: Dynamicky najít cvičení podle názvu v záložce**
+            for exercise_id in self.get_active_exercises():
+                config = self.get_exercise_config(exercise_id)
+                if config['icon'] in tab_name and config['name'] in tab_name:
+                    self.update_exercise_tab(exercise_id)
+                    self.refresh_exercise_calendar(exercise_id)
+                    break
         except Exception as e:
             print(f"Chyba při přepnutí záložky: {e}")
-    
+
     def auto_refresh(self):
+        """Automatický refresh aktuální záložky"""
         try:
             current_tab = self.tabs.currentIndex()
             tab_name = self.tabs.tabText(current_tab)
             
-            if "💪" in tab_name:
-                self.update_exercise_tab('kliky')
-            elif "🦵" in tab_name:
-                self.update_exercise_tab('dřepy')
-            elif "🧘" in tab_name:
-                self.update_exercise_tab('skrčky')
+            # **OPRAVENO: Dynamicky najít cvičení podle názvu v záložce**
+            for exercise_id in self.get_active_exercises():
+                config = self.get_exercise_config(exercise_id)
+                if config['icon'] in tab_name and config['name'] in tab_name:
+                    self.update_exercise_tab(exercise_id)
+                    break
         except Exception as e:
             print(f"Chyba při automatické aktualizaci: {e}")
+
     
     def show_message(self, title, text, icon=QMessageBox.Information):
         msg = QMessageBox(self)
@@ -1932,55 +1938,77 @@ class FitnessTrackerApp(QMainWindow):
                 self.years_list.addItem(item)
 
     def load_year_settings_to_ui(self, year):
-        """Načte nastavení pro daný rok do UI"""
-        self.current_settings_year = year
+        """Načte nastavení roku do UI"""
         settings = self.get_year_settings(year)
         
-        self.current_year_label.setText(f"⚙️ Upravuješ nastavení pro rok: {year}")
-        
-        start_date = QDate.fromString(settings['start_date'], 'yyyy-MM-dd')
+        # Datum
+        start_date_str = settings.get("start_date", f"{year}-01-01")
+        start_date = QDate.fromString(start_date_str, "yyyy-MM-dd")
         self.start_date_edit.setDate(start_date)
         
-        self.base_kliky.setValue(settings['base_goals']['kliky'])
-        self.base_drepy.setValue(settings['base_goals']['dřepy'])
-        self.base_skrcky.setValue(settings['base_goals']['skrčky'])
+        # **DYNAMICKY NAČÍST CÍLE PRO VŠECHNA AKTIVNÍ CVIČENÍ**
+        active_exercises = self.get_active_exercises()
         
-        self.increment_kliky.setValue(settings['weekly_increment']['kliky'])
-        self.increment_drepy.setValue(settings['weekly_increment']['dřepy'])
-        self.increment_skrcky.setValue(settings['weekly_increment']['skrčky'])
+        for exercise_id in active_exercises:
+            # Základní cíl
+            if exercise_id in self.base_goal_spins:
+                base_goal = settings.get("base_goals", {}).get(exercise_id, 50)
+                self.base_goal_spins[exercise_id].setValue(base_goal)
+            
+            # Týdenní přírůstek
+            if exercise_id in self.increment_spins:
+                increment = settings.get("weekly_increment", {}).get(exercise_id, 10)
+                self.increment_spins[exercise_id].setValue(increment)
+
     
     def on_year_selected_for_settings(self, item):
-        """Při kliknutí na rok v nastavení načte jeho konfiguraci"""
-        selected_year = item.data(Qt.UserRole)
-        self.load_year_settings_to_ui(selected_year)
+        """Načte nastavení zvoleného roku do formuláře"""
+        year = item.data(Qt.UserRole)
+        if not year:
+            return
         
-        for exercise in ['kliky', 'dřepy', 'skrčky']:
-            if exercise in self.exercise_year_selectors:
-                self.exercise_year_selectors[exercise].setCurrentText(str(selected_year))
-        
-        for exercise in ['kliky', 'dřepy', 'skrčky']:
-            self.update_exercise_tab(exercise)
-            self.refresh_exercise_calendar(exercise)
-    
+        self.current_settings_year = year
+        self.load_year_settings_to_ui(year)
+
     def save_settings(self):
+        """Uloží nastavení pro aktuálně vybraný rok"""
+        if not self.current_settings_year:
+            self.show_message("Chyba", "Nejdřív vyber rok!", QMessageBox.Warning)
+            return
+        
         year_str = str(self.current_settings_year)
         
-        self.data['year_settings'][year_str]['start_date'] = self.start_date_edit.date().toString('yyyy-MM-dd')
-        self.data['year_settings'][year_str]['base_goals']['kliky'] = self.base_kliky.value()
-        self.data['year_settings'][year_str]['base_goals']['dřepy'] = self.base_drepy.value()
-        self.data['year_settings'][year_str]['base_goals']['skrčky'] = self.base_skrcky.value()
-        self.data['year_settings'][year_str]['weekly_increment']['kliky'] = self.increment_kliky.value()
-        self.data['year_settings'][year_str]['weekly_increment']['dřepy'] = self.increment_drepy.value()
-        self.data['year_settings'][year_str]['weekly_increment']['skrčky'] = self.increment_skrcky.value()
+        if year_str not in self.data["year_settings"]:
+            self.data["year_settings"][year_str] = {
+                "base_goals": {},
+                "weekly_increment": {}
+            }
+        
+        # Uložit datum
+        start_date_str = self.start_date_edit.date().toString("yyyy-MM-dd")
+        self.data["year_settings"][year_str]["start_date"] = start_date_str
+        
+        # **DYNAMICKY ULOŽIT VŠECHNA AKTIVNÍ CVIČENÍ**
+        active_exercises = self.get_active_exercises()
+        
+        for exercise_id in active_exercises:
+            # Základní cíl
+            if exercise_id in self.base_goal_spins:
+                self.data["year_settings"][year_str]["base_goals"][exercise_id] = self.base_goal_spins[exercise_id].value()
+            
+            # Týdenní přírůstek
+            if exercise_id in self.increment_spins:
+                self.data["year_settings"][year_str]["weekly_increment"][exercise_id] = self.increment_spins[exercise_id].value()
         
         self.save_data()
-        self.show_message("Uloženo", f"Nastavení pro rok {self.current_settings_year} bylo úspěšně uloženo!")
         
-        for exercise in ['kliky', 'dřepy', 'skrčky']:
+        # Refresh všech záložek
+        for exercise in active_exercises:
             self.update_exercise_tab(exercise)
-            if exercise in self.exercise_calendar_widgets:
-                self.refresh_exercise_calendar(exercise)
-    
+            self.refresh_exercise_calendar(exercise)
+        
+        self.show_message("Uloženo", f"Nastavení pro rok {self.current_settings_year} bylo uloženo!", QMessageBox.Information)
+
     def add_custom_year(self):
         """Dialog pro přidání libovolného roku"""
         current_year = datetime.now().year
