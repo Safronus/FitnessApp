@@ -123,6 +123,17 @@ Všechna data se ukládají lokálně v souboru `fitness_data.json` ve stejném 
 
 ## 📝 Changelog
 
+### v1.7 (14.11.2025)
+- **Nová funkcionalita**: Rychlá tlačítka v záložce "Přidat výkon"
+  - Kliky: 10, 15, 20
+  - Dřepy: 5, 10, 15, 20
+  - Skrčky: 10, 15, 20, 30, 40
+- Umožňují okamžité přidání přednastavených hodnot bez nutnosti zadávat do SpinBox
+
+### v1.6 (26.10.2025)
+...
+
+
 ### v1.6 (26.10.2025 02:23 CEST)
 **Vylepšení:**
 - 🎨 **Vylepšení záložky Nastavení:**
@@ -453,5 +464,6 @@ Vytvořeno v roce 2025
 - [Issues](https://github.com/Safronus/FitnessApp/issues)
 
 ---
-**Poslední aktualizace:** 26.10.2025 02:23 CEST  
-**Aktuální verze:** 1.6
+**Poslední aktualizace:** 14.11.2025 22:01 CET  
+**Aktuální verze:** 1.7
+

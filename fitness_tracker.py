@@ -802,13 +802,14 @@ class FitnessTrackerApp(QMainWindow):
         widget = QWidget()
         layout = QVBoxLayout(widget)
         
-        title_label = QLabel("➕ Přidání výkonu")
+        # Titulek
+        title_label = QLabel("📝 Přidání výkonů")
         title_label.setStyleSheet("font-size: 18px; font-weight: bold; color: #14919b; padding: 10px;")
         layout.addWidget(title_label)
         
         # Výběr data
         date_row = QHBoxLayout()
-        date_row.addWidget(QLabel("📅 Datum:"))
+        date_row.addWidget(QLabel("Datum:"))
         self.add_date_edit = QDateEdit()
         self.add_date_edit.setDate(QDate.currentDate())
         self.add_date_edit.setCalendarPopup(True)
@@ -823,22 +824,20 @@ class FitnessTrackerApp(QMainWindow):
         goals_layout.setObjectName("add_goals_layout")
         
         self.add_goals_labels = {}
+        selected_date_str = self.add_date_edit.date().toString("yyyy-MM-dd")
         
-        selected_date_str = self.add_date_edit.date().toString('yyyy-MM-dd')
-        
-        for exercise in ['kliky', 'dřepy', 'skrčky']:
+        for exercise in ["kliky", "dřepy", "skrčky"]:
             goal = self.calculate_goal(exercise, selected_date_str)
             
-            # OPRAVA: Správné zpracování current_value
+            # Spočítej aktuální hodnotu
             current_value = 0
-            if selected_date_str in self.data['workouts'] and exercise in self.data['workouts'][selected_date_str]:
-                records = self.data['workouts'][selected_date_str][exercise]
-                
-                # OPRAVA: Kontrola typu a sečtení
+            if selected_date_str in self.data["workouts"] and exercise in self.data["workouts"][selected_date_str]:
+                records = self.data["workouts"][selected_date_str][exercise]
+                # OPRAVA: Správné zpracování current_value
                 if isinstance(records, list):
-                    current_value = sum(r['value'] for r in records)
+                    current_value = sum(r["value"] for r in records)
                 elif isinstance(records, dict):
-                    current_value = records.get('value', 0)
+                    current_value = records.get("value", 0)
                 else:
                     current_value = 0
             
@@ -846,7 +845,7 @@ class FitnessTrackerApp(QMainWindow):
                 status = f"✅ Splněno ({current_value}/{goal})"
                 color = "#32c766"
             elif current_value > 0:
-                status = f"⏳ Rozpracováno ({current_value}/{goal})"
+                status = f"🔄 Rozpracováno ({current_value}/{goal})"
                 color = "#FFD700"
             else:
                 status = f"❌ Nesplněno (0/{goal})"
@@ -872,9 +871,19 @@ class FitnessTrackerApp(QMainWindow):
         self.kliky_spin.setRange(0, 10000)
         self.kliky_spin.setValue(0)
         kliky_row.addWidget(self.kliky_spin)
-        kliky_btn = QPushButton("✅ Přidat")
-        kliky_btn.clicked.connect(lambda: self.add_single_workout('kliky', self.kliky_spin.value()))
+        kliky_btn = QPushButton("Přidat")
+        kliky_btn.clicked.connect(lambda: self.add_single_workout("kliky", self.kliky_spin.value()))
         kliky_row.addWidget(kliky_btn)
+        
+        # Rychlá tlačítka pro kliky: 10, 15, 20
+        for quick_val in [10, 15, 20]:
+            quick_btn = QPushButton(str(quick_val))
+            quick_btn.setFixedWidth(50)
+            quick_btn.setStyleSheet("font-size: 11px; padding: 5px;")
+            quick_btn.clicked.connect(lambda checked, val=quick_val: self.add_single_workout("kliky", val))
+            kliky_row.addWidget(quick_btn)
+        
+        kliky_row.addStretch()
         add_layout.addLayout(kliky_row)
         
         # Dřepy
@@ -884,9 +893,19 @@ class FitnessTrackerApp(QMainWindow):
         self.drepy_spin.setRange(0, 10000)
         self.drepy_spin.setValue(0)
         drepy_row.addWidget(self.drepy_spin)
-        drepy_btn = QPushButton("✅ Přidat")
-        drepy_btn.clicked.connect(lambda: self.add_single_workout('dřepy', self.drepy_spin.value()))
+        drepy_btn = QPushButton("Přidat")
+        drepy_btn.clicked.connect(lambda: self.add_single_workout("dřepy", self.drepy_spin.value()))
         drepy_row.addWidget(drepy_btn)
+        
+        # Rychlá tlačítka pro dřepy: 5, 10, 15, 20
+        for quick_val in [5, 10, 15, 20]:
+            quick_btn = QPushButton(str(quick_val))
+            quick_btn.setFixedWidth(50)
+            quick_btn.setStyleSheet("font-size: 11px; padding: 5px;")
+            quick_btn.clicked.connect(lambda checked, val=quick_val: self.add_single_workout("dřepy", val))
+            drepy_row.addWidget(quick_btn)
+        
+        drepy_row.addStretch()
         add_layout.addLayout(drepy_row)
         
         # Skrčky
@@ -896,23 +915,33 @@ class FitnessTrackerApp(QMainWindow):
         self.skrcky_spin.setRange(0, 10000)
         self.skrcky_spin.setValue(0)
         skrcky_row.addWidget(self.skrcky_spin)
-        skrcky_btn = QPushButton("✅ Přidat")
-        skrcky_btn.clicked.connect(lambda: self.add_single_workout('skrčky', self.skrcky_spin.value()))
+        skrcky_btn = QPushButton("Přidat")
+        skrcky_btn.clicked.connect(lambda: self.add_single_workout("skrčky", self.skrcky_spin.value()))
         skrcky_row.addWidget(skrcky_btn)
+        
+        # Rychlá tlačítka pro skrčky: 10, 15, 20, 30, 40
+        for quick_val in [10, 15, 20, 30, 40]:
+            quick_btn = QPushButton(str(quick_val))
+            quick_btn.setFixedWidth(50)
+            quick_btn.setStyleSheet("font-size: 11px; padding: 5px;")
+            quick_btn.clicked.connect(lambda checked, val=quick_val: self.add_single_workout("skrčky", val))
+            skrcky_row.addWidget(quick_btn)
+        
+        skrcky_row.addStretch()
         add_layout.addLayout(skrcky_row)
         
         add_group.setLayout(add_layout)
         layout.addWidget(add_group)
         
         # Tlačítko pro přidání všeho najednou
-        add_all_btn = QPushButton("🚀 Přidat všechny výkony najednou")
+        add_all_btn = QPushButton("➕ Přidat všechny výkony najednou")
         add_all_btn.setStyleSheet("font-size: 14px; padding: 12px; background-color: #0d7377;")
         add_all_btn.clicked.connect(self.add_all_workouts)
         layout.addWidget(add_all_btn)
         
         layout.addStretch()
-        
         return widget
+
 
     def refresh_add_tab_goals(self):
         """Aktualizuje přehled cílů při změně data"""
