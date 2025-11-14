@@ -1,6 +1,22 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+"""
+Fitness Tracker - Aplikace pro sledování cvičení s progresivními cíli
+Verze 2.0
+
+Changelog:
+v2.0 (14.11.2025)
+- **MAJOR UPDATE**: Dynamické cvičení
+- Možnost přidávat vlastní typy cvičení
+- Možnost přejmenovat cvičení
+- Dynamické záložky podle aktivních cvičení
+- Dialog pro správu cvičení v Nastavení
+
+v1.8h - v1.0
+- Předchozí verze
+"""
+
 import sys
 import json
 import uuid
@@ -12,7 +28,7 @@ from PySide6.QtWidgets import (
     QTableWidgetItem, QGroupBox, QFormLayout, QHeaderView, QMessageBox,
     QGridLayout, QComboBox, QScrollArea, QFrame, QProgressBar, QTextEdit,
     QDialog, QListWidget, QListWidgetItem, QInputDialog, QCheckBox, QFileDialog,
-    QTreeWidget, QTreeWidgetItem
+    QTreeWidget, QTreeWidgetItem, QLineEdit  # ← PŘIDÁNO
 )
 from PySide6.QtCore import Qt, QDate, QTimer
 from PySide6.QtGui import QColor, QAction
@@ -24,9 +40,9 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
 
-# Verze aplikace
-VERSION = "1.8h"
-VERSION_DATE = "14.11.2026"
+TITLE = "Fitness Tracker"
+VERSION = "2.0"
+VERSION_DATE = "14.11.2025"
 
 # Dark Theme Stylesheet
 DARK_THEME = """
@@ -386,6 +402,232 @@ class NewYearDialog(QDialog):
         self.use_current = False
         self.accept()
 
+class AddExerciseDialog(QDialog):
+    """Dialog pro přidání nového cvičení"""
+    def __init__(self, existing_ids, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Přidat nové cvičení")
+        self.existing_ids = existing_ids
+        
+        layout = QVBoxLayout(self)
+        
+        # Info
+        info_label = QLabel("📝 Vytvoření nového typu cvičení")
+        info_label.setStyleSheet("font-weight: bold; font-size: 14px; padding: 10px; color: #14919b;")
+        layout.addWidget(info_label)
+        
+        # Form
+        form_layout = QFormLayout()
+        
+        # Název
+        self.name_input = QLineEdit()
+        self.name_input.setPlaceholderText("Např. Shyby, Plank, Běh")
+        form_layout.addRow("Název cvičení:", self.name_input)
+        
+        # ID (automaticky z názvu)
+        self.id_label = QLabel("(vygeneruje se automaticky)")
+        self.id_label.setStyleSheet("font-size: 10px; color: #a0a0a0;")
+        form_layout.addRow("ID:", self.id_label)
+        
+        # Ikona
+        self.icon_input = QLineEdit()
+        self.icon_input.setText("🏋️")
+        self.icon_input.setMaxLength(2)
+        form_layout.addRow("Ikona (emoji):", self.icon_input)
+        
+        # **NOVĚ: Základní cíl**
+        self.base_goal_spin = QSpinBox()
+        self.base_goal_spin.setRange(1, 1000)
+        self.base_goal_spin.setValue(50)
+        self.base_goal_spin.setSuffix(" opakování/den")
+        form_layout.addRow("🎯 Základní cíl (1. týden):", self.base_goal_spin)
+        
+        # **NOVĚ: Týdenní přírůstek**
+        self.weekly_increment_spin = QSpinBox()
+        self.weekly_increment_spin.setRange(0, 100)
+        self.weekly_increment_spin.setValue(10)
+        self.weekly_increment_spin.setSuffix(" opakování")
+        form_layout.addRow("📈 Týdenní přírůstek:", self.weekly_increment_spin)
+        
+        # Rychlá tlačítka
+        quick_label = QLabel("Rychlá tlačítka (oddělte čárkou):")
+        self.quick_input = QLineEdit()
+        self.quick_input.setText("10, 20, 30")
+        self.quick_input.setPlaceholderText("10, 20, 30")
+        form_layout.addRow(quick_label, self.quick_input)
+        
+        layout.addLayout(form_layout)
+        
+        # Tlačítka
+        buttons_layout = QHBoxLayout()
+        
+        save_btn = QPushButton("Vytvořit")
+        save_btn.clicked.connect(self.validate_and_accept)
+        buttons_layout.addWidget(save_btn)
+        
+        cancel_btn = QPushButton("Zrušit")
+        cancel_btn.clicked.connect(self.reject)
+        buttons_layout.addWidget(cancel_btn)
+        
+        layout.addLayout(buttons_layout)
+    
+    def validate_and_accept(self):
+        """Validace a přijetí"""
+        name = self.name_input.text().strip()
+        
+        if not name:
+            QMessageBox.warning(self, "Chyba", "Zadej název cvičení!")
+            return
+        
+        # Vygeneruj ID z názvu (lowercase, bez diakritiky)
+        import unicodedata
+        exercise_id = ''.join(
+            c for c in unicodedata.normalize('NFD', name.lower())
+            if unicodedata.category(c) != 'Mn'
+        ).replace(' ', '_')
+        
+        # Kontrola duplicity
+        if exercise_id in self.existing_ids:
+            QMessageBox.warning(self, "Chyba", f"Cvičení s ID '{exercise_id}' již existuje!")
+            return
+        
+        self.exercise_id = exercise_id
+        self.accept()
+    
+    def get_exercise_data(self):
+        """Vrátí data pro nové cvičení"""
+        # Parse rychlých tlačítek
+        quick_text = self.quick_input.text().strip()
+        try:
+            quick_buttons = [int(x.strip()) for x in quick_text.split(',') if x.strip()]
+        except:
+            quick_buttons = [10, 20, 30]
+        
+        return {
+            "name": self.name_input.text().strip(),
+            "icon": self.icon_input.text().strip() or "🏋️",
+            "order": 999,  # Na konec
+            "active": True,
+            "quick_buttons": quick_buttons,
+            "base_goal": self.base_goal_spin.value(),  # **NOVĚ**
+            "weekly_increment": self.weekly_increment_spin.value()  # **NOVĚ**
+        }
+
+    
+    def validate_and_accept(self):
+        """Validace a přijetí"""
+        name = self.name_input.text().strip()
+        
+        if not name:
+            QMessageBox.warning(self, "Chyba", "Zadej název cvičení!")
+            return
+        
+        # Vygeneruj ID z názvu (lowercase, bez diakritiky)
+        import unicodedata
+        exercise_id = ''.join(
+            c for c in unicodedata.normalize('NFD', name.lower())
+            if unicodedata.category(c) != 'Mn'
+        ).replace(' ', '_')
+        
+        # Kontrola duplicity
+        if exercise_id in self.existing_ids:
+            QMessageBox.warning(self, "Chyba", f"Cvičení s ID '{exercise_id}' již existuje!")
+            return
+        
+        self.exercise_id = exercise_id
+        self.accept()
+    
+    def get_exercise_data(self):
+        """Vrátí data pro nové cvičení"""
+        # Parse rychlých tlačítek
+        quick_text = self.quick_input.text().strip()
+        try:
+            quick_buttons = [int(x.strip()) for x in quick_text.split(',') if x.strip()]
+        except:
+            quick_buttons = [10, 20, 30]
+        
+        return {
+            "name": self.name_input.text().strip(),
+            "icon": self.icon_input.text().strip() or "🏋️",
+            "order": 999,  # Na konec
+            "active": True,
+            "quick_buttons": quick_buttons
+        }
+
+class EditExerciseDialog(QDialog):
+    """Dialog pro editaci existujícího cvičení"""
+    def __init__(self, exercise_id, exercise_config, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(f"Upravit cvičení: {exercise_config['name']}")
+        self.exercise_id = exercise_id
+        
+        layout = QVBoxLayout(self)
+        
+        # Info
+        info_label = QLabel(f"✏️ Úprava cvičení '{exercise_config['name']}'")
+        info_label.setStyleSheet("font-weight: bold; font-size: 14px; padding: 10px; color: #14919b;")
+        layout.addWidget(info_label)
+        
+        # ID (nepřejmenovatelné)
+        id_info = QLabel(f"ID: {exercise_id} (nelze změnit)")
+        id_info.setStyleSheet("font-size: 10px; color: #a0a0a0; padding: 5px;")
+        layout.addWidget(id_info)
+        
+        # Form
+        form_layout = QFormLayout()
+        
+        # Název
+        self.name_input = QLineEdit()
+        self.name_input.setText(exercise_config['name'])
+        form_layout.addRow("Název cvičení:", self.name_input)
+        
+        # Ikona
+        self.icon_input = QLineEdit()
+        self.icon_input.setText(exercise_config.get('icon', '🏋️'))
+        self.icon_input.setMaxLength(2)
+        form_layout.addRow("Ikona (emoji):", self.icon_input)
+        
+        # Rychlá tlačítka
+        quick_buttons = exercise_config.get('quick_buttons', [10, 20, 30])
+        self.quick_input = QLineEdit()
+        self.quick_input.setText(', '.join(map(str, quick_buttons)))
+        form_layout.addRow("Rychlá tlačítka:", self.quick_input)
+        
+        # Aktivní
+        self.active_checkbox = QCheckBox("Aktivní (zobrazit záložku)")
+        self.active_checkbox.setChecked(exercise_config.get('active', True))
+        form_layout.addRow("", self.active_checkbox)
+        
+        layout.addLayout(form_layout)
+        
+        # Tlačítka
+        buttons_layout = QHBoxLayout()
+        
+        save_btn = QPushButton("Uložit")
+        save_btn.clicked.connect(self.accept)
+        buttons_layout.addWidget(save_btn)
+        
+        cancel_btn = QPushButton("Zrušit")
+        cancel_btn.clicked.connect(self.reject)
+        buttons_layout.addWidget(cancel_btn)
+        
+        layout.addLayout(buttons_layout)
+    
+    def get_exercise_data(self):
+        """Vrátí aktualizovaná data"""
+        # Parse rychlých tlačítek
+        quick_text = self.quick_input.text().strip()
+        try:
+            quick_buttons = [int(x.strip()) for x in quick_text.split(',') if x.strip()]
+        except:
+            quick_buttons = [10, 20, 30]
+        
+        return {
+            "name": self.name_input.text().strip(),
+            "icon": self.icon_input.text().strip() or "🏋️",
+            "active": self.active_checkbox.isChecked(),
+            "quick_buttons": quick_buttons
+        }
 
 class EditWorkoutDialog(QDialog):
     """Dialog pro editaci existujícího záznamu"""
@@ -449,7 +691,7 @@ class EditWorkoutDialog(QDialog):
 class FitnessTrackerApp(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle(f"Fitness Tracker v{VERSION} - Sledování cvičení")
+        self.setWindowTitle(f"{TITLE} v{VERSION} - Sledování cvičení")
         self.setMinimumSize(1400, 800)
         
         self.data_file = Path("fitness_data.json")
@@ -461,12 +703,113 @@ class FitnessTrackerApp(QMainWindow):
         self.ensure_app_state()
         self.migrate_data()
         self.migrate_to_year_settings()
+        self.migrate_to_exercises()
+        self.migrate_exercise_keys()  # **NOVĚ: Migrace klíčů bez diakritiky**
+        
         self.setup_ui()
         self.restore_app_state()
         
-        #self.update_timer = QTimer()
-        #self.update_timer.timeout.connect(self.auto_refresh)
-        #self.update_timer.start(5000)
+        self.update_timer = QTimer()
+        self.update_timer.timeout.connect(self.auto_refresh)
+        self.update_timer.start(5000)
+
+    def add_exercise(self):
+        """Přidá nové cvičení"""
+        existing_ids = list(self.data.get("exercises", {}).keys())
+        
+        dialog = AddExerciseDialog(existing_ids, self)
+        if dialog.exec():
+            exercise_id = dialog.exercise_id
+            exercise_data = dialog.get_exercise_data()
+            
+            # Přidej do dat
+            if "exercises" not in self.data:
+                self.data["exercises"] = {}
+            
+            # **Extrahuj cíle z dialogu**
+            base_goal = exercise_data.pop("base_goal")
+            weekly_increment = exercise_data.pop("weekly_increment")
+            
+            self.data["exercises"][exercise_id] = exercise_data
+            
+            # Přidej do year_settings pro všechny roky s hodnotami z dialogu
+            for year_str in self.data.get("year_settings", {}).keys():
+                if exercise_id not in self.data["year_settings"][year_str]["base_goals"]:
+                    self.data["year_settings"][year_str]["base_goals"][exercise_id] = base_goal
+                if exercise_id not in self.data["year_settings"][year_str]["weekly_increment"]:
+                    self.data["year_settings"][year_str]["weekly_increment"][exercise_id] = weekly_increment
+            
+            # Přidej do app_state
+            if "app_state" in self.data and "exercise_years" in self.data["app_state"]:
+                self.data["app_state"]["exercise_years"][exercise_id] = datetime.now().year
+            
+            self.save_data()
+            
+            self.show_message("Úspěch", f"Cvičení '{exercise_data['name']}' bylo přidáno!\n\nZákladní cíl: {base_goal}\nTýdenní přírůstek: {weekly_increment}\n\nRestartuj aplikaci pro zobrazení nové záložky.", QMessageBox.Information)
+
+    
+    def edit_exercise(self, exercise_id):
+        """Edituje existující cvičení"""
+        if "exercises" not in self.data or exercise_id not in self.data["exercises"]:
+            self.show_message("Chyba", "Cvičení nenalezeno!", QMessageBox.Warning)
+            return
+        
+        config = self.data["exercises"][exercise_id]
+        
+        dialog = EditExerciseDialog(exercise_id, config, self)
+        if dialog.exec():
+            updated_data = dialog.get_exercise_data()
+            
+            # Aktualizuj data
+            self.data["exercises"][exercise_id].update(updated_data)
+            self.save_data()
+            
+            self.show_message("Úspěch", f"Cvičení bylo aktualizováno!\n\nRestartuj aplikaci pro aplikování změn.", QMessageBox.Information)
+    
+    
+    def delete_exercise(self, exercise_id):
+        """Smaže cvičení (včetně všech dat!)"""
+        if "exercises" not in self.data or exercise_id not in self.data["exercises"]:
+            return
+        
+        config = self.data["exercises"][exercise_id]
+        
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Potvrzení smazání")
+        msg.setText(f"Opravdu chceš smazat cvičení '{config['name']}'?")
+        msg.setInformativeText("⚠️ Budou smazána VŠECHNA data (záznamy, cíle) pro toto cvičení!\n\nTato akce je nevratná!")
+        msg.setIcon(QMessageBox.Warning)
+        msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        
+        yes_btn = msg.button(QMessageBox.Yes)
+        yes_btn.setText("Ano, smazat")
+        no_btn = msg.button(QMessageBox.No)
+        no_btn.setText("Ne, zrušit")
+        
+        if msg.exec() == QMessageBox.Yes:
+            # Smaž z exercises
+            del self.data["exercises"][exercise_id]
+            
+            # Smaž všechny záznamy
+            for date_str in list(self.data["workouts"].keys()):
+                if exercise_id in self.data["workouts"][date_str]:
+                    del self.data["workouts"][date_str][exercise_id]
+            
+            # Smaž z year_settings
+            for year_str in self.data.get("year_settings", {}).keys():
+                if exercise_id in self.data["year_settings"][year_str].get("base_goals", {}):
+                    del self.data["year_settings"][year_str]["base_goals"][exercise_id]
+                if exercise_id in self.data["year_settings"][year_str].get("weekly_increment", {}):
+                    del self.data["year_settings"][year_str]["weekly_increment"][exercise_id]
+            
+            # Smaž z app_state
+            if "app_state" in self.data and "exercise_years" in self.data["app_state"]:
+                if exercise_id in self.data["app_state"]["exercise_years"]:
+                    del self.data["app_state"]["exercise_years"][exercise_id]
+            
+            self.save_data()
+            
+            self.show_message("Smazáno", f"Cvičení '{config['name']}' bylo smazáno.\n\nRestartuj aplikaci.", QMessageBox.Information)
         
     def closeEvent(self, event):
         try:
@@ -547,6 +890,85 @@ class FitnessTrackerApp(QMainWindow):
                 
                 self.save_data()
                 print(f"Data migrována na nový formát year_settings pro rok {start_year}")
+                
+    def migrate_to_exercises(self):
+        """Migrace na nový formát s exercises (verze 2.0)"""
+        if "exercises" not in self.data:
+            print("Migrace na verze 2.0: Vytváření struktury 'exercises'...")
+            
+            # Výchozí cvičení
+            self.data["exercises"] = {
+                "kliky": {
+                    "name": "Kliky",
+                    "icon": "💪",
+                    "order": 0,
+                    "active": True,
+                    "quick_buttons": [10, 15, 20]
+                },
+                "drepy": {
+                    "name": "Dřepy",
+                    "icon": "🦵",
+                    "order": 1,
+                    "active": True,
+                    "quick_buttons": [5, 10, 15, 20]
+                },
+                "skrcky": {
+                    "name": "Skrčky",
+                    "icon": "🧘",
+                    "order": 2,
+                    "active": True,
+                    "quick_buttons": [10, 15, 20, 30, 40]
+                }
+            }
+            
+            self.save_data()
+            print("Migrace dokončena: Struktura 'exercises' vytvořena.")
+
+    def migrate_exercise_keys(self):
+        """Migrace klíčů cvičení - sjednocení na verzi bez diakritiky (v2.0)"""
+        # Mapování starých klíčů na nové (bez diakritiky)
+        key_mapping = {
+            "dřepy": "drepy",
+            "skrčky": "skrcky"
+        }
+        
+        changed = False
+        
+        # Migrace v year_settings
+        for year_str in self.data.get("year_settings", {}).keys():
+            year_settings = self.data["year_settings"][year_str]
+            
+            # base_goals
+            if "base_goals" in year_settings:
+                for old_key, new_key in key_mapping.items():
+                    if old_key in year_settings["base_goals"]:
+                        year_settings["base_goals"][new_key] = year_settings["base_goals"].pop(old_key)
+                        changed = True
+            
+            # weekly_increment
+            if "weekly_increment" in year_settings:
+                for old_key, new_key in key_mapping.items():
+                    if old_key in year_settings["weekly_increment"]:
+                        year_settings["weekly_increment"][new_key] = year_settings["weekly_increment"].pop(old_key)
+                        changed = True
+        
+        # Migrace v workouts
+        for date_str in list(self.data.get("workouts", {}).keys()):
+            for old_key, new_key in key_mapping.items():
+                if old_key in self.data["workouts"][date_str]:
+                    self.data["workouts"][date_str][new_key] = self.data["workouts"][date_str].pop(old_key)
+                    changed = True
+        
+        # Migrace v app_state
+        if "app_state" in self.data and "exercise_years" in self.data["app_state"]:
+            for old_key, new_key in key_mapping.items():
+                if old_key in self.data["app_state"]["exercise_years"]:
+                    self.data["app_state"]["exercise_years"][new_key] = self.data["app_state"]["exercise_years"].pop(old_key)
+                    changed = True
+        
+        if changed:
+            print("Migrace klíčů cvičení dokončena: dřepy → drepy, skrčky → skrcky")
+            self.save_data()
     
     def get_year_settings(self, year):
         """Vrátí nastavení pro daný rok"""
@@ -569,43 +991,103 @@ class FitnessTrackerApp(QMainWindow):
             self.save_data()
         
         return self.data['year_settings'][year_str]
+    
+    def get_active_exercises(self):
+        """Vrátí seznam aktivních cvičení (ID) seřazených podle order"""
+        if "exercises" not in self.data:
+            return ["kliky", "drepy", "skrcky"]
         
+        active = [
+            (ex_id, config) 
+            for ex_id, config in self.data["exercises"].items() 
+            if config.get("active", True)
+        ]
+        
+        # Seřadit podle order
+        active.sort(key=lambda x: x[1].get("order", 999))
+        
+        return [ex_id for ex_id, _ in active]
+    
+    
+    def get_exercise_config(self, exercise_id):
+        """Vrátí konfiguraci pro dané cvičení"""
+        if "exercises" not in self.data:
+            # Fallback pro starou strukturu
+            defaults = {
+                "kliky": {"name": "Kliky", "icon": "💪", "order": 0, "active": True, "quick_buttons": [10, 15, 20]},
+                "drepy": {"name": "Dřepy", "icon": "🦵", "order": 1, "active": True, "quick_buttons": [5, 10, 15, 20]},
+                "skrcky": {"name": "Skrčky", "icon": "🧘", "order": 2, "active": True, "quick_buttons": [10, 15, 20, 30, 40]}
+            }
+            return defaults.get(exercise_id, {"name": exercise_id.capitalize(), "icon": "🏋️", "order": 999, "active": True, "quick_buttons": [10, 20, 30]})
+        
+        return self.data["exercises"].get(exercise_id, {
+            "name": exercise_id.capitalize(),
+            "icon": "🏋️",
+            "order": 999,
+            "active": True,
+            "quick_buttons": [10, 20, 30]
+        })
+
     def load_data(self):
+        """Načte data ze souboru nebo vytvoří výchozí strukturu"""
         if self.data_file.exists():
             with open(self.data_file, 'r', encoding='utf-8') as f:
                 self.data = json.load(f)
         else:
             current_year = datetime.now().year
             self.data = {
-                'version': VERSION,
-                'year_settings': {
+                "version": VERSION,
+                "exercises": {
+                    "kliky": {
+                        "name": "Kliky",
+                        "icon": "💪",
+                        "order": 0,
+                        "active": True,
+                        "quick_buttons": [10, 15, 20]
+                    },
+                    "drepy": {  # BEZ DIAKRITIKY
+                        "name": "Dřepy",
+                        "icon": "🦵",
+                        "order": 1,
+                        "active": True,
+                        "quick_buttons": [5, 10, 15, 20]
+                    },
+                    "skrcky": {  # BEZ DIAKRITIKY
+                        "name": "Skrčky",
+                        "icon": "🧘",
+                        "order": 2,
+                        "active": True,
+                        "quick_buttons": [10, 15, 20, 30, 40]
+                    }
+                },
+                "year_settings": {
                     str(current_year): {
-                        'start_date': f'{current_year}-01-01',
-                        'base_goals': {
-                            'kliky': 50,
-                            'dřepy': 20,
-                            'skrčky': 20
+                        "start_date": f"{current_year}-01-01",
+                        "base_goals": {
+                            "kliky": 50,
+                            "drepy": 20,  # BEZ DIAKRITIKY
+                            "skrcky": 20  # BEZ DIAKRITIKY
                         },
-                        'weekly_increment': {
-                            'kliky': 10,
-                            'dřepy': 5,
-                            'skrčky': 10
+                        "weekly_increment": {
+                            "kliky": 10,
+                            "drepy": 5,   # BEZ DIAKRITIKY
+                            "skrcky": 10  # BEZ DIAKRITIKY
                         }
                     }
                 },
-                'workouts': {},
-                'app_state': {
-                    'last_tab': 0,
-                    'window_geometry': None,
-                    'exercise_years': {
-                        'kliky': datetime.now().year,
-                        'dřepy': datetime.now().year,
-                        'skrčky': datetime.now().year
+                "workouts": {},
+                "app_state": {
+                    "last_tab": 0,
+                    "window_geometry": None,
+                    "exercise_years": {
+                        "kliky": datetime.now().year,
+                        "drepy": datetime.now().year,   # BEZ DIAKRITIKY
+                        "skrcky": datetime.now().year   # BEZ DIAKRITIKY
                     }
                 }
             }
             self.save_data()
-    
+
     def save_data(self):
         self.data['version'] = VERSION
         with open(self.data_file, 'w', encoding='utf-8') as f:
@@ -659,137 +1141,125 @@ class FitnessTrackerApp(QMainWindow):
             print(f"Chyba při obnovování stavu: {e}")
     
     def setup_ui(self):
+        """Vytvoří UI - dynamické záložky podle active exercises"""
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
-        
         layout = QVBoxLayout(central_widget)
         
         self.tabs = QTabWidget()
         self.tabs.currentChanged.connect(self.on_tab_changed)
         layout.addWidget(self.tabs)
         
+        # Záložka "Přidat výkon" - vždy první
         self.tabs.addTab(self.create_add_workout_tab(), "➕ Přidat výkon")
-        self.tabs.addTab(self.create_exercise_tab('kliky', '💪'), "💪 Kliky")
-        self.tabs.addTab(self.create_exercise_tab('dřepy', '🦵'), "🦵 Dřepy")
-        self.tabs.addTab(self.create_exercise_tab('skrčky', '🧘'), "🧘 Skrčky")
+        
+        # **DYNAMICKÉ ZÁLOŽKY PRO CVIČENÍ**
+        active_exercises = self.get_active_exercises()
+        for exercise_id in active_exercises:
+            config = self.get_exercise_config(exercise_id)
+            tab_label = f"{config['icon']} {config['name']}"
+            self.tabs.addTab(self.create_exercise_tab(exercise_id, config['icon']), tab_label)
+        
+        # Záložka "Nastavení"
         self.tabs.addTab(self.create_settings_tab(), "⚙️ Nastavení")
+        
+        # Záložka "O aplikaci"
         self.tabs.addTab(self.create_about_tab(), "ℹ️ O aplikaci")
 
     def add_single_workout(self, exercise_type, value):
         """Přidá výkon pro jednu kategorii"""
-        if value == 0:
+        if value <= 0:
             self.show_message("Chyba", f"Zadej nenulovou hodnotu pro {exercise_type}!", QMessageBox.Warning)
             return
         
-        selected_date_str = self.add_date_edit.date().toString('yyyy-MM-dd')
+        selected_date_str = self.add_date_edit.date().toString("yyyy-MM-dd")
         
-        if selected_date_str not in self.data['workouts']:
-            self.data['workouts'][selected_date_str] = {}
+        if selected_date_str not in self.data["workouts"]:
+            self.data["workouts"][selected_date_str] = {}
         
-        if exercise_type not in self.data['workouts'][selected_date_str]:
-            self.data['workouts'][selected_date_str][exercise_type] = []
+        if exercise_type not in self.data["workouts"][selected_date_str]:
+            self.data["workouts"][selected_date_str][exercise_type] = []
         
-        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         new_record = {
-            'value': value,
-            'timestamp': timestamp,
-            'id': str(uuid.uuid4())
+            "value": value,
+            "timestamp": timestamp,
+            "id": str(uuid.uuid4())
         }
         
-        self.data['workouts'][selected_date_str][exercise_type].append(new_record)
-        
+        self.data["workouts"][selected_date_str][exercise_type].append(new_record)
         self.save_data()
         
         # Aktualizuj všechny záložky
-        for exercise in ['kliky', 'dřepy', 'skrčky']:
+        active_exercises = self.get_active_exercises()
+        for exercise in active_exercises:
             self.update_exercise_tab(exercise)
             self.refresh_exercise_calendar(exercise)
         
-        # Refresh přehledu cílů
         self.refresh_add_tab_goals()
         
-        self.show_message("Přidáno", f"Výkon byl zaznamenán: {value} {exercise_type}")
+        config = self.get_exercise_config(exercise_type)
+        self.show_message("Přidáno", f"Výkon byl zaznamenán:\n{value}× {config['name']}")
         
-        # Reset hodnoty
-        if exercise_type == 'kliky':
-            self.kliky_spin.setValue(0)
-        elif exercise_type == 'dřepy':
-            self.drepy_spin.setValue(0)
-        elif exercise_type == 'skrčky':
-            self.skrcky_spin.setValue(0)
+        # Reset správného SpinBoxu
+        if exercise_type in self.exercise_spinboxes:
+            self.exercise_spinboxes[exercise_type].setValue(0)
 
     def add_all_workouts(self):
         """Přidá všechny výkony najednou"""
-        kliky_val = self.kliky_spin.value()
-        drepy_val = self.drepy_spin.value()
-        skrcky_val = self.skrcky_spin.value()
+        active_exercises = self.get_active_exercises()
+    
+        # Sbírej hodnoty
+        values = {}
+        for exercise_id in active_exercises:
+            if exercise_id in self.exercise_spinboxes:
+                val = self.exercise_spinboxes[exercise_id].value()
+                if val > 0:
+                    values[exercise_id] = val
         
-        if kliky_val == 0 and drepy_val == 0 and skrcky_val == 0:
+        if not values:
             self.show_message("Chyba", "Zadej alespoň jednu nenulovou hodnotu!", QMessageBox.Warning)
             return
         
-        selected_date_str = self.add_date_edit.date().toString('yyyy-MM-dd')
+        selected_date_str = self.add_date_edit.date().toString("yyyy-MM-dd")
         
-        if selected_date_str not in self.data['workouts']:
-            self.data['workouts'][selected_date_str] = {}
+        if selected_date_str not in self.data["workouts"]:
+            self.data["workouts"][selected_date_str] = {}
         
-        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         added = []
         
-        if kliky_val > 0:
-            if 'kliky' not in self.data['workouts'][selected_date_str]:
-                self.data['workouts'][selected_date_str]['kliky'] = []
+        for exercise_id, val in values.items():
+            if exercise_id not in self.data["workouts"][selected_date_str]:
+                self.data["workouts"][selected_date_str][exercise_id] = []
             
-            self.data['workouts'][selected_date_str]['kliky'].append({
-                'value': kliky_val,
-                'timestamp': timestamp,
-                'id': str(uuid.uuid4())
+            self.data["workouts"][selected_date_str][exercise_id].append({
+                "value": val,
+                "timestamp": timestamp,
+                "id": str(uuid.uuid4())
             })
-            added.append(f"kliky: {kliky_val}")
-        
-        if drepy_val > 0:
-            if 'dřepy' not in self.data['workouts'][selected_date_str]:
-                self.data['workouts'][selected_date_str]['dřepy'] = []
             
-            self.data['workouts'][selected_date_str]['dřepy'].append({
-                'value': drepy_val,
-                'timestamp': timestamp,
-                'id': str(uuid.uuid4())
-            })
-            added.append(f"dřepy: {drepy_val}")
-        
-        if skrcky_val > 0:
-            if 'skrčky' not in self.data['workouts'][selected_date_str]:
-                self.data['workouts'][selected_date_str]['skrčky'] = []
-            
-            self.data['workouts'][selected_date_str]['skrčky'].append({
-                'value': skrcky_val,
-                'timestamp': timestamp,
-                'id': str(uuid.uuid4())
-            })
-            added.append(f"skrčky: {skrcky_val}")
+            config = self.get_exercise_config(exercise_id)
+            added.append(f"{config['icon']} {config['name']}: {val}")
         
         self.save_data()
         
         # Aktualizuj všechny záložky
-        for exercise in ['kliky', 'dřepy', 'skrčky']:
+        for exercise in active_exercises:
             self.update_exercise_tab(exercise)
             self.refresh_exercise_calendar(exercise)
         
-        # Refresh přehledu
         self.refresh_add_tab_goals()
-        
         self.show_message("Přidáno", f"Výkony zaznamenány:\n" + "\n".join(added))
         
-        # Reset hodnot
-        self.kliky_spin.setValue(0)
-        self.drepy_spin.setValue(0)
-        self.skrcky_spin.setValue(0)
+        # Reset všech SpinBoxů
+        for exercise_id in active_exercises:
+            if exercise_id in self.exercise_spinboxes:
+                self.exercise_spinboxes[exercise_id].setValue(0)
+
 
     def create_add_workout_tab(self):
-        """Záložka pro přidávání výkonů - redesign"""
+        """Záložka pro přidávání výkonů - dynamická podle aktivních cvičení"""
         widget = QWidget()
         layout = QVBoxLayout(widget)
         
@@ -817,20 +1287,19 @@ class FitnessTrackerApp(QMainWindow):
         self.add_goals_labels = {}
         selected_date_str = self.add_date_edit.date().toString("yyyy-MM-dd")
         
-        for exercise in ["kliky", "dřepy", "skrčky"]:
-            goal = self.calculate_goal(exercise, selected_date_str)
+        active_exercises = self.get_active_exercises()
+        for exercise_id in active_exercises:
+            config = self.get_exercise_config(exercise_id)
+            goal = self.calculate_goal(exercise_id, selected_date_str)
             
             # Spočítej aktuální hodnotu
             current_value = 0
-            if selected_date_str in self.data["workouts"] and exercise in self.data["workouts"][selected_date_str]:
-                records = self.data["workouts"][selected_date_str][exercise]
-                # OPRAVA: Správné zpracování current_value
+            if selected_date_str in self.data["workouts"] and exercise_id in self.data["workouts"][selected_date_str]:
+                records = self.data["workouts"][selected_date_str][exercise_id]
                 if isinstance(records, list):
                     current_value = sum(r["value"] for r in records)
                 elif isinstance(records, dict):
                     current_value = records.get("value", 0)
-                else:
-                    current_value = 0
             
             if current_value >= goal:
                 status = f"✅ Splněno ({current_value}/{goal})"
@@ -842,110 +1311,62 @@ class FitnessTrackerApp(QMainWindow):
                 status = f"❌ Nesplněno (0/{goal})"
                 color = "#ff6b6b"
             
-            goal_label = QLabel(f"{exercise.capitalize()}: {status}")
+            goal_label = QLabel(f"{config['icon']} {config['name']}: {status}")
             goal_label.setStyleSheet(f"font-size: 13px; padding: 5px; color: {color}; font-weight: bold;")
-            goal_label.setObjectName(f"goal_label_{exercise}")
-            self.add_goals_labels[exercise] = goal_label
+            goal_label.setObjectName(f"goal_label_{exercise_id}")
+            self.add_goals_labels[exercise_id] = goal_label
             goals_layout.addWidget(goal_label)
         
         goals_group.setLayout(goals_layout)
         layout.addWidget(goals_group)
         
-        # Přidávání výkonů - každá kategorie samostatně
+        # Přidávání výkonů - dynamické řádky
         add_group = QGroupBox("➕ Zadat výkon")
         add_layout = QVBoxLayout()
         
-        # Společné styly pro všechna hlavní tlačítka "Přidat"
+        # Společné styly
         main_button_style = "font-size: 12px; padding: 8px; min-height: 35px; background-color: #0d7377;"
-        # Společné styly pro rychlá tlačítka
         quick_button_style = "font-size: 11px; padding: 8px; min-height: 35px; background-color: #2a4d50; color: #b0b0b0;"
         
-        # Kliky
-        kliky_row = QHBoxLayout()
-        kliky_label = QLabel("💪 Kliky:")
-        kliky_label.setFixedWidth(80)
-        kliky_row.addWidget(kliky_label)
+        # **DYNAMICKY VYTVOŘIT ŘÁDEK PRO KAŽDÉ CVIČENÍ**
+        self.exercise_spinboxes = {}  # Uložení SpinBoxů
         
-        self.kliky_spin = QSpinBox()
-        self.kliky_spin.setRange(0, 10000)
-        self.kliky_spin.setValue(0)
-        self.kliky_spin.setFixedWidth(100)
-        kliky_row.addWidget(self.kliky_spin)
-        
-        kliky_btn = QPushButton("Přidat")
-        kliky_btn.setStyleSheet(main_button_style)
-        kliky_btn.setFixedWidth(80)
-        kliky_btn.clicked.connect(lambda: self.add_single_workout("kliky", self.kliky_spin.value()))
-        kliky_row.addWidget(kliky_btn)
-        
-        # Rychlá tlačítka pro kliky: 10, 15, 20
-        for quick_val in [10, 15, 20]:
-            quick_btn = QPushButton(str(quick_val))
-            quick_btn.setFixedWidth(50)
-            quick_btn.setStyleSheet(quick_button_style)
-            quick_btn.clicked.connect(lambda checked, val=quick_val: self.add_single_workout("kliky", val))
-            kliky_row.addWidget(quick_btn)
-        
-        kliky_row.addStretch()
-        add_layout.addLayout(kliky_row)
-        
-        # Dřepy
-        drepy_row = QHBoxLayout()
-        drepy_label = QLabel("🦵 Dřepy:")
-        drepy_label.setFixedWidth(80)
-        drepy_row.addWidget(drepy_label)
-        
-        self.drepy_spin = QSpinBox()
-        self.drepy_spin.setRange(0, 10000)
-        self.drepy_spin.setValue(0)
-        self.drepy_spin.setFixedWidth(100)
-        drepy_row.addWidget(self.drepy_spin)
-        
-        drepy_btn = QPushButton("Přidat")
-        drepy_btn.setStyleSheet(main_button_style)
-        drepy_btn.setFixedWidth(80)
-        drepy_btn.clicked.connect(lambda: self.add_single_workout("dřepy", self.drepy_spin.value()))
-        drepy_row.addWidget(drepy_btn)
-        
-        # Rychlá tlačítka pro dřepy: 5, 10, 15, 20
-        for quick_val in [5, 10, 15, 20]:
-            quick_btn = QPushButton(str(quick_val))
-            quick_btn.setFixedWidth(50)
-            quick_btn.setStyleSheet(quick_button_style)
-            quick_btn.clicked.connect(lambda checked, val=quick_val: self.add_single_workout("dřepy", val))
-            drepy_row.addWidget(quick_btn)
-        
-        drepy_row.addStretch()
-        add_layout.addLayout(drepy_row)
-        
-        # Skrčky
-        skrcky_row = QHBoxLayout()
-        skrcky_label = QLabel("🧘 Skrčky:")
-        skrcky_label.setFixedWidth(80)
-        skrcky_row.addWidget(skrcky_label)
-        
-        self.skrcky_spin = QSpinBox()
-        self.skrcky_spin.setRange(0, 10000)
-        self.skrcky_spin.setValue(0)
-        self.skrcky_spin.setFixedWidth(100)
-        skrcky_row.addWidget(self.skrcky_spin)
-        
-        skrcky_btn = QPushButton("Přidat")
-        skrcky_btn.setStyleSheet(main_button_style)
-        skrcky_btn.setFixedWidth(80)
-        skrcky_btn.clicked.connect(lambda: self.add_single_workout("skrčky", self.skrcky_spin.value()))
-        skrcky_row.addWidget(skrcky_btn)
-        
-        # Rychlá tlačítka pro skrčky: 10, 15, 20, 30, 40
-        for quick_val in [10, 15, 20, 30, 40]:
-            quick_btn = QPushButton(str(quick_val))
-            quick_btn.setFixedWidth(50)
-            quick_btn.setStyleSheet(quick_button_style)
-            quick_btn.clicked.connect(lambda checked, val=quick_val: self.add_single_workout("skrčky", val))
-            skrcky_row.addWidget(quick_btn)
-        
-        skrcky_row.addStretch()
-        add_layout.addLayout(skrcky_row)
+        for exercise_id in active_exercises:
+            config = self.get_exercise_config(exercise_id)
+            
+            exercise_row = QHBoxLayout()
+            
+            # Label
+            label = QLabel(f"{config['icon']} {config['name']}:")
+            label.setFixedWidth(80)
+            exercise_row.addWidget(label)
+            
+            # SpinBox
+            spinbox = QSpinBox()
+            spinbox.setRange(0, 10000)
+            spinbox.setValue(0)
+            spinbox.setFixedWidth(100)
+            exercise_row.addWidget(spinbox)
+            self.exercise_spinboxes[exercise_id] = spinbox
+            
+            # Hlavní tlačítko "Přidat"
+            main_btn = QPushButton("Přidat")
+            main_btn.setStyleSheet(main_button_style)
+            main_btn.setFixedWidth(80)
+            main_btn.clicked.connect(lambda checked, ex=exercise_id: self.add_single_workout(ex, self.exercise_spinboxes[ex].value()))
+            exercise_row.addWidget(main_btn)
+            
+            # Rychlá tlačítka
+            quick_buttons = config.get("quick_buttons", [10, 20, 30])
+            for quick_val in quick_buttons:
+                quick_btn = QPushButton(str(quick_val))
+                quick_btn.setFixedWidth(50)
+                quick_btn.setStyleSheet(quick_button_style)
+                quick_btn.clicked.connect(lambda checked, ex=exercise_id, val=quick_val: self.add_single_workout(ex, val))
+                exercise_row.addWidget(quick_btn)
+            
+            exercise_row.addStretch()
+            add_layout.addLayout(exercise_row)
         
         add_group.setLayout(add_layout)
         layout.addWidget(add_group)
@@ -958,8 +1379,6 @@ class FitnessTrackerApp(QMainWindow):
         
         layout.addStretch()
         return widget
-
-
 
     def refresh_add_tab_goals(self):
         """Aktualizuje přehled cílů při změně data"""
@@ -1165,256 +1584,298 @@ class FitnessTrackerApp(QMainWindow):
         return widget
     
     def create_settings_tab(self):
-        """Vytvoří záložku s nastavením"""
+        """Záložka s nastavením - nyní i se správou cvičení"""
         widget = QWidget()
         layout = QVBoxLayout(widget)
         
-        # NOVÁ SEKCE: Správa roků - jednoduchá
+        # Titulek
+        title_label = QLabel("⚙️ Nastavení aplikace")
+        title_label.setStyleSheet("font-size: 18px; font-weight: bold; color: #14919b; padding: 10px;")
+        layout.addWidget(title_label)
+        
+        # ==================== SEKCE 1: SPRÁVA CVIČENÍ ====================
+        exercises_group = QGroupBox("🏋️ Správa cvičení")
+        exercises_group.setStyleSheet("""
+            QGroupBox {
+                font-size: 16px;
+                font-weight: bold;
+                background-color: #1e1e1e;
+                border: 2px solid #0d7377;
+                border-radius: 5px;
+                padding-top: 18px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                subcontrol-position: top center;
+                padding: 3px 8px;
+                color: #14919b;
+            }
+        """)
+        exercises_layout = QVBoxLayout()
+        
+        # Info text
+        exercises_info = QLabel("📝 Přidávej, upravuj nebo mazej typy cvičení")
+        exercises_info.setStyleSheet("font-size: 12px; color: #a0a0a0; padding: 5px;")
+        exercises_layout.addWidget(exercises_info)
+        
+        # Seznam cvičení
+        self.exercises_list = QListWidget()
+        self.exercises_list.setMaximumHeight(150)
+        self.exercises_list.setStyleSheet("""
+            QListWidget {
+                background-color: #2d2d2d;
+                border: 1px solid #3d3d3d;
+                border-radius: 5px;
+            }
+            QListWidget::item {
+                padding: 8px;
+            }
+            QListWidget::item:selected {
+                background-color: #0d7377;
+            }
+        """)
+        
+        # Načti cvičení
+        self.refresh_exercises_list()
+        exercises_layout.addWidget(self.exercises_list)
+        
+        # Tlačítka pro správu cvičení
+        exercises_buttons = QHBoxLayout()
+        
+        add_exercise_btn = QPushButton("➕ Přidat cvičení")
+        add_exercise_btn.setStyleSheet("padding: 8px; background-color: #0d7377;")
+        add_exercise_btn.clicked.connect(self.add_exercise)
+        exercises_buttons.addWidget(add_exercise_btn)
+        
+        edit_exercise_btn = QPushButton("✏️ Upravit cvičení")
+        edit_exercise_btn.setStyleSheet("padding: 8px; background-color: #2a4d50;")
+        edit_exercise_btn.clicked.connect(self.edit_selected_exercise)
+        exercises_buttons.addWidget(edit_exercise_btn)
+        
+        delete_exercise_btn = QPushButton("🗑️ Smazat cvičení")
+        delete_exercise_btn.setStyleSheet("padding: 8px; background-color: #dc3545;")
+        delete_exercise_btn.clicked.connect(self.delete_selected_exercise)
+        exercises_buttons.addWidget(delete_exercise_btn)
+        
+        exercises_layout.addLayout(exercises_buttons)
+        exercises_group.setLayout(exercises_layout)
+        layout.addWidget(exercises_group)
+        
+        # ==================== SEKCE 2: SPRÁVA ROKŮ ====================
         years_group = QGroupBox("📅 Správa roků")
         years_group.setStyleSheet("""
             QGroupBox {
-                background-color: #2d2d2d;
+                font-size: 16px;
+                font-weight: bold;
+                background-color: #1e1e1e;
                 border: 2px solid #0d7377;
                 border-radius: 5px;
-                padding: 15px;
-                font-weight: bold;
+                padding-top: 18px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                subcontrol-position: top center;
+                padding: 3px 8px;
                 color: #14919b;
             }
         """)
         years_layout = QVBoxLayout()
         
-        # Seznam roků - BEZ info textu
+        # Seznam roků
         self.years_list = QListWidget()
         self.years_list.setMaximumHeight(150)
-        self.years_list.itemClicked.connect(self.on_year_selected_for_settings)
+        self.years_list.itemClicked.connect(self.on_year_selected_for_settings)  # ← OPRAVENO
         self.years_list.setStyleSheet("""
+            QListWidget {
+                background-color: #2d2d2d;
+                border: 1px solid #3d3d3d;
+                border-radius: 5px;
+            }
             QListWidget::item {
-                padding: 10px;
-                border-bottom: 1px solid #3d3d3d;
+                padding: 8px;
             }
             QListWidget::item:selected {
                 background-color: #0d7377;
-                color: white;
-                font-weight: bold;
-            }
-            QListWidget::item:hover {
-                background-color: #3d3d3d;
             }
         """)
+
         
-        available_years = self.get_available_years()
-        for year in available_years:
-            year_workouts = sum(1 for date_str in self.data['workouts'].keys() if int(date_str.split('-')[0]) == year)
-            item = QListWidgetItem(f"📆 Rok {year} ({year_workouts} dnů s cvičením)")
+        # Načti roky
+        for year in self.get_available_years():
+            year_workouts = sum(1 for date_str in self.data["workouts"].keys() if int(date_str.split("-")[0]) == year)
+            item = QListWidgetItem(f"📅 Rok {year} ({year_workouts} dní s cvičením)")
             item.setData(Qt.UserRole, year)
             self.years_list.addItem(item)
         
         years_layout.addWidget(self.years_list)
         
-        # Tlačítka
+        # Tlačítka pro správu roků
         years_buttons = QHBoxLayout()
         
-        add_year_btn = QPushButton("➕ Přidat nový rok")
+        add_year_btn = QPushButton("➕ Přidat rok")
         add_year_btn.clicked.connect(self.add_custom_year)
         years_buttons.addWidget(add_year_btn)
         
-        delete_year_btn = QPushButton("🗑️ Smazat vybraný rok")
-        delete_year_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #dc3545;
-                color: white;
-            }
-            QPushButton:hover {
-                background-color: #c82333;
-            }
-        """)
-        delete_year_btn.clicked.connect(lambda: self.delete_year_from_list())
+        delete_year_btn = QPushButton("🗑️ Smazat rok")
+        delete_year_btn.clicked.connect(self.delete_year_from_list)  # ← OPRAVENO
         years_buttons.addWidget(delete_year_btn)
         
-        reset_year_btn = QPushButton("🔄 Vynulovat záznamy roku")
-        reset_year_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #ff9800;
-                color: white;
-            }
-            QPushButton:hover {
-                background-color: #e68900;
-            }
-        """)
-        reset_year_btn.clicked.connect(self.reset_year_workouts)
+        reset_year_btn = QPushButton("🔄 Vynulovat záznamy")
+        reset_year_btn.clicked.connect(self.reset_year_workouts)  # ← OPRAVENO
         years_buttons.addWidget(reset_year_btn)
+
         
         years_layout.addLayout(years_buttons)
         years_group.setLayout(years_layout)
         layout.addWidget(years_group)
         
-        # Indikace upravovaného roku - jemnější
-        self.current_year_label = QLabel()
-        self.current_year_label.setStyleSheet("""
-            background-color: #2d2d2d;
-            color: #14919b;
-            padding: 10px;
-            border-radius: 5px;
-            font-weight: bold;
-            font-size: 13px;
-            border: 2px solid #0d7377;
-        """)
-        self.current_year_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(self.current_year_label)
-        
-        # NOVÁ SEKCE: Nastavení cílů - 3 sekce vedle sebe
-        goals_settings_group = QGroupBox("🎯 Nastavení cílů pro vybraný rok")
-        goals_settings_group.setStyleSheet("""
+        # ==================== SEKCE 3: NASTAVENÍ VYBRANÉHO ROKU ====================
+        settings_group = QGroupBox("⚙️ Nastavení vybraného roku")
+        settings_group.setStyleSheet("""
             QGroupBox {
-                background-color: #2d2d2d;
+                font-size: 16px;
+                font-weight: bold;
+                background-color: #1e1e1e;
                 border: 2px solid #0d7377;
                 border-radius: 5px;
-                padding: 15px;
-                font-weight: bold;
-                color: #14919b;
+                padding-top: 18px;
             }
         """)
-        goals_main_layout = QHBoxLayout()
+        settings_layout = QVBoxLayout()
         
-        # 1. SLOUPEC: Startovní datum
-        date_section = QVBoxLayout()
-        date_label = QLabel("📅 Startovní datum")
-        date_label.setStyleSheet("font-weight: bold; padding: 5px; color: #14919b; font-size: 12px;")
-        date_section.addWidget(date_label)
+        # Grid pro organizaci
+        settings_grid = QGridLayout()
+        settings_grid.setSpacing(10)
+        
+        # Startovní datum
+        date_label = QLabel("📅 Datum zahájení")
+        date_label.setStyleSheet("font-weight: bold; color: #14919b;")
+        settings_grid.addWidget(date_label, 0, 0)
         
         self.start_date_edit = QDateEdit()
         self.start_date_edit.setCalendarPopup(True)
-        self.start_date_edit.setStyleSheet("padding: 8px;")
-        date_section.addWidget(self.start_date_edit)
-        date_section.addStretch()
+        self.start_date_edit.setDate(QDate.currentDate())
+        settings_grid.addWidget(self.start_date_edit, 1, 0)
         
-        goals_main_layout.addLayout(date_section)
+        # Základní cíle
+        base_goals_label = QLabel("🎯 Základní cíle (1. týden)")
+        base_goals_label.setStyleSheet("font-weight: bold; color: #14919b;")
+        settings_grid.addWidget(base_goals_label, 0, 1)
         
-        # 2. SLOUPEC: Základní cíle
-        base_section = QVBoxLayout()
-        base_label = QLabel("🎯 Základní cíle")
-        base_label.setStyleSheet("font-weight: bold; padding: 5px; color: #14919b; font-size: 12px;")
-        base_section.addWidget(base_label)
+        base_goals_widget = QWidget()
+        base_goals_layout = QVBoxLayout(base_goals_widget)
+        base_goals_layout.setContentsMargins(0, 0, 0, 0)
+        self.base_goal_spins = {}
         
-        base_goals_layout = QFormLayout()
-        base_goals_layout.setSpacing(8)
+        for exercise_id in self.get_active_exercises():
+            config = self.get_exercise_config(exercise_id)
+            row = QHBoxLayout()
+            row.addWidget(QLabel(f"{config['icon']} {config['name']}:"))
+            spin = QSpinBox()
+            spin.setRange(0, 1000)
+            spin.setValue(50)
+            self.base_goal_spins[exercise_id] = spin
+            row.addWidget(spin)
+            base_goals_layout.addLayout(row)
         
-        self.base_kliky = QSpinBox()
-        self.base_kliky.setRange(0, 1000)
-        base_goals_layout.addRow("Kliky:", self.base_kliky)
+        settings_grid.addWidget(base_goals_widget, 1, 1)
         
-        self.base_drepy = QSpinBox()
-        self.base_drepy.setRange(0, 1000)
-        base_goals_layout.addRow("Dřepy:", self.base_drepy)
-        
-        self.base_skrcky = QSpinBox()
-        self.base_skrcky.setRange(0, 1000)
-        base_goals_layout.addRow("Skrčky:", self.base_skrcky)
-        
-        base_section.addLayout(base_goals_layout)
-        base_section.addStretch()
-        
-        goals_main_layout.addLayout(base_section)
-        
-        # 3. SLOUPEC: Týdenní přírůstky
-        increment_section = QVBoxLayout()
+        # Týdenní přírůstky
         increment_label = QLabel("📈 Týdenní přírůstky")
-        increment_label.setStyleSheet("font-weight: bold; padding: 5px; color: #14919b; font-size: 12px;")
-        increment_section.addWidget(increment_label)
+        increment_label.setStyleSheet("font-weight: bold; color: #14919b;")
+        settings_grid.addWidget(increment_label, 0, 2)
         
-        increment_layout = QFormLayout()
-        increment_layout.setSpacing(8)
+        increment_widget = QWidget()
+        increment_layout = QVBoxLayout(increment_widget)
+        increment_layout.setContentsMargins(0, 0, 0, 0)
+        self.increment_spins = {}
         
-        self.increment_kliky = QSpinBox()
-        self.increment_kliky.setRange(0, 100)
-        increment_layout.addRow("Kliky/týden:", self.increment_kliky)
+        for exercise_id in self.get_active_exercises():
+            config = self.get_exercise_config(exercise_id)
+            row = QHBoxLayout()
+            row.addWidget(QLabel(f"{config['icon']} {config['name']}:"))
+            spin = QSpinBox()
+            spin.setRange(0, 100)
+            spin.setValue(10)
+            self.increment_spins[exercise_id] = spin
+            row.addWidget(spin)
+            increment_layout.addLayout(row)
         
-        self.increment_drepy = QSpinBox()
-        self.increment_drepy.setRange(0, 100)
-        increment_layout.addRow("Dřepy/týden:", self.increment_drepy)
+        settings_grid.addWidget(increment_widget, 1, 2)
         
-        self.increment_skrcky = QSpinBox()
-        self.increment_skrcky.setRange(0, 100)
-        increment_layout.addRow("Skrčky/týden:", self.increment_skrcky)
+        settings_layout.addLayout(settings_grid)
         
-        increment_section.addLayout(increment_layout)
-        increment_section.addStretch()
+        # Tlačítko Uložit
+        save_settings_btn = QPushButton("💾 Uložit nastavení")
+        save_settings_btn.clicked.connect(self.save_settings)  # ← OPRAVENO
+        save_settings_btn.setStyleSheet("padding: 10px; font-size: 14px; background-color: #0d7377;")
+        settings_layout.addWidget(save_settings_btn)
+
+
         
-        goals_main_layout.addLayout(increment_section)
+        settings_group.setLayout(settings_layout)
+        layout.addWidget(settings_group)
         
-        goals_settings_group.setLayout(goals_main_layout)
-        layout.addWidget(goals_settings_group)
+        # ==================== SEKCE 4: EXPORT/IMPORT ====================
+        backup_group = QGroupBox("💾 Záloha dat")
+        backup_layout = QHBoxLayout()
         
-        # Tlačítko uložit
-        save_btn = QPushButton("💾 Uložit nastavení")
-        save_btn.clicked.connect(self.save_settings)
-        save_btn.setStyleSheet("padding: 10px; font-size: 14px;")
-        layout.addWidget(save_btn)
-        
-        # Export/Import
-        export_import_group = QGroupBox("💾 Záloha a obnova dat")
-        export_import_group.setStyleSheet("""
-            QGroupBox {
-                background-color: #2d2d2d;
-                border: 2px solid #0d7377;
-                border-radius: 5px;
-                padding: 15px;
-                font-weight: bold;
-                color: #14919b;
-            }
-        """)
-        export_import_layout = QVBoxLayout()
-        
-        export_import_info = QLabel(
-            "Export uloží všechna cvičení, nastavení a roky do souboru.\n"
-            "Import umožňuje obnovit nebo sloučit data ze zálohy."
-        )
-        export_import_info.setStyleSheet("font-size: 11px; color: #a0a0a0; padding: 5px;")
-        export_import_info.setWordWrap(True)
-        export_import_layout.addWidget(export_import_info)
-        
-        export_import_buttons = QHBoxLayout()
-        
-        export_btn = QPushButton("📤 Exportovat cvičení")
-        export_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #28a745;
-                color: white;
-                padding: 8px;
-            }
-            QPushButton:hover {
-                background-color: #218838;
-            }
-        """)
+        export_btn = QPushButton("📤 Exportovat data")
         export_btn.clicked.connect(self.export_data)
-        export_import_buttons.addWidget(export_btn)
+        backup_layout.addWidget(export_btn)
         
-        import_btn = QPushButton("📥 Importovat cvičení")
-        import_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #17a2b8;
-                color: white;
-                padding: 8px;
-            }
-            QPushButton:hover {
-                background-color: #138496;
-            }
-        """)
+        import_btn = QPushButton("📥 Importovat data")
         import_btn.clicked.connect(self.import_data)
-        export_import_buttons.addWidget(import_btn)
+        backup_layout.addWidget(import_btn)
         
-        export_import_layout.addLayout(export_import_buttons)
-        
-        export_import_group.setLayout(export_import_layout)
-        layout.addWidget(export_import_group)
+        backup_group.setLayout(backup_layout)
+        layout.addWidget(backup_group)
         
         layout.addStretch()
-        
-        # Načíst aktuální rok
-        if available_years:
-            self.load_year_settings_to_ui(datetime.now().year)
-        
         return widget
+
+    def refresh_exercises_list(self):
+        """Obnoví seznam cvičení"""
+        self.exercises_list.clear()
+        
+        if "exercises" not in self.data:
+            return
+        
+        # Seřadit podle order
+        exercises = sorted(
+            self.data["exercises"].items(),
+            key=lambda x: x[1].get("order", 999)
+        )
+        
+        for exercise_id, config in exercises:
+            status = "✅" if config.get("active", True) else "❌"
+            item = QListWidgetItem(f"{status} {config['icon']} {config['name']} (ID: {exercise_id})")
+            item.setData(Qt.UserRole, exercise_id)
+            self.exercises_list.addItem(item)
+    
+    
+    def edit_selected_exercise(self):
+        """Upraví vybrané cvičení"""
+        current_item = self.exercises_list.currentItem()
+        if not current_item:
+            self.show_message("Chyba", "Vyber cvičení k úpravě!", QMessageBox.Warning)
+            return
+        
+        exercise_id = current_item.data(Qt.UserRole)
+        self.edit_exercise(exercise_id)
+        self.refresh_exercises_list()
+    
+    
+    def delete_selected_exercise(self):
+        """Smaže vybrané cvičení"""
+        current_item = self.exercises_list.currentItem()
+        if not current_item:
+            self.show_message("Chyba", "Vyber cvičení ke smazání!", QMessageBox.Warning)
+            return
+        
+        exercise_id = current_item.data(Qt.UserRole)
+        self.delete_exercise(exercise_id)
+        self.refresh_exercises_list()
 
     def reset_year_workouts(self):
         """Vynuluje všechny záznamy pro vybraný rok (ponechá nastavení)"""
@@ -2348,35 +2809,51 @@ class FitnessTrackerApp(QMainWindow):
         except Exception as e:
             print(f"Chyba při aktualizaci záložky {exercise_type}: {e}")
 
-    
     def calculate_goal(self, exercise_type, date_str):
-        """Vypočítá cíl pro daný den"""
-        target_date = datetime.strptime(date_str, '%Y-%m-%d')
-        year = target_date.year
+        """Vypočítá cíl pro dané datum"""
+        try:
+            date = datetime.strptime(date_str, "%Y-%m-%d").date()
+            year = date.year
+            settings = self.get_year_settings(year)
+            
+            # **FALLBACK: Pokud klíč neexistuje, zkus s diakritikou**
+            if exercise_type not in settings['base_goals']:
+                # Zkus starý formát s diakritikou
+                old_mapping = {
+                    "drepy": "dřepy",
+                    "skrcky": "skrčky"
+                }
+                old_key = old_mapping.get(exercise_type, exercise_type)
+                if old_key in settings['base_goals']:
+                    exercise_type = old_key
+                else:
+                    # Pokud stále neexistuje, vrať výchozí
+                    return 50
+            
+            base_goal = settings['base_goals'][exercise_type]
+            weekly_increment = settings['weekly_increment'][exercise_type]
+            start_date = datetime.strptime(settings['start_date'], "%Y-%m-%d").date()
+            
+            if date < start_date:
+                return 0
+            
+            days_diff = (date - start_date).days
+            
+            # První neúplný týden
+            first_week_days = 7 - start_date.weekday()
+            
+            if days_diff < first_week_days:
+                return base_goal
+            
+            # Počet úplných týdnů
+            days_after_first_week = days_diff - first_week_days
+            full_weeks = days_after_first_week // 7
+            
+            return base_goal + (full_weeks + 1) * weekly_increment
         
-        settings = self.get_year_settings(year)
-        
-        start_date = datetime.strptime(settings['start_date'], '%Y-%m-%d')
-        base_goal = settings['base_goals'][exercise_type]
-        increment = settings['weekly_increment'][exercise_type]
-        
-        if target_date < start_date:
-            return 0
-        
-        days_to_sunday = 6 - start_date.weekday()
-        first_week_end = start_date + timedelta(days=days_to_sunday)
-        
-        if target_date <= first_week_end:
-            return int(base_goal)
-        
-        first_full_week_start = first_week_end + timedelta(days=1)
-        days_since_first_full_week = (target_date - first_full_week_start).days
-        
-        full_weeks = (days_since_first_full_week // 7) + 1
-        
-        goal = base_goal + (full_weeks * increment)
-        
-        return int(max(0, goal))
+        except Exception as e:
+            print(f"Chyba v calculate_goal pro {exercise_type}, {date_str}: {e}")
+            return 50
 
     def get_goal_calculation_text(self, exercise_type, date_str):
         """Vrátí text s vysvětlením výpočtu"""
