@@ -2589,125 +2589,183 @@ class FitnessTrackerApp(QMainWindow):
     def update_detailed_overview(self, exercise_type, selected_year):
         """Aktualizuje detailní přehled: Den, Týden, Měsíc, Zbytek roku"""
         try:
-            today = datetime.now()
-            today_str = today.strftime('%Y-%m-%d')
+            today = datetime.now().date()
+            today_str = today.strftime("%Y-%m-%d")
             
-            # === DEN ===
+            # **OPRAVA: Pro vybraný rok != aktuální rok, použij poslední den s daty nebo 31.12.**
             if selected_year == today.year:
-                day_goal = self.calculate_goal(exercise_type, today_str)
-                day_performed = 0
+                current_date = today
+                current_date_str = today_str
+            else:
+                # Pro jiný rok: najdi poslední den s daty nebo použij 31.12.
+                last_date_with_data = None
+                year_end = datetime(selected_year, 12, 31).date()
                 
-                if today_str in self.data['workouts'] and exercise_type in self.data['workouts'][today_str]:
-                    records = self.data['workouts'][today_str][exercise_type]
-                    if isinstance(records, list):
-                        day_performed = sum(r['value'] for r in records)
-                    elif isinstance(records, dict):
-                        day_performed = records.get('value', 0)
+                # Projdi všechny dny s daty v tomto roce
+                for date_str in sorted(self.data["workouts"].keys(), reverse=True):
+                    date_obj = datetime.strptime(date_str, "%Y-%m-%d").date()
+                    if date_obj.year == selected_year:
+                        if exercise_type in self.data["workouts"][date_str]:
+                            last_date_with_data = date_obj
+                            break
                 
-                day_diff = day_performed - day_goal
-                day_status = f"+{day_diff}" if day_diff >= 0 else str(day_diff)
-                day_color = "#32c766" if day_diff >= 0 else "#ff6b6b"
+                # Pokud existují data, použij poslední datum; jinak konec roku
+                if last_date_with_data:
+                    current_date = min(last_date_with_data, year_end)
+                else:
+                    current_date = year_end
                 
-                today_section = self.findChild(QLabel, f"today_section_{exercise_type}")
-                if today_section:
-                    today_section.setText(
-                        f"📅 DNES ({today.strftime('%d.%m.%Y')}): {day_performed}/{day_goal} ({day_status})"
-                    )
-                    today_section.setStyleSheet(f"font-size: 14px; font-weight: bold; color: {day_color}; padding: 5px;")
+                # Ale nikdy nepřekročit dnešek
+                if current_date > today:
+                    current_date = today
+                
+                current_date_str = current_date.strftime("%Y-%m-%d")
             
-            # === TÝDEN ===
-            week_start = today - timedelta(days=today.weekday())
+            # ====================  DNES ====================
+            day_goal = self.calculate_goal(exercise_type, current_date_str)
+            day_performed = 0
+            
+            if current_date_str in self.data["workouts"] and exercise_type in self.data["workouts"][current_date_str]:
+                records = self.data["workouts"][current_date_str][exercise_type]
+                if isinstance(records, list):
+                    day_performed = sum(r["value"] for r in records)
+                elif isinstance(records, dict):
+                    day_performed = records.get("value", 0)
+            
+            day_diff = day_performed - day_goal
+            day_status = f"(+{day_diff})" if day_diff >= 0 else str(day_diff)
+            day_color = "#32c766" if day_diff >= 0 else "#ff6b6b"
+            
+            today_section = self.findChild(QLabel, f"today_section_{exercise_type}")
+            if today_section:
+                today_section.setText(f"📅 DNES ({current_date.strftime('%d.%m.%Y')}): {day_performed}/{day_goal} {day_status}")
+                today_section.setStyleSheet(f"font-size: 14px; font-weight: bold; color: {day_color}; padding: 5px;")
+            
+            # ==================== TÝDEN ====================
+            week_start = current_date - timedelta(days=current_date.weekday())
             week_end = week_start + timedelta(days=6)
+            
+            # Respektovat start_date
+            settings = self.get_year_settings(selected_year)
+            settings_start_date = datetime.strptime(settings.get("start_date", f"{selected_year}-01-01"), "%Y-%m-%d").date()
+            if week_start < settings_start_date:
+                week_start = settings_start_date
+            
+            # Nepřekračovat dnešek
+            if week_end > today:
+                week_end = today
             
             week_goal = 0
             week_performed = 0
-            
             current = week_start
-            while current <= week_end and current <= today:
-                date_str = current.strftime('%Y-%m-%d')
+            
+            while current <= week_end:
+                date_str = current.strftime("%Y-%m-%d")
                 goal = self.calculate_goal(exercise_type, date_str)
                 if isinstance(goal, int):
                     week_goal += goal
                 
-                if date_str in self.data['workouts'] and exercise_type in self.data['workouts'][date_str]:
-                    records = self.data['workouts'][date_str][exercise_type]
+                if date_str in self.data["workouts"] and exercise_type in self.data["workouts"][date_str]:
+                    records = self.data["workouts"][date_str][exercise_type]
                     if isinstance(records, list):
-                        week_performed += sum(r['value'] for r in records)
+                        week_performed += sum(r["value"] for r in records)
                     elif isinstance(records, dict):
-                        week_performed += records.get('value', 0)
+                        week_performed += records.get("value", 0)
                 
                 current += timedelta(days=1)
             
             week_diff = week_performed - week_goal
-            week_status = f"+{week_diff}" if week_diff >= 0 else str(week_diff)
+            week_status = f"(+{week_diff})" if week_diff >= 0 else str(week_diff)
             
             week_section = self.findChild(QLabel, f"week_section_{exercise_type}")
             if week_section:
-                week_section.setText(
-                    f"📆 TÝDEN ({week_start.strftime('%d.%m.')} - {week_end.strftime('%d.%m.')}): {week_performed}/{week_goal} ({week_status})"
-                )
+                week_section.setText(f"📆 TÝDEN ({week_start.strftime('%d.%m.')} - {week_end.strftime('%d.%m.')}): {week_performed}/{week_goal} {week_status}")
             
-            # === MĚSÍC ===
-            month_start = datetime(today.year, today.month, 1)
+            # ==================== MĚSÍC ====================
+            month_start = datetime(current_date.year, current_date.month, 1).date()
+            if current_date.month == 12:
+                next_month = datetime(current_date.year + 1, 1, 1).date()
+            else:
+                next_month = datetime(current_date.year, current_date.month + 1, 1).date()
+            month_end = next_month - timedelta(days=1)
+            
+            # Respektovat start_date
+            if month_start < settings_start_date:
+                month_start = settings_start_date
+            
+            # Nepřekračovat dnešek
+            if month_end > today:
+                month_end = today
             
             month_goal = 0
             month_performed = 0
-            
             current = month_start
-            while current <= today:
-                date_str = current.strftime('%Y-%m-%d')
+            
+            while current <= month_end:
+                date_str = current.strftime("%Y-%m-%d")
                 goal = self.calculate_goal(exercise_type, date_str)
                 if isinstance(goal, int):
                     month_goal += goal
                 
-                if date_str in self.data['workouts'] and exercise_type in self.data['workouts'][date_str]:
-                    records = self.data['workouts'][date_str][exercise_type]
+                if date_str in self.data["workouts"] and exercise_type in self.data["workouts"][date_str]:
+                    records = self.data["workouts"][date_str][exercise_type]
                     if isinstance(records, list):
-                        month_performed += sum(r['value'] for r in records)
+                        month_performed += sum(r["value"] for r in records)
                     elif isinstance(records, dict):
-                        month_performed += records.get('value', 0)
+                        month_performed += records.get("value", 0)
                 
                 current += timedelta(days=1)
             
             month_diff = month_performed - month_goal
-            month_status = f"+{month_diff}" if month_diff >= 0 else str(month_diff)
+            month_status = f"(+{month_diff})" if month_diff >= 0 else str(month_diff)
             
             month_section = self.findChild(QLabel, f"month_section_{exercise_type}")
             if month_section:
-                month_section.setText(
-                    f"📅 MĚSÍC ({today.strftime('%B %Y')}): {month_performed}/{month_goal} ({month_status})"
-                )
+                month_section.setText(f"📊 MĚSÍC ({current_date.strftime('%B %Y')}): {month_performed}/{month_goal} {month_status}")
             
-            # === ZBYTEK ROKU ===
-            year_end = datetime(today.year, 12, 31)
-            tomorrow = today + timedelta(days=1)
+            # ==================== ZBYTEK ROKU ====================
+            year_end = datetime(selected_year, 12, 31).date()
+            tomorrow = current_date + timedelta(days=1)
+            
+            # Pro budoucí roky zobraz celý rok
+            if selected_year > today.year:
+                rest_start = settings_start_date
+            else:
+                rest_start = tomorrow if tomorrow <= year_end else year_end
+            
+            # Nepřekračovat dnešek
+            if rest_start > today:
+                rest_start = today
             
             rest_goal = 0
+            current = rest_start
             
-            current = tomorrow
             while current <= year_end:
-                date_str = current.strftime('%Y-%m-%d')
+                date_str = current.strftime("%Y-%m-%d")
                 goal = self.calculate_goal(exercise_type, date_str)
                 if isinstance(goal, int):
                     rest_goal += goal
                 current += timedelta(days=1)
             
-            days_left = (year_end - today).days
+            days_left = (year_end - current_date).days
             
             year_rest_section = self.findChild(QLabel, f"year_rest_section_{exercise_type}")
             if year_rest_section:
-                year_rest_section.setText(
-                    f"📊 ZBYTEK ROKU: {rest_goal} ({days_left} dnů do {year_end.strftime('%d.%m.%Y')})"
-                )
+                if selected_year < today.year:
+                    year_rest_section.setText(f"🏁 ZBYTEK ROKU: Rok {selected_year} ukončen")
+                elif selected_year == today.year:
+                    year_rest_section.setText(f"⏳ ZBYTEK ROKU: {rest_goal} ({days_left} dní do {year_end.strftime('%d.%m.%Y')})")
+                else:
+                    year_rest_section.setText(f"🔮 ZBYTEK ROKU: Budoucí rok {selected_year}")
             
-            # Progress bar
+            # ==================== PROGRESS BAR ====================
             total_performed, total_yearly_goal, goal_to_date = self.calculate_yearly_progress(exercise_type, selected_year)
             
             progress_bar = self.findChild(QProgressBar, f"progress_bar_{exercise_type}")
             if progress_bar and goal_to_date > 0:
                 percentage = int((total_performed / goal_to_date) * 100)
                 progress_bar.setValue(percentage)
-                progress_bar.setFormat(f"{total_performed:,} / {goal_to_date:,} ({percentage}%)")
+                progress_bar.setFormat(f"{total_performed}/{goal_to_date} ({percentage}%)")
             elif progress_bar:
                 progress_bar.setValue(0)
                 progress_bar.setFormat("Žádný cíl")
@@ -2716,6 +2774,7 @@ class FitnessTrackerApp(QMainWindow):
             print(f"Chyba v update_detailed_overview pro {exercise_type}: {e}")
             import traceback
             traceback.print_exc()
+
 
 
     def refresh_exercise_calendar(self, exercise_type):

@@ -122,6 +122,12 @@ Všechna data se ukládají lokálně v souboru `fitness_data.json` ve stejném 
 
 
 ## 📝 Changelog
+### v1.8d (14.11.2025)
+- **Oprava**: Sekce DNES/TÝDEN/MĚSÍC/ZBYTEK ROKU nyní respektují vybraný rok
+  - Pro historické roky zobrazují data z konce roku nebo posledního záznamu
+  - Pro budoucí roky zobrazují informaci o budoucím roku
+  - Graf a přehled nyní konzistentně reagují na změnu roku
+
 ### v1.8c (14.11.2025)
 - **Oprava**: Graf nyní správně zobrazuje data pro vybraný rok
   - Týdenní/měsíční mód respektuje vybraný rok místo jen aktuálního roku
@@ -492,5 +498,6 @@ Vytvořeno v roce 2025
 - [Issues](https://github.com/Safronus/FitnessApp/issues)
 
 ---
-**Poslední aktualizace:** 14.11.2025 22:37 CET  
-**Aktuální verze:** 1.8c
+**Poslední aktualizace:** 14.11.2025 22:41 CET  
+**Aktuální verze:** 1.8d
+
