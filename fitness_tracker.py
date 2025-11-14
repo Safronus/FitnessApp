@@ -1,24 +1,23 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+
 """
 Fitness Tracker - Aplikace pro sledování cvičení s progresivními cíli
-Verze 1.6
+Verze 1.8
 
 Changelog:
-v1.6 (26.10.2025)
-- Vylepšení záložky Nastavení:
-  - Odstranění sekce "Dostupné roky" a "tip"
-  - Lepší indikace zvoleného roku (zvýraznění v seznamu)
-  - Nastavení cílů ve 3 sloupcích vedle sebe (Datum, Základní cíle, Přírůstky)
-  - Přehlednější design s lepšími rámečky
+v1.8 (14.11.2025)
+- Přidání grafů výkonu do záložek s jednotlivými cvičeními
+- Možnost přepínání zobrazení: týden/měsíc/rok
+- Vizualizace skutečného výkonu (bar chart) a cílů (line chart)
 
-v1.5d - v1.0.0
+v1.7a - v1.0
 - Předchozí verze
 """
 
 import sys
 import json
-import uuid  # NOVÝ IMPORT
+import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
 from PySide6.QtWidgets import (
@@ -29,9 +28,15 @@ from PySide6.QtWidgets import (
     QDialog, QListWidget, QListWidgetItem, QInputDialog, QCheckBox, QFileDialog,
     QTreeWidget, QTreeWidgetItem
 )
-
 from PySide6.QtCore import Qt, QDate, QTimer
 from PySide6.QtGui import QColor, QAction
+
+# Matplotlib imports
+import matplotlib
+matplotlib.use('Qt5Agg')
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
+import matplotlib.pyplot as plt
 
 # Verze aplikace
 VERSION = "1.6"
@@ -1674,20 +1679,231 @@ class FitnessTrackerApp(QMainWindow):
         
         diag_window.show()
         self.diag_window = diag_window
+        
+    def create_performance_chart(self, exercisetype, parent_layout):
+        """Vytvoří sekci s grafem výkonu a přepínači zobrazení"""
+        chart_group = QGroupBox(f"📊 Graf výkonu - {exercisetype.capitalize()}")
+        chart_group.setStyleSheet("""
+            QGroupBox {
+                font-size: 16px;
+                font-weight: bold;
+                background-color: #1e1e1e;
+                border: 2px solid #0d7377;
+                border-radius: 5px;
+                padding-top: 18px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                subcontrol-position: top center;
+                padding: 3px 8px;
+                color: #14919b;
+            }
+        """)
+        
+        chart_layout = QVBoxLayout()
+        
+        # Přepínače zobrazení
+        mode_buttons_layout = QHBoxLayout()
+        mode_buttons_layout.addStretch()
+        
+        weekly_btn = QPushButton("📅 Týden")
+        weekly_btn.setCheckable(True)
+        weekly_btn.setChecked(True)
+        weekly_btn.setFixedWidth(100)
+        weekly_btn.setStyleSheet("padding: 8px; font-size: 12px;")
+        weekly_btn.clicked.connect(lambda: self.update_performance_chart(exercisetype, "weekly"))
+        mode_buttons_layout.addWidget(weekly_btn)
+        
+        monthly_btn = QPushButton("📆 Měsíc")
+        monthly_btn.setCheckable(True)
+        monthly_btn.setFixedWidth(100)
+        monthly_btn.setStyleSheet("padding: 8px; font-size: 12px;")
+        monthly_btn.clicked.connect(lambda: self.update_performance_chart(exercisetype, "monthly"))
+        mode_buttons_layout.addWidget(monthly_btn)
+        
+        yearly_btn = QPushButton("📊 Rok")
+        yearly_btn.setCheckable(True)
+        yearly_btn.setFixedWidth(100)
+        yearly_btn.setStyleSheet("padding: 8px; font-size: 12px;")
+        yearly_btn.clicked.connect(lambda: self.update_performance_chart(exercisetype, "yearly"))
+        mode_buttons_layout.addWidget(yearly_btn)
+        
+        mode_buttons_layout.addStretch()
+        chart_layout.addLayout(mode_buttons_layout)
+        
+        # Uložení tlačítek pro toggle
+        if not hasattr(self, 'chart_mode_buttons'):
+            self.chart_mode_buttons = {}
+        self.chart_mode_buttons[exercisetype] = {
+            'weekly': weekly_btn,
+            'monthly': monthly_btn,
+            'yearly': yearly_btn
+        }
+        
+        # Matplotlib figure
+        fig = Figure(figsize=(12, 4), facecolor='#1e1e1e')
+        canvas = FigureCanvas(fig)
+        canvas.setStyleSheet("background-color: #1e1e1e;")
+        chart_layout.addWidget(canvas)
+        
+        # Uložení reference
+        if not hasattr(self, 'chart_canvases'):
+            self.chart_canvases = {}
+        if not hasattr(self, 'chart_figures'):
+            self.chart_figures = {}
+        if not hasattr(self, 'chart_modes'):
+            self.chart_modes = {}
+        
+        self.chart_canvases[exercisetype] = canvas
+        self.chart_figures[exercisetype] = fig
+        self.chart_modes[exercisetype] = "weekly"
+        
+        chart_group.setLayout(chart_layout)
+        parent_layout.addWidget(chart_group)
+        
+        # Iniciální vykreslení
+        self.update_performance_chart(exercisetype, "weekly")
+
+    def update_performance_chart(self, exercisetype, mode):
+        """Aktualizuje graf výkonu podle zvoleného módu"""
+        if exercisetype not in self.chart_figures:
+            return
+        
+        # Update módu a toggle tlačítek
+        self.chart_modes[exercisetype] = mode
+        if exercisetype in self.chart_mode_buttons:
+            for btn_mode, btn in self.chart_mode_buttons[exercisetype].items():
+                btn.setChecked(btn_mode == mode)
+        
+        fig = self.chart_figures[exercisetype]
+        fig.clear()
+        
+        ax = fig.add_subplot(111)
+        ax.set_facecolor('#2d2d2d')
+        fig.patch.set_facecolor('#1e1e1e')
+        
+        # Získání dat podle módu
+        today = datetime.now().date()
+        
+        if mode == "weekly":
+            start_date = today - timedelta(days=6)
+            end_date = today
+            date_range = [start_date + timedelta(days=i) for i in range(7)]
+            title = f"Poslední týden ({start_date.strftime('%d.%m.')} - {end_date.strftime('%d.%m.%Y')})"
+            xlabel_format = "%a\n%d.%m"
+        
+        elif mode == "monthly":
+            start_date = datetime(today.year, today.month, 1).date()
+            if today.month == 12:
+                next_month = datetime(today.year + 1, 1, 1).date()
+            else:
+                next_month = datetime(today.year, today.month + 1, 1).date()
+            end_date = next_month - timedelta(days=1)
+            date_range = [start_date + timedelta(days=i) for i in range((end_date - start_date).days + 1)]
+            title = f"{today.strftime('%B %Y')}"
+            xlabel_format = "%d.%m"
+        
+        else:  # yearly
+            # Získat vybraný rok z selektoru
+            if exercisetype in self.exercise_year_selectors:
+                selector = self.exercise_year_selectors[exercisetype]
+                if selector and selector.currentText():
+                    selected_year = int(selector.currentText())
+                else:
+                    selected_year = today.year
+            else:
+                selected_year = today.year
+            
+            start_date = datetime(selected_year, 1, 1).date()
+            end_date = datetime(selected_year, 12, 31).date()
+            date_range = [start_date + timedelta(days=i) for i in range((end_date - start_date).days + 1)]
+            title = f"Celý rok {selected_year}"
+            xlabel_format = "%m/%y"
+        
+        # Sbírat data
+        dates = []
+        performed = []
+        goals = []
+        
+        for date in date_range:
+            if date > today:  # Nezobrazovat budoucnost
+                continue
+                
+            date_str = date.strftime("%Y-%m-%d")
+            dates.append(date)
+            
+            # Výkon
+            perf = 0
+            if date_str in self.data["workouts"] and exercisetype in self.data["workouts"][date_str]:
+                records = self.data["workouts"][date_str][exercisetype]
+                if isinstance(records, list):
+                    perf = sum(r["value"] for r in records)
+                elif isinstance(records, dict):
+                    perf = records.get("value", 0)
+            performed.append(perf)
+            
+            # Cíl
+            goal = self.calculate_goal(exercisetype, date_str)
+            goals.append(goal if isinstance(goal, int) else 0)
+        
+        if not dates:
+            ax.text(0.5, 0.5, 'Žádná data k zobrazení', 
+                    horizontalalignment='center', verticalalignment='center',
+                    transform=ax.transAxes, fontsize=14, color='#a0a0a0')
+        else:
+            # Sloupcový graf pro výkon
+            bar_width = 0.8 if mode == "weekly" else 0.6
+            bars = ax.bar(dates, performed, width=bar_width, label='Výkon', color='#0d7377', alpha=0.8)
+            
+            # Čárový graf pro cíle
+            ax.plot(dates, goals, label='Cíl', color='#FFD700', linewidth=2, marker='o', markersize=3)
+            
+            # Styling
+            ax.set_title(title, fontsize=14, color='#e0e0e0', pad=10)
+            ax.set_xlabel('Datum', fontsize=10, color='#a0a0a0')
+            ax.set_ylabel('Počet opakování', fontsize=10, color='#a0a0a0')
+            ax.tick_params(colors='#a0a0a0', labelsize=8)
+            ax.spines['bottom'].set_color('#3d3d3d')
+            ax.spines['top'].set_color('#3d3d3d')
+            ax.spines['left'].set_color('#3d3d3d')
+            ax.spines['right'].set_color('#3d3d3d')
+            ax.grid(True, alpha=0.2, color='#4d4d4d', linestyle='--')
+            
+            # Formátování X osy
+            if mode == "yearly":
+                # Pro rok - zobrazit jen některé měsíce
+                num_dates = len(dates)
+                step = max(1, num_dates // 12)
+                ax.set_xticks([dates[i] for i in range(0, num_dates, step)])
+                ax.set_xticklabels([dates[i].strftime(xlabel_format) for i in range(0, num_dates, step)], rotation=0)
+            else:
+                ax.set_xticks(dates)
+                ax.set_xticklabels([d.strftime(xlabel_format) for d in dates], rotation=45 if mode == "monthly" else 0)
+            
+            # Legenda
+            legend = ax.legend(loc='upper left', fontsize=9, facecolor='#2d2d2d', edgecolor='#3d3d3d')
+            for text in legend.get_texts():
+                text.set_color('#e0e0e0')
+        
+        fig.tight_layout()
+        self.chart_canvases[exercisetype].draw()
+
     
     def create_exercise_tab(self, exercise_type, icon):
         """Vytvoří záložku pro konkrétní cvičení - BEZ přidávání"""
         widget = QWidget()
         main_layout = QHBoxLayout(widget)
         
+        # ==================== LEVÝ PANEL ====================
         left_panel = QWidget()
         left_layout = QVBoxLayout(left_panel)
         left_layout.setContentsMargins(0, 0, 0, 0)
         
+        # Year selector layout
         year_selector_layout = QHBoxLayout()
         year_selector_layout.addWidget(QLabel(f"📅 Zobrazit rok:"))
-        
         year_selector = QComboBox()
+        
         available_years = self.get_available_years()
         if available_years:
             for year in available_years:
@@ -1695,14 +1911,12 @@ class FitnessTrackerApp(QMainWindow):
             year_selector.setCurrentText(str(datetime.now().year))
         
         year_selector.currentTextChanged.connect(lambda: self.update_exercise_tab_and_calendar(exercise_type))
-        
         self.exercise_year_selectors[exercise_type] = year_selector
-        
         year_selector_layout.addWidget(year_selector)
         year_selector_layout.addStretch()
-        
         left_layout.addLayout(year_selector_layout)
         
+        # Cíle frame (den, týden, měsíc, zbytek roku)
         goals_frame = QFrame()
         goals_frame.setStyleSheet("""
             QFrame {
@@ -1713,30 +1927,35 @@ class FitnessTrackerApp(QMainWindow):
         """)
         goals_layout = QVBoxLayout(goals_frame)
         
+        # Dnešní sekce
         today_section = QLabel()
         today_section.setObjectName(f"today_section_{exercise_type}")
         today_section.setStyleSheet("font-size: 14px; font-weight: bold; color: #14919b; padding: 5px;")
         today_section.setWordWrap(True)
         goals_layout.addWidget(today_section)
         
+        # Týdenní sekce
         week_section = QLabel()
         week_section.setObjectName(f"week_section_{exercise_type}")
         week_section.setStyleSheet("font-size: 12px; color: #FFD700; padding: 5px;")
         week_section.setWordWrap(True)
         goals_layout.addWidget(week_section)
         
+        # Měsíční sekce
         month_section = QLabel()
         month_section.setObjectName(f"month_section_{exercise_type}")
         month_section.setStyleSheet("font-size: 12px; color: #90EE90; padding: 5px;")
         month_section.setWordWrap(True)
         goals_layout.addWidget(month_section)
         
+        # Roční sekce (zbytek)
         year_rest_section = QLabel()
         year_rest_section.setObjectName(f"year_rest_section_{exercise_type}")
         year_rest_section.setStyleSheet("font-size: 12px; color: #87CEEB; padding: 5px;")
         year_rest_section.setWordWrap(True)
         goals_layout.addWidget(year_rest_section)
         
+        # Progress bar
         progress_bar = QProgressBar()
         progress_bar.setObjectName(f"progress_bar_{exercise_type}")
         progress_bar.setTextVisible(True)
@@ -1744,8 +1963,8 @@ class FitnessTrackerApp(QMainWindow):
         
         left_layout.addWidget(goals_frame)
         
+        # Bulk actions
         bulk_actions_layout = QHBoxLayout()
-        
         delete_selected_btn = QPushButton("🗑️ Smazat vybrané")
         delete_selected_btn.setObjectName(f"delete_selected_{exercise_type}")
         delete_selected_btn.setStyleSheet("""
@@ -1759,15 +1978,13 @@ class FitnessTrackerApp(QMainWindow):
         """)
         delete_selected_btn.clicked.connect(lambda: self.delete_selected_records(exercise_type))
         bulk_actions_layout.addWidget(delete_selected_btn)
-        
         bulk_actions_layout.addStretch()
-        
         left_layout.addLayout(bulk_actions_layout)
         
-        # TreeWidget s kontextovým menu
+        # TreeWidget pro záznamy
         tree = QTreeWidget()
         tree.setObjectName(f"tree_{exercise_type}")
-        tree.setColumnCount(4)  # OPRAVA: Bez sloupce Akce
+        tree.setColumnCount(4)  # Datum, Čas, Výkon, Data (hidden)
         tree.setHeaderLabels(["Datum / Záznam", "Čas / Výkon", "% cíle", "Data"])
         tree.setColumnHidden(3, True)
         
@@ -1779,7 +1996,6 @@ class FitnessTrackerApp(QMainWindow):
         tree.setIndentation(20)
         tree.setContextMenuPolicy(Qt.CustomContextMenu)
         tree.customContextMenuRequested.connect(lambda pos: self.show_tree_context_menu(pos, exercise_type))
-        
         tree.setStyleSheet("""
             QTreeWidget {
                 background-color: #1e1e1e;
@@ -1795,10 +2011,14 @@ class FitnessTrackerApp(QMainWindow):
         
         left_layout.addWidget(tree)
         
+        main_layout.addWidget(left_panel, 1)
+        
+        # ==================== PRAVÁ STRANA (SCROLLOVACÍ OBLAST) ====================
         right_panel = QWidget()
         right_layout = QVBoxLayout(right_panel)
         right_layout.setContentsMargins(0, 0, 0, 0)
         
+        # Roční přehled - nadpis
         overview_label = QLabel(f"📊 Roční přehled - {exercise_type.capitalize()}")
         overview_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #14919b; padding: 5px;")
         right_layout.addWidget(overview_label)
@@ -1812,10 +2032,8 @@ class FitnessTrackerApp(QMainWindow):
             color_box = QLabel()
             color_box.setFixedSize(18, 18)
             color_box.setStyleSheet(f"background-color: {color}; border: 1px solid #3d3d3d;")
-            
             text_label = QLabel(text)
             text_label.setStyleSheet("font-size: 10px; color: #e0e0e0;")
-            
             legend_layout.addWidget(color_box)
             legend_layout.addWidget(text_label)
         
@@ -1825,37 +2043,48 @@ class FitnessTrackerApp(QMainWindow):
         add_legend_item("#FFD700", "Akorát")
         add_legend_item("#FF6B6B", "Mírný skluz")
         add_legend_item("#8B0000", "Velký skluz")
-        
         legend_layout.addStretch()
-        
         right_layout.addLayout(legend_layout)
         
+        # Scrollovací oblast pro kalendář a graf
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setStyleSheet("QScrollArea { border: none; background-color: #1e1e1e; }")
         
-        calendar_widget = QWidget()
-        calendar_widget.setStyleSheet("background-color: #1e1e1e;")
-        calendar_layout = QVBoxLayout(calendar_widget)
+        scroll_content = QWidget()
+        calendar_layout = QVBoxLayout(scroll_content)
         calendar_layout.setContentsMargins(0, 0, 0, 0)
         
-        self.exercise_calendar_widgets[exercise_type] = calendar_layout
+        # Kalendář widget
+        calendar_widget = QWidget()
+        calendar_widget.setStyleSheet("background-color: #1e1e1e;")
+        calendar_inner_layout = QVBoxLayout(calendar_widget)
+        calendar_inner_layout.setContentsMargins(0, 0, 0, 0)
+        self.exercise_calendar_widgets[exercise_type] = calendar_inner_layout
+        calendar_layout.addWidget(calendar_widget)
         
-        scroll.setWidget(calendar_widget)
-        right_layout.addWidget(scroll)
-        
+        # Statistiky pod kalendářem
         stats_year_label = QLabel()
         stats_year_label.setObjectName(f"stats_year_label_{exercise_type}")
         stats_year_label.setStyleSheet("font-size: 11px; padding: 5px; background-color: #2d2d2d; color: #e0e0e0; border-radius: 5px;")
-        right_layout.addWidget(stats_year_label)
+        calendar_layout.addWidget(stats_year_label)
         
-        main_layout.addWidget(left_panel, 1)
+        # ==================== NOVĚ: PŘIDÁNÍ GRAFU POD KALENDÁŘ ====================
+        self.create_performance_chart(exercise_type, calendar_layout)
+        
+        calendar_layout.addStretch()
+        
+        scroll.setWidget(scroll_content)
+        right_layout.addWidget(scroll)
+        
         main_layout.addWidget(right_panel, 1)
         
+        # Refresh kalendáře a detailního přehledu
         self.update_exercise_tab(exercise_type)
         self.refresh_exercise_calendar(exercise_type)
         
         return widget
+
 
     def show_tree_context_menu(self, position, exercise_type):
         """Zobrazí kontextové menu pro tree položky"""

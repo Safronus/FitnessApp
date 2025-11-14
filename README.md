@@ -122,6 +122,21 @@ Všechna data se ukládají lokálně v souboru `fitness_data.json` ve stejném 
 
 
 ## 📝 Changelog
+### v1.8 (14.11.2025)
+- **Nová funkcionalita**: Grafy výkonu v záložkách jednotlivých cvičení
+  - Vizualizace skutečného výkonu (sloupcový graf) a cílů (čárový graf)
+  - Přepínání zobrazení: **Týden** (7 dní), **Měsíc** (aktuální), **Rok** (celý)
+  - Integrace pomocí matplotlib do PySide6
+  - Zobrazení pod ročním kalendářem
+- **Nová závislost**: `matplotlib` pro vykreslování grafů
+
+### v1.7a (14.11.2025)
+- **UI vylepšení**: Zarovnání a vylepšení layoutu záložky "Přidat výkon"
+  - Fixní šířky pro labely (80px) a SpinBoxy (100px) pro konzistentní zarovnání
+  - Sjednocení výšky všech tlačítek (35px)
+  - Barevné odlišení rychlých tlačítek (tmavší odstín) od hlavního tlačítka "Přidat"
+  - Zlepšení vizuální hierarchie a čitelnosti
+
 
 ### v1.7 (14.11.2025)
 - **Nová funkcionalita**: Rychlá tlačítka v záložce "Přidat výkon"
@@ -464,6 +479,5 @@ Vytvořeno v roce 2025
 - [Issues](https://github.com/Safronus/FitnessApp/issues)
 
 ---
-**Poslední aktualizace:** 14.11.2025 22:01 CET  
-**Aktuální verze:** 1.7
-
+**Poslední aktualizace:** 14.11.2025 22:15 CET  
+**Aktuální verze:** 1.8
