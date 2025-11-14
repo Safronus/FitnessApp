@@ -354,8 +354,498 @@ QToolTip {
 }
 """
 
+class SmartGoalCalculator:
+    """Chytrý kalkulátor cílů pro nový rok"""
+    
+    FITNESS_LEVELS = {
+        "beginner": {"name": "🟢 Začátečník", "multiplier": 0.5},
+        "intermediate": {"name": "🟡 Intermediate", "multiplier": 1.0},
+        "advanced": {"name": "🔴 Pokročilý", "multiplier": 1.5}
+    }
+    
+    TIME_AVAILABILITY = {
+        "low": {"name": "3× týdně", "multiplier": 0.7},
+        "medium": {"name": "5× týdně", "multiplier": 1.0},
+        "high": {"name": "Každý den", "multiplier": 1.2}
+    }
+    
+    GOAL_TYPES = {
+        "muscle": {"name": "🏋️ Nárůst svalové hmoty", "multiplier": 1.2},
+        "weight_loss": {"name": "🔥 Hubnutí", "multiplier": 1.0},
+        "endurance": {"name": "💪 Síla a kondice", "multiplier": 1.1}
+    }
+    
+    def __init__(self, data):
+        self.data = data
+    
+    def analyze_previous_year(self, year, exercise_id):
+        """Analyzuje předchozí rok a vrátí statistiky"""
+        year_str = str(year)
+        
+        if year_str not in self.data.get("year_settings", {}):
+            return None
+        
+        # Získat finální cíl
+        settings = self.data["year_settings"][year_str]
+        base_goal = settings.get("base_goals", {}).get(exercise_id, 50)
+        weekly_increment = settings.get("weekly_increment", {}).get(exercise_id, 10)
+        
+        # Spočítat finální cíl (52 týdnů)
+        final_goal = base_goal + (52 * weekly_increment)
+        
+        # Analyzovat skutečný výkon
+        total_performed = 0
+        total_goal = 0
+        days_count = 0
+        last_3_months_performed = []
+        
+        for date_str, workouts in self.data.get("workouts", {}).items():
+            date_obj = datetime.strptime(date_str, "%Y-%m-%d").date()
+            
+            if date_obj.year != year:
+                continue
+            
+            if exercise_id in workouts:
+                records = workouts[exercise_id]
+                if isinstance(records, list):
+                    perf = sum(r["value"] for r in records)
+                elif isinstance(records, dict):
+                    perf = records.get("value", 0)
+                else:
+                    perf = 0
+                
+                total_performed += perf
+                days_count += 1
+                
+                # Poslední 3 měsíce
+                if date_obj >= datetime(year, 10, 1).date():
+                    last_3_months_performed.append(perf)
+        
+        avg_daily = total_performed / days_count if days_count > 0 else 0
+        avg_last_3_months = sum(last_3_months_performed) / len(last_3_months_performed) if last_3_months_performed else 0
+        
+        return {
+            "base_goal": base_goal,
+            "final_goal": final_goal,
+            "total_performed": total_performed,
+            "avg_daily": avg_daily,
+            "avg_last_3_months": avg_last_3_months,
+            "days_count": days_count,
+            "weekly_increment": weekly_increment
+        }
+    
+    def calculate_smart_goals(self, exercise_id, previous_year=None, 
+                             fitness_level="intermediate", time_availability="medium", 
+                             goal_type="endurance"):
+        """Vypočítá chytré cíle pro nový rok"""
+        
+        # Multipliers
+        fitness_mult = self.FITNESS_LEVELS[fitness_level]["multiplier"]
+        time_mult = self.TIME_AVAILABILITY[time_availability]["multiplier"]
+        goal_mult = self.GOAL_TYPES[goal_type]["multiplier"]
+        
+        # Pokud existuje předchozí rok, použij jeho data
+        if previous_year:
+            analysis = self.analyze_previous_year(previous_year, exercise_id)
+            
+            if analysis and analysis["days_count"] > 30:  # Dostatek dat
+                # Použij průměr posledních 3 měsíců jako základ
+                base_from_history = analysis["avg_last_3_months"]
+                
+                # Aplikuj multipliers
+                recommended_base = int(base_from_history * fitness_mult * time_mult * goal_mult * 0.9)
+                recommended_increment = int(recommended_base * 0.10)  # 10% růst týdně
+                
+                return {
+                    "base_goal": max(recommended_base, 10),
+                    "weekly_increment": max(recommended_increment, 5),
+                    "method": "history_based",
+                    "confidence": "high"
+                }
+        
+        # Fallback: použij fitness level jako základ
+        base_defaults = {
+            "kliky": 50,
+            "drepy": 20,
+            "skrcky": 30
+        }
+        
+        base = base_defaults.get(exercise_id, 40)
+        recommended_base = int(base * fitness_mult * time_mult * goal_mult)
+        recommended_increment = int(recommended_base * 0.10)
+        
+        return {
+            "base_goal": max(recommended_base, 10),
+            "weekly_increment": max(recommended_increment, 5),
+            "method": "level_based",
+            "confidence": "medium"
+        }
 
-class NewYearDialog(QDialog):
+class NewYearWizardDialog(QDialog):
+    """Multi-step wizard pro vytvoření nového roku"""
+    
+    def __init__(self, year, parent=None):
+        super().__init__(parent)
+        self.year = year
+        self.parent_app = parent
+        self.current_page = 0
+        self.calculator = SmartGoalCalculator(parent.data)
+        
+        # Uložení odpovědí
+        self.answers = {
+            "fitness_level": "intermediate",
+            "time_availability": "medium",
+            "goal_type": "endurance",
+            "use_smart_recommendations": True
+        }
+        
+        self.setWindowTitle(f"🧙‍♂️ Průvodce vytvořením roku {year}")
+        self.setMinimumSize(700, 500)
+        
+        layout = QVBoxLayout(self)
+        
+        # Progress bar
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setMaximum(5)
+        self.progress_bar.setValue(0)
+        layout.addWidget(self.progress_bar)
+        
+        # Stack widget pro stránky
+        self.stack = QWidget()
+        self.stack_layout = QVBoxLayout(self.stack)
+        layout.addWidget(self.stack)
+        
+        # Tlačítka navigace
+        buttons_layout = QHBoxLayout()
+        self.back_btn = QPushButton("← Zpět")
+        self.back_btn.clicked.connect(self.go_back)
+        self.back_btn.setEnabled(False)
+        buttons_layout.addWidget(self.back_btn)
+        
+        buttons_layout.addStretch()
+        
+        self.next_btn = QPushButton("Další →")
+        self.next_btn.clicked.connect(self.go_next)
+        buttons_layout.addWidget(self.next_btn)
+        
+        self.finish_btn = QPushButton("✅ Vytvořit rok")
+        self.finish_btn.clicked.connect(self.accept)
+        self.finish_btn.setVisible(False)
+        buttons_layout.addWidget(self.finish_btn)
+        
+        layout.addLayout(buttons_layout)
+        
+        # Vytvoř stránky
+        self.pages = [
+            self.create_welcome_page(),
+            self.create_analysis_page(),
+            self.create_fitness_level_page(),
+            self.create_preferences_page(),
+            self.create_summary_page()
+        ]
+        
+        self.show_page(0)
+    
+    def create_welcome_page(self):
+        """Stránka 1: Uvítání"""
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        
+        title = QLabel(f"🎉 Vytvoření roku {self.year}")
+        title.setStyleSheet("font-size: 20px; font-weight: bold; color: #14919b;")
+        layout.addWidget(title)
+        
+        intro = QLabel(
+            f"Vítej v průvodci vytvořením nového roku!\n\n"
+            f"Tento wizard ti pomůže nastavit <b>optimální cíle</b> pro rok {self.year} "
+            f"na základě tvého fitness levelu, dostupného času a cílů.\n\n"
+            f"<b>Proces má 5 kroků:</b>\n"
+            f"1️⃣ Analýza předchozího roku\n"
+            f"2️⃣ Výběr fitness levelu\n"
+            f"3️⃣ Nastavení preferencí\n"
+            f"4️⃣ Chytré doporučení\n"
+            f"5️⃣ Finální konfirmace"
+        )
+        intro.setWordWrap(True)
+        intro.setStyleSheet("font-size: 13px; padding: 20px; background-color: #2d2d2d; border-radius: 5px;")
+        layout.addWidget(intro)
+        
+        layout.addStretch()
+        return page
+    
+    def create_analysis_page(self):
+        """Stránka 2: Analýza předchozího roku"""
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        
+        title = QLabel("📊 Analýza předchozího roku")
+        title.setStyleSheet("font-size: 18px; font-weight: bold; color: #14919b;")
+        layout.addWidget(title)
+        
+        self.analysis_text = QTextEdit()
+        self.analysis_text.setReadOnly(True)
+        self.analysis_text.setMaximumHeight(300)
+        self.analysis_text.setStyleSheet("background-color: #2d2d2d; border: 1px solid #3d3d3d; font-family: monospace;")
+        layout.addWidget(self.analysis_text)
+        
+        # Analýza
+        self.perform_analysis()
+        
+        layout.addStretch()
+        return page
+    
+    def perform_analysis(self):
+        """Provede analýzu předchozího roku"""
+        previous_year = self.year - 1
+        analysis_text = f"🔍 <b>Analýza roku {previous_year}:</b><br><br>"
+        
+        found_data = False
+        
+        for exercise_id in self.parent_app.get_active_exercises():
+            config = self.parent_app.get_exercise_config(exercise_id)
+            analysis = self.calculator.analyze_previous_year(previous_year, exercise_id)
+            
+            if analysis and analysis["days_count"] > 0:
+                found_data = True
+                analysis_text += f"<b>{config['icon']} {config['name']}:</b><br>"
+                analysis_text += f"  • Dní s tréninkem: {analysis['days_count']}<br>"
+                analysis_text += f"  • Průměr/den: {analysis['avg_daily']:.1f}<br>"
+                analysis_text += f"  • Průměr (posl. 3 měs.): {analysis['avg_last_3_months']:.1f}<br>"
+                analysis_text += f"  • Finální cíl: {analysis['final_goal']}<br><br>"
+        
+        if not found_data:
+            analysis_text += f"❌ Nenašel jsem dostatek dat z roku {previous_year}.<br><br>"
+            analysis_text += f"💡 Cíle budou nastaveny podle tvého fitness levelu."
+        
+        self.analysis_text.setHtml(analysis_text)
+    
+    def create_fitness_level_page(self):
+        """Stránka 3: Fitness level"""
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        
+        title = QLabel("💪 Jaký je tvůj současný fitness level?")
+        title.setStyleSheet("font-size: 18px; font-weight: bold; color: #14919b;")
+        layout.addWidget(title)
+        
+        desc = QLabel("Vyber úroveň, která nejlépe odpovídá tvé aktuální kondici:")
+        desc.setStyleSheet("font-size: 12px; color: #a0a0a0; padding: 10px;")
+        layout.addWidget(desc)
+        
+        self.fitness_buttons = QWidget()
+        fitness_layout = QVBoxLayout(self.fitness_buttons)
+        
+        for level_id, level_data in SmartGoalCalculator.FITNESS_LEVELS.items():
+            btn = QPushButton(level_data["name"])
+            btn.setCheckable(True)
+            btn.setStyleSheet("""
+                QPushButton {
+                    padding: 15px;
+                    font-size: 14px;
+                    text-align: left;
+                    background-color: #2d2d2d;
+                    border: 2px solid #3d3d3d;
+                }
+                QPushButton:checked {
+                    background-color: #0d7377;
+                    border: 2px solid #14919b;
+                }
+            """)
+            btn.clicked.connect(lambda checked, l=level_id: self.set_fitness_level(l))
+            
+            if level_id == "intermediate":
+                btn.setChecked(True)
+            
+            fitness_layout.addWidget(btn)
+        
+        layout.addWidget(self.fitness_buttons)
+        layout.addStretch()
+        return page
+    
+    def create_preferences_page(self):
+        """Stránka 4: Preference (čas + cíl)"""
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        
+        title = QLabel("⚙️ Tvoje preference")
+        title.setStyleSheet("font-size: 18px; font-weight: bold; color: #14919b;")
+        layout.addWidget(title)
+        
+        # Čas
+        time_label = QLabel("⏰ Kolik času můžeš trénovat?")
+        time_label.setStyleSheet("font-size: 14px; font-weight: bold; padding-top: 10px;")
+        layout.addWidget(time_label)
+        
+        self.time_buttons = QWidget()
+        time_layout = QVBoxLayout(self.time_buttons)
+        
+        for time_id, time_data in SmartGoalCalculator.TIME_AVAILABILITY.items():
+            btn = QPushButton(time_data["name"])
+            btn.setCheckable(True)
+            btn.setStyleSheet("""
+                QPushButton {
+                    padding: 10px;
+                    font-size: 13px;
+                    background-color: #2d2d2d;
+                    border: 2px solid #3d3d3d;
+                }
+                QPushButton:checked {
+                    background-color: #0d7377;
+                    border: 2px solid #14919b;
+                }
+            """)
+            btn.clicked.connect(lambda checked, t=time_id: self.set_time_availability(t))
+            
+            if time_id == "medium":
+                btn.setChecked(True)
+            
+            time_layout.addWidget(btn)
+        
+        layout.addWidget(self.time_buttons)
+        
+        # Cíl
+        goal_label = QLabel("🎯 Jaký je tvůj hlavní cíl?")
+        goal_label.setStyleSheet("font-size: 14px; font-weight: bold; padding-top: 20px;")
+        layout.addWidget(goal_label)
+        
+        self.goal_buttons = QWidget()
+        goal_layout = QVBoxLayout(self.goal_buttons)
+        
+        for goal_id, goal_data in SmartGoalCalculator.GOAL_TYPES.items():
+            btn = QPushButton(goal_data["name"])
+            btn.setCheckable(True)
+            btn.setStyleSheet("""
+                QPushButton {
+                    padding: 10px;
+                    font-size: 13px;
+                    background-color: #2d2d2d;
+                    border: 2px solid #3d3d3d;
+                }
+                QPushButton:checked {
+                    background-color: #0d7377;
+                    border: 2px solid #14919b;
+                }
+            """)
+            btn.clicked.connect(lambda checked, g=goal_id: self.set_goal_type(g))
+            
+            if goal_id == "endurance":
+                btn.setChecked(True)
+            
+            goal_layout.addWidget(btn)
+        
+        layout.addWidget(self.goal_buttons)
+        layout.addStretch()
+        return page
+    
+    def create_summary_page(self):
+        """Stránka 5: Souhrn a doporučení"""
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        
+        title = QLabel("✅ Tvé nové cíle pro rok " + str(self.year))
+        title.setStyleSheet("font-size: 18px; font-weight: bold; color: #14919b;")
+        layout.addWidget(title)
+        
+        self.summary_text = QTextEdit()
+        self.summary_text.setReadOnly(True)
+        self.summary_text.setStyleSheet("background-color: #2d2d2d; border: 1px solid #3d3d3d; font-family: monospace;")
+        layout.addWidget(self.summary_text)
+        
+        layout.addStretch()
+        return page
+    
+    def generate_summary(self):
+        """Vygeneruje souhrn doporučení"""
+        summary_html = f"<b>🎯 Doporučené cíle pro rok {self.year}:</b><br><br>"
+        
+        self.recommendations = {}
+        
+        for exercise_id in self.parent_app.get_active_exercises():
+            config = self.parent_app.get_exercise_config(exercise_id)
+            
+            goals = self.calculator.calculate_smart_goals(
+                exercise_id,
+                previous_year=self.year - 1,
+                fitness_level=self.answers["fitness_level"],
+                time_availability=self.answers["time_availability"],
+                goal_type=self.answers["goal_type"]
+            )
+            
+            self.recommendations[exercise_id] = goals
+            
+            summary_html += f"<b>{config['icon']} {config['name']}:</b><br>"
+            summary_html += f"  • Základní cíl (1. týden): <span style='color: #32c766;'>{goals['base_goal']}</span> opakování/den<br>"
+            summary_html += f"  • Týdenní přírůstek: <span style='color: #FFD700;'>+{goals['weekly_increment']}</span> opakování<br>"
+            
+            # Vypočti finální cíl
+            final_goal = goals['base_goal'] + (52 * goals['weekly_increment'])
+            summary_html += f"  • Finální cíl (52. týden): <span style='color: #0d7377;'>{final_goal}</span> opakování/den<br>"
+            summary_html += f"  • Metoda: {goals['method']}<br><br>"
+        
+        summary_html += "<br><i>💡 Tyto hodnoty můžeš kdykoliv upravit v Nastavení.</i>"
+        
+        self.summary_text.setHtml(summary_html)
+    
+    def set_fitness_level(self, level):
+        self.answers["fitness_level"] = level
+        # Uncheck ostatní
+        for btn in self.fitness_buttons.findChildren(QPushButton):
+            btn.setChecked(False)
+        sender = self.sender()
+        sender.setChecked(True)
+    
+    def set_time_availability(self, time):
+        self.answers["time_availability"] = time
+        for btn in self.time_buttons.findChildren(QPushButton):
+            btn.setChecked(False)
+        sender = self.sender()
+        sender.setChecked(True)
+    
+    def set_goal_type(self, goal):
+        self.answers["goal_type"] = goal
+        for btn in self.goal_buttons.findChildren(QPushButton):
+            btn.setChecked(False)
+        sender = self.sender()
+        sender.setChecked(True)
+    
+    def show_page(self, index):
+        """Zobrazí stránku podle indexu"""
+        # Skrytí všech stránek
+        for page in self.pages:
+            page.setVisible(False)
+        
+        # Zobraz aktuální stránku
+        self.stack_layout.addWidget(self.pages[index])
+        self.pages[index].setVisible(True)
+        
+        self.current_page = index
+        self.progress_bar.setValue(index + 1)
+        
+        # Navigační tlačítka
+        self.back_btn.setEnabled(index > 0)
+        
+        if index == len(self.pages) - 1:
+            self.next_btn.setVisible(False)
+            self.finish_btn.setVisible(True)
+            self.generate_summary()
+        else:
+            self.next_btn.setVisible(True)
+            self.finish_btn.setVisible(False)
+    
+    def go_next(self):
+        if self.current_page < len(self.pages) - 1:
+            self.show_page(self.current_page + 1)
+    
+    def go_back(self):
+        if self.current_page > 0:
+            self.show_page(self.current_page - 1)
+    
+    def get_recommendations(self):
+        """Vrátí doporučení pro všechna cvičení"""
+        return self.recommendations
+
+
+class SimpleYearDialog(QDialog):
     """Dialog pro nastavení nového roku"""
     def __init__(self, year, parent=None):
         super().__init__(parent)
@@ -2010,13 +2500,13 @@ class FitnessTrackerApp(QMainWindow):
         self.show_message("Uloženo", f"Nastavení pro rok {self.current_settings_year} bylo uloženo!", QMessageBox.Information)
 
     def add_custom_year(self):
-        """Dialog pro přidání libovolného roku"""
+        """Dialog pro přidání libovolného roku - nyní s wizardem"""
         current_year = datetime.now().year
         year, ok = QInputDialog.getInt(
             self,
             "Přidat rok",
             "Zadej rok, který chceš přidat do sledování:",
-            current_year,
+            current_year + 1,  # Defaultně příští rok
             2000,
             2100,
             1
@@ -2025,7 +2515,7 @@ class FitnessTrackerApp(QMainWindow):
         if ok:
             year_str = str(year)
             
-            # **OPRAVA: Zkontrolovat, zda rok již existuje**
+            # Zkontrolovat, zda rok již existuje
             if year_str in self.data["year_settings"]:
                 self.show_message(
                     "Informace",
@@ -2034,38 +2524,35 @@ class FitnessTrackerApp(QMainWindow):
                 )
                 return
             
-            dialog = NewYearDialog(year, self)
+            # Spustit Smart Year Wizard
+            wizard = NewYearWizardDialog(year, self)
             
-            if dialog.exec():
-                if dialog.use_current:
-                    # Použít aktuální nastavení z jiného roku
-                    current_year_settings = self.get_year_settings(current_year)
-                    self.data["year_settings"][year_str] = {
-                        "start_date": f"{year}-01-01",  # **VŽDY 1.1. pro nový rok**
-                        "base_goals": current_year_settings["base_goals"].copy(),
-                        "weekly_increment": current_year_settings["weekly_increment"].copy()
-                    }
-                else:
-                    # Nové výchozí nastavení
-                    self.data["year_settings"][year_str] = {
-                        "start_date": f"{year}-01-01",  # **VŽDY 1.1. pro nový rok**
-                        "base_goals": {"kliky": 50, "dřepy": 20, "skrčky": 20},
-                        "weekly_increment": {"kliky": 10, "dřepy": 5, "skrčky": 10}
-                    }
+            if wizard.exec():
+                # Získat doporučení z wizardu
+                recommendations = wizard.get_recommendations()
                 
-                # **OPRAVA: NETVOŘIT ŽÁDNÉ ZÁZNAMY!**
-                # (Odstraněno vytváření prvního dne s prázdnými záznamy)
+                # Vytvořit year_settings s doporučenými hodnotami
+                self.data["year_settings"][year_str] = {
+                    "start_date": f"{year}-01-01",
+                    "base_goals": {},
+                    "weekly_increment": {}
+                }
+                
+                # Aplikovat doporučení pro každé cvičení
+                for exercise_id, goals in recommendations.items():
+                    self.data["year_settings"][year_str]["base_goals"][exercise_id] = goals["base_goal"]
+                    self.data["year_settings"][year_str]["weekly_increment"][exercise_id] = goals["weekly_increment"]
                 
                 self.save_data()
                 self.update_all_year_selectors()
                 
-                # **OPRAVA: Automaticky přepnout na nový rok ve všech záložkách**
-                for exercise in ["kliky", "dřepy", "skrčky"]:
+                # Automaticky přepnout na nový rok ve všech záložkách
+                for exercise in self.get_active_exercises():
                     if exercise in self.exercise_year_selectors:
                         self.exercise_year_selectors[exercise].setCurrentText(str(year))
                 
-                # **NOVĚ: Refresh VŠECH záložek, grafů a přehledů**
-                for exercise in ["kliky", "dřepy", "skrčky"]:
+                # Refresh VŠECH záložek, grafů a přehledů
+                for exercise in self.get_active_exercises():
                     self.update_exercise_tab(exercise)
                     self.refresh_exercise_calendar(exercise)
                     # Refresh grafu
@@ -2084,13 +2571,20 @@ class FitnessTrackerApp(QMainWindow):
                 # Načíst nastavení nového roku do UI
                 self.load_year_settings_to_ui(year)
                 
+                # Shrnutí
+                summary_text = f"Rok {year} byl vytvořen s těmito cíly:\n\n"
+                for exercise_id, goals in recommendations.items():
+                    config = self.get_exercise_config(exercise_id)
+                    summary_text += f"{config['icon']} {config['name']}:\n"
+                    summary_text += f"  • Základní cíl: {goals['base_goal']}\n"
+                    summary_text += f"  • Týdenní přírůstek: {goals['weekly_increment']}\n\n"
+                
                 self.show_message(
-                    "Úspěch",
-                    f"Rok {year} byl přidán do sledování!\n\n"
-                    f"Startovní datum: 1.1.{year}\n"
-                    f"Můžeš začít zaznamenávat své cvičení.",
+                    "🎉 Rok vytvořen!",
+                    summary_text,
                     QMessageBox.Information
                 )
+
     
     def delete_year_from_list(self):
         """Smaže vybraný rok ze seznamu"""
