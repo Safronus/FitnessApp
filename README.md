@@ -122,6 +122,12 @@ Všechna data se ukládají lokálně v souboru `fitness_data.json` ve stejném 
 
 
 ## 📝 Changelog
+### v1.8h (14.11.2025)
+- **Vylepšení**: Progress bar nyní zobrazuje náskok nad 100%
+  - Formát: `120/100 (+20%)` nebo `80/100 (80%, -20)`
+  - Barevné odlišení: zelená (náskok), žlutá (přesně), červená (skluz)
+  - Dynamické maximum pro progress bar
+
 ### v1.8g (14.11.2025)
 - **Oprava UI**: Rozšířen year selector, aby byly vidět celé roky v rozbalovacím seznamu
 
@@ -514,5 +520,6 @@ Vytvořeno v roce 2025
 - [Issues](https://github.com/Safronus/FitnessApp/issues)
 
 ---
-**Poslední aktualizace:** 14.11.2025 23:00 CET  
-**Aktuální verze:** 1.8g
+**Poslední aktualizace:** 14.11.2025 23:07 CET  
+**Aktuální verze:** 1.8h
+

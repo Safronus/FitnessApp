@@ -1,20 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-"""
-Fitness Tracker - Aplikace pro sledování cvičení s progresivními cíli
-Verze 1.8
-
-Changelog:
-v1.8 (14.11.2025)
-- Přidání grafů výkonu do záložek s jednotlivými cvičeními
-- Možnost přepínání zobrazení: týden/měsíc/rok
-- Vizualizace skutečného výkonu (bar chart) a cílů (line chart)
-
-v1.7a - v1.0
-- Předchozí verze
-"""
-
 import sys
 import json
 import uuid
@@ -39,8 +25,8 @@ from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
 
 # Verze aplikace
-VERSION = "1.6"
-VERSION_DATE = "26.10.2025"
+VERSION = "1.8h"
+VERSION_DATE = "14.11.2026"
 
 # Dark Theme Stylesheet
 DARK_THEME = """
@@ -2768,17 +2754,75 @@ class FitnessTrackerApp(QMainWindow):
             progress_bar = self.findChild(QProgressBar, f"progress_bar_{exercise_type}")
             if progress_bar and goal_to_date > 0:
                 percentage = int((total_performed / goal_to_date) * 100)
+                
+                # **NOVĚ: Povolit hodnoty nad 100% a zobrazit náskok**
+                progress_bar.setMaximum(max(100, percentage))  # Dynamické maximum
                 progress_bar.setValue(percentage)
-                progress_bar.setFormat(f"{total_performed}/{goal_to_date} ({percentage}%)")
+                
+                # Formát s náskopem/skluzem
+                diff = total_performed - goal_to_date
+                if diff > 0:
+                    progress_bar.setFormat(f"{total_performed}/{goal_to_date} ({percentage}%, +{diff})")
+                    # Zelená barva pro náskok
+                    progress_bar.setStyleSheet("""
+                        QProgressBar {
+                            text-align: center;
+                            border: 2px solid #0d7377;
+                            border-radius: 5px;
+                            background-color: #2d2d2d;
+                        }
+                        QProgressBar::chunk {
+                            background-color: #32c766;
+                        }
+                    """)
+                elif diff < 0:
+                    progress_bar.setFormat(f"{total_performed}/{goal_to_date} ({percentage}%, {diff})")
+                    # Červená barva pro skluz
+                    progress_bar.setStyleSheet("""
+                        QProgressBar {
+                            text-align: center;
+                            border: 2px solid #0d7377;
+                            border-radius: 5px;
+                            background-color: #2d2d2d;
+                        }
+                        QProgressBar::chunk {
+                            background-color: #ff6b6b;
+                        }
+                    """)
+                else:
+                    progress_bar.setFormat(f"{total_performed}/{goal_to_date} ({percentage}%)")
+                    # Žlutá barva pro přesné splnění
+                    progress_bar.setStyleSheet("""
+                        QProgressBar {
+                            text-align: center;
+                            border: 2px solid #0d7377;
+                            border-radius: 5px;
+                            background-color: #2d2d2d;
+                        }
+                        QProgressBar::chunk {
+                            background-color: #FFD700;
+                        }
+                    """)
             elif progress_bar:
                 progress_bar.setValue(0)
                 progress_bar.setFormat("Žádný cíl")
+                progress_bar.setStyleSheet("""
+                    QProgressBar {
+                        text-align: center;
+                        border: 2px solid #0d7377;
+                        border-radius: 5px;
+                        background-color: #2d2d2d;
+                    }
+                    QProgressBar::chunk {
+                        background-color: #3d3d3d;
+                    }
+                """)
         
         except Exception as e:
             print(f"Chyba v update_detailed_overview pro {exercise_type}: {e}")
             import traceback
             traceback.print_exc()
-    
+
     
     def show_yearly_summary(self, exercise_type, selected_year, today):
         """Zobrazí roční souhrn pro jiný rok než aktuální"""
@@ -2867,8 +2911,50 @@ class FitnessTrackerApp(QMainWindow):
             # Progress bar
             progress_bar = self.findChild(QProgressBar, f"progress_bar_{exercise_type}")
             if progress_bar:
+                # **NOVĚ: Povolit hodnoty nad 100%**
+                progress_bar.setMaximum(max(100, percentage))
                 progress_bar.setValue(percentage)
-                progress_bar.setFormat(f"{total_performed}/{total_goal} ({percentage}%)")
+                
+                # Formát s náskopem/skluzem
+                if diff > 0:
+                    progress_bar.setFormat(f"{total_performed}/{total_goal} ({percentage}%, +{diff})")
+                    progress_bar.setStyleSheet("""
+                        QProgressBar {
+                            text-align: center;
+                            border: 2px solid #0d7377;
+                            border-radius: 5px;
+                            background-color: #2d2d2d;
+                        }
+                        QProgressBar::chunk {
+                            background-color: #32c766;
+                        }
+                    """)
+                elif diff < 0:
+                    progress_bar.setFormat(f"{total_performed}/{total_goal} ({percentage}%, {diff})")
+                    progress_bar.setStyleSheet("""
+                        QProgressBar {
+                            text-align: center;
+                            border: 2px solid #0d7377;
+                            border-radius: 5px;
+                            background-color: #2d2d2d;
+                        }
+                        QProgressBar::chunk {
+                            background-color: #ff6b6b;
+                        }
+                    """)
+                else:
+                    progress_bar.setFormat(f"{total_performed}/{total_goal} ({percentage}%)")
+                    progress_bar.setStyleSheet("""
+                        QProgressBar {
+                            text-align: center;
+                            border: 2px solid #0d7377;
+                            border-radius: 5px;
+                            background-color: #2d2d2d;
+                        }
+                        QProgressBar::chunk {
+                            background-color: #FFD700;
+                        }
+                    """)
         
         except Exception as e:
             print(f"Chyba v show_yearly_summary pro {exercise_type}: {e}")
