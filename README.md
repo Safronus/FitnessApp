@@ -122,6 +122,12 @@ Všechna data se ukládají lokálně v souboru `fitness_data.json` ve stejném 
 
 
 ## 📝 Changelog
+### v1.8f (14.11.2025)
+- **Vylepšení**: Přehled pro jiné roky než aktuální nyní zobrazuje roční souhrn
+  - **Aktuální rok**: DNES/TÝDEN/MĚSÍC/ZBYTEK ROKU
+  - **Jiné roky**: Roční souhrn (celkový výkon, dní s cvičením, průměr, % splnění)
+  - Status podle typu roku: 🏁 Uzavřený / 🔮 Budoucí / 📊 Aktuální
+
 ### v1.8e (14.11.2025)
 - **Oprava**: Vytváření nových roků nyní funguje správně
   - Nový rok se vytvoří **bez záznamů** (čistý start)

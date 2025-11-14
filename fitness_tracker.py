@@ -2621,47 +2621,20 @@ class FitnessTrackerApp(QMainWindow):
             traceback.print_exc()
 
     def update_detailed_overview(self, exercise_type, selected_year):
-        """Aktualizuje detailní přehled: Den, Týden, Měsíc, Zbytek roku"""
+        """Aktualizuje detailní přehled: Den, Týden, Měsíc, Zbytek roku (pro aktuální rok) nebo Roční souhrn (pro jiné roky)"""
         try:
             today = datetime.now().date()
             today_str = today.strftime("%Y-%m-%d")
+            current_year = today.year
             
-            # **OPRAVA: Pro vybraný rok != aktuální rok**
-            if selected_year == today.year:
-                current_date = today
-                current_date_str = today_str
-            else:
-                # Pro jiný rok: najdi poslední den s daty nebo použij 31.12. (nebo dnešek pro budoucí roky)
-                last_date_with_data = None
-                year_end = datetime(selected_year, 12, 31).date()
-                
-                # Projdi všechny dny s daty v tomto roce
-                for date_str in sorted(self.data["workouts"].keys(), reverse=True):
-                    date_obj = datetime.strptime(date_str, "%Y-%m-%d").date()
-                    if date_obj.year == selected_year:
-                        if exercise_type in self.data["workouts"][date_str]:
-                            last_date_with_data = date_obj
-                            break
-                
-                # **OPRAVA: Pro budoucí roky bez dat, použij start_date**
-                if not last_date_with_data:
-                    settings = self.get_year_settings(selected_year)
-                    settings_start_date = datetime.strptime(settings.get("start_date", f"{selected_year}-01-01"), "%Y-%m-%d").date()
-                    
-                    if selected_year > today.year:
-                        # Budoucí rok - použij start_date nebo dnešek
-                        current_date = max(settings_start_date, today) if settings_start_date <= today else settings_start_date
-                    else:
-                        # Minulý rok bez dat - použij konec roku
-                        current_date = min(year_end, today)
-                else:
-                    current_date = min(last_date_with_data, year_end)
-                
-                # Ale nikdy nepřekročit dnešek
-                if current_date > today:
-                    current_date = today
-                
-                current_date_str = current_date.strftime("%Y-%m-%d")
+            # **NOVĚ: Pro jiný rok než aktuální zobraz ROČNÍ SOUHRN**
+            if selected_year != current_year:
+                self.show_yearly_summary(exercise_type, selected_year, today)
+                return
+            
+            # **PRO AKTUÁLNÍ ROK: Zobraz normální DNES/TÝDEN/MĚSÍC/ZBYTEK ROKU**
+            current_date = today
+            current_date_str = today_str
             
             # ====================  DNES ====================
             day_goal = self.calculate_goal(exercise_type, current_date_str)
@@ -2722,6 +2695,7 @@ class FitnessTrackerApp(QMainWindow):
             week_section = self.findChild(QLabel, f"week_section_{exercise_type}")
             if week_section:
                 week_section.setText(f"📆 TÝDEN ({week_start.strftime('%d.%m.')} - {week_end.strftime('%d.%m.')}): {week_performed}/{week_goal} {week_status}")
+                week_section.setStyleSheet("font-size: 12px; color: #FFD700; padding: 5px;")
             
             # ==================== MĚSÍC ====================
             month_start = datetime(current_date.year, current_date.month, 1).date()
@@ -2764,20 +2738,12 @@ class FitnessTrackerApp(QMainWindow):
             month_section = self.findChild(QLabel, f"month_section_{exercise_type}")
             if month_section:
                 month_section.setText(f"📊 MĚSÍC ({current_date.strftime('%B %Y')}): {month_performed}/{month_goal} {month_status}")
+                month_section.setStyleSheet("font-size: 12px; color: #90EE90; padding: 5px;")
             
             # ==================== ZBYTEK ROKU ====================
             year_end = datetime(selected_year, 12, 31).date()
             tomorrow = current_date + timedelta(days=1)
-            
-            # Pro budoucí roky zobraz celý rok
-            if selected_year > today.year:
-                rest_start = settings_start_date
-            else:
-                rest_start = tomorrow if tomorrow <= year_end else year_end
-            
-            # Nepřekračovat dnešek
-            if rest_start > today:
-                rest_start = today
+            rest_start = tomorrow if tomorrow <= year_end else year_end
             
             rest_goal = 0
             current = rest_start
@@ -2793,12 +2759,8 @@ class FitnessTrackerApp(QMainWindow):
             
             year_rest_section = self.findChild(QLabel, f"year_rest_section_{exercise_type}")
             if year_rest_section:
-                if selected_year < today.year:
-                    year_rest_section.setText(f"🏁 ZBYTEK ROKU: Rok {selected_year} ukončen")
-                elif selected_year == today.year:
-                    year_rest_section.setText(f"⏳ ZBYTEK ROKU: {rest_goal} ({days_left} dní do {year_end.strftime('%d.%m.%Y')})")
-                else:
-                    year_rest_section.setText(f"🔮 ZBYTEK ROKU: Budoucí rok {selected_year}")
+                year_rest_section.setText(f"⏳ ZBYTEK ROKU: {rest_goal} ({days_left} dní do {year_end.strftime('%d.%m.%Y')})")
+                year_rest_section.setStyleSheet("font-size: 12px; color: #87CEEB; padding: 5px;")
             
             # ==================== PROGRESS BAR ====================
             total_performed, total_yearly_goal, goal_to_date = self.calculate_yearly_progress(exercise_type, selected_year)
@@ -2816,7 +2778,102 @@ class FitnessTrackerApp(QMainWindow):
             print(f"Chyba v update_detailed_overview pro {exercise_type}: {e}")
             import traceback
             traceback.print_exc()
-
+    
+    
+    def show_yearly_summary(self, exercise_type, selected_year, today):
+        """Zobrazí roční souhrn pro jiný rok než aktuální"""
+        try:
+            # Získat nastavení roku
+            settings = self.get_year_settings(selected_year)
+            settings_start_date = datetime.strptime(settings.get("start_date", f"{selected_year}-01-01"), "%Y-%m-%d").date()
+            year_end = datetime(selected_year, 12, 31).date()
+            
+            # Pro budoucí rok omezit na dnešek
+            if year_end > today:
+                year_end = today
+            
+            # Spočítat celkové statistiky
+            total_performed = 0
+            total_goal = 0
+            days_with_workout = 0
+            
+            current = settings_start_date
+            while current <= year_end:
+                date_str = current.strftime("%Y-%m-%d")
+                
+                # Cíl
+                goal = self.calculate_goal(exercise_type, date_str)
+                if isinstance(goal, int):
+                    total_goal += goal
+                
+                # Výkon
+                if date_str in self.data["workouts"] and exercise_type in self.data["workouts"][date_str]:
+                    records = self.data["workouts"][date_str][exercise_type]
+                    if isinstance(records, list):
+                        perf = sum(r["value"] for r in records)
+                        if perf > 0:
+                            days_with_workout += 1
+                        total_performed += perf
+                    elif isinstance(records, dict):
+                        perf = records.get("value", 0)
+                        if perf > 0:
+                            days_with_workout += 1
+                        total_performed += perf
+                
+                current += timedelta(days=1)
+            
+            # Vypočítat průměr
+            total_days = (year_end - settings_start_date).days + 1
+            avg_per_day = total_performed / total_days if total_days > 0 else 0
+            
+            # Procento splnění
+            percentage = int((total_performed / total_goal) * 100) if total_goal > 0 else 0
+            diff = total_performed - total_goal
+            diff_status = f"(+{diff})" if diff >= 0 else str(diff)
+            diff_color = "#32c766" if diff >= 0 else "#ff6b6b"
+            
+            # Status podle roku
+            if selected_year < today.year:
+                year_status = "🏁 UZAVŘENÝ ROK"
+                year_color = "#87CEEB"
+            elif selected_year > today.year:
+                year_status = "🔮 BUDOUCÍ ROK"
+                year_color = "#FFD700"
+            else:
+                year_status = "📊 AKTUÁLNÍ ROK"
+                year_color = "#32c766"
+            
+            # Aktualizovat UI
+            today_section = self.findChild(QLabel, f"today_section_{exercise_type}")
+            if today_section:
+                today_section.setText(f"{year_status} {selected_year}")
+                today_section.setStyleSheet(f"font-size: 14px; font-weight: bold; color: {year_color}; padding: 5px;")
+            
+            week_section = self.findChild(QLabel, f"week_section_{exercise_type}")
+            if week_section:
+                week_section.setText(f"📈 Celkový výkon: {total_performed}/{total_goal} {diff_status}")
+                week_section.setStyleSheet(f"font-size: 12px; color: {diff_color}; padding: 5px;")
+            
+            month_section = self.findChild(QLabel, f"month_section_{exercise_type}")
+            if month_section:
+                month_section.setText(f"📅 Dní s cvičením: {days_with_workout} / {total_days} (průměr: {avg_per_day:.1f}/den)")
+                month_section.setStyleSheet("font-size: 12px; color: #90EE90; padding: 5px;")
+            
+            year_rest_section = self.findChild(QLabel, f"year_rest_section_{exercise_type}")
+            if year_rest_section:
+                year_rest_section.setText(f"✅ Splnění cíle: {percentage}% ({settings_start_date.strftime('%d.%m.')} - {year_end.strftime('%d.%m.%Y')})")
+                year_rest_section.setStyleSheet("font-size: 12px; color: #FFD700; padding: 5px;")
+            
+            # Progress bar
+            progress_bar = self.findChild(QProgressBar, f"progress_bar_{exercise_type}")
+            if progress_bar:
+                progress_bar.setValue(percentage)
+                progress_bar.setFormat(f"{total_performed}/{total_goal} ({percentage}%)")
+        
+        except Exception as e:
+            print(f"Chyba v show_yearly_summary pro {exercise_type}: {e}")
+            import traceback
+            traceback.print_exc()
 
 
     def refresh_exercise_calendar(self, exercise_type):
