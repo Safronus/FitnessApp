@@ -1785,7 +1785,7 @@ class FitnessTrackerApp(QMainWindow):
         # Získání dat podle módu
         today = datetime.now().date()
         
-        # **NOVĚ: Získat start_date pro aktuální/vybraný rok**
+        # **OPRAVA: Získat vybraný rok z selektoru**
         if exercise_type in self.exercise_year_selectors:
             selector = self.exercise_year_selectors[exercise_type]
             if selector and selector.currentText():
@@ -1795,36 +1795,60 @@ class FitnessTrackerApp(QMainWindow):
         else:
             selected_year = today.year
         
+        # **OPRAVA: Načíst start_date pro vybraný rok (ne jen aktuální)**
         year_settings = self.get_year_settings(selected_year)
         settings_start_date_str = year_settings.get("start_date", f"{selected_year}-01-01")
         settings_start_date = datetime.strptime(settings_start_date_str, "%Y-%m-%d").date()
         
         if mode == "weekly":
-            start_date = today - timedelta(days=6)
-            end_date = today
+            # **OPRAVA: Pro vybraný rok != aktuální rok, zobraz poslední týden TOHOTO roku**
+            if selected_year == today.year:
+                end_date = today
+                start_date = today - timedelta(days=6)
+            else:
+                # Pro starší/budoucí rok: zobraz poslední týden roku nebo od start_date
+                end_date = datetime(selected_year, 12, 31).date()
+                start_date = end_date - timedelta(days=6)
             
-            # **NOVĚ: Respektovat start_date - pokud týden začíná před start_date**
+            # Respektovat start_date - pokud týden začíná před start_date
             if start_date < settings_start_date:
                 start_date = settings_start_date
+            
+            # Zajistit, že end_date nepřesáhne dnešek
+            if end_date > today:
+                end_date = today
             
             date_range = [start_date + timedelta(days=i) for i in range((end_date - start_date).days + 1)]
             title = f"Poslední týden ({start_date.strftime('%d.%m.')} - {end_date.strftime('%d.%m.%Y')})"
             xlabel_format = "%a\n%d.%m"
         
         elif mode == "monthly":
-            start_date = datetime(today.year, today.month, 1).date()
-            if today.month == 12:
-                next_month = datetime(today.year + 1, 1, 1).date()
+            # **OPRAVA: Pro vybraný rok != aktuální rok, zobraz poslední měsíc TOHOTO roku**
+            if selected_year == today.year:
+                current_month = today.month
+                current_year = today.year
             else:
-                next_month = datetime(today.year, today.month + 1, 1).date()
+                # Pro starší/budoucí rok: zobraz prosinec nebo poslední měsíc se záznamy
+                current_month = 12
+                current_year = selected_year
+            
+            start_date = datetime(current_year, current_month, 1).date()
+            if current_month == 12:
+                next_month = datetime(current_year + 1, 1, 1).date()
+            else:
+                next_month = datetime(current_year, current_month + 1, 1).date()
             end_date = next_month - timedelta(days=1)
             
-            # **NOVĚ: Respektovat start_date - pokud měsíc začíná před start_date**
+            # Respektovat start_date
             if start_date < settings_start_date:
                 start_date = settings_start_date
             
+            # Zajistit, že end_date nepřesáhne dnešek
+            if end_date > today:
+                end_date = today
+            
             date_range = [start_date + timedelta(days=i) for i in range((end_date - start_date).days + 1)]
-            title = f"{today.strftime('%B %Y')} (od {start_date.strftime('%d.%m.')})"
+            title = f"{start_date.strftime('%B %Y')} (od {start_date.strftime('%d.%m.')})"
             xlabel_format = "%d.%m"
         
         else:  # yearly
@@ -1882,7 +1906,7 @@ class FitnessTrackerApp(QMainWindow):
             # Čárový graf pro cíle
             ax.plot(dates, goals, label='Cíl', color='#FFD700', linewidth=2, marker='o', markersize=3)
             
-            # **NOVĚ: Označení začátku cvičení (pokud je v zobrazeném rozsahu)**
+            # **Označení začátku cvičení (pokud je v zobrazeném rozsahu)**
             if settings_start_date in dates:
                 ax.axvline(x=settings_start_date, color='#32c766', linestyle='--', linewidth=2, alpha=0.7, label='Začátek cvičení')
                 
