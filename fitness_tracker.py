@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
     QTableWidgetItem, QGroupBox, QFormLayout, QHeaderView, QMessageBox,
     QGridLayout, QComboBox, QScrollArea, QFrame, QProgressBar, QTextEdit,
     QDialog, QListWidget, QListWidgetItem, QInputDialog, QCheckBox, QFileDialog,
-    QTreeWidget, QTreeWidgetItem, QLineEdit, QTextBrowser  # ← PŘIDÁNO
+    QTreeWidget, QTreeWidgetItem, QLineEdit, QTextBrowser, QAbstractItemView  # ← PŘIDÁNO
 )
 
 from PySide6.QtCore import Qt, QDate, QTimer
@@ -3810,15 +3810,14 @@ class FitnessTrackerApp(QMainWindow):
         self.update_performance_chart(exercisetype, "weekly")
 
     def update_performance_chart(self, exercise_type, mode):
-        """Aktualizuje graf výkonu podle zvoleného módu (weekly/monthly/yearly)
-        a vyznačí den začátku cvičení s popiskem.
-        Minimal-change: zachovává stávající struktury (chart_figures, chart_canvases, chart_mode_buttons, exercise_year_selectors).
+        """Aktualizuje graf výkonu (weekly/monthly/yearly) a vyznačí den začátku cvičení.
+        Per-exercise start: year_settings.exercise_start_dates › exercises[...].start_dates › year_settings.start_date › YYYY-01-01.
         """
-        # Ověření figure
+        # Obrana: musíme mít figure
         if not hasattr(self, 'chart_figures') or exercise_type not in self.chart_figures:
             return
     
-        # Uložit mód + nastavit toggle tlačítka
+        # Ulož mód + případné přepnutí toggle tlačítek (bez změny stávajícího UI)
         if not hasattr(self, 'chart_modes'):
             self.chart_modes = {}
         self.chart_modes[exercise_type] = mode
@@ -3833,80 +3832,88 @@ class FitnessTrackerApp(QMainWindow):
         fig.clear()
         ax = fig.add_subplot(111)
     
-        # Dark theme ladění os
+        # Dark-theme
         ax.set_facecolor('#1e1e1e')
         ax.tick_params(axis='x', colors='#e0e0e0')
         ax.tick_params(axis='y', colors='#e0e0e0')
     
-        # Identita cvičení a rok
+        # Titulek
         cfg = self.get_exercise_config(exercise_type) if hasattr(self, 'get_exercise_config') else {"name": exercise_type}
-        ax.set_title(f"Výkon – {cfg.get('name', exercise_type)}", color='#e0e0e0')
+        ax.set_title(f"Výkon – {cfg.get('name', exercise_type)}", color='#e0e0e0', fontsize=14)
     
         today = datetime.now().date()
     
-        # Zvolený rok z per-exercise comboboxu
+        # Zvolený rok z per-exercise comboboxu (beze změny stávající logiky)
         if hasattr(self, 'exercise_year_selectors') and exercise_type in self.exercise_year_selectors \
            and self.exercise_year_selectors[exercise_type].currentText():
             selected_year = int(self.exercise_year_selectors[exercise_type].currentText())
         else:
             selected_year = today.year
     
-        # Roková nastavení + den začátku cvičení z nastavení roku
-        settings = self.get_year_settings(selected_year)
-        # Fallback: pokud v nastavení není, ber 1.1. daného roku
-        settings_start_date = datetime.strptime(settings.get("start_date", f"{selected_year}-01-01"), "%Y-%m-%d").date()
+        # ---- Rozhodnutí o PER-EXERCISE startu ----
+        # 1) year_settings.exercise_start_dates[exercise_type]
+        start_date = None
+        ys = self.get_year_settings(selected_year) if hasattr(self, 'get_year_settings') else {}
+        ex_starts = (ys.get("exercise_start_dates") or {}) if isinstance(ys, dict) else {}
+        ex_start_str = ex_starts.get(exercise_type)
     
-        # Rozsah dat podle módu
+        if ex_start_str:
+            try:
+                start_date = datetime.strptime(ex_start_str, "%Y-%m-%d").date()
+            except Exception:
+                start_date = None
+    
+        # 2) exercises[exercise_type].start_dates[str(selected_year)]
+        if start_date is None:
+            try:
+                ex_def = (self.data.get("exercises", {}) or {}).get(exercise_type, {})
+                per_year = (ex_def.get("start_dates") or {})
+                ex2_str = per_year.get(str(selected_year))
+                if ex2_str:
+                    start_date = datetime.strptime(ex2_str, "%Y-%m-%d").date()
+            except Exception:
+                start_date = None
+    
+        # 3) year_settings.start_date
+        if start_date is None:
+            try:
+                ys_start = (ys or {}).get("start_date")
+                if ys_start:
+                    start_date = datetime.strptime(ys_start, "%Y-%m-%d").date()
+            except Exception:
+                start_date = None
+    
+        # 4) fallback
+        if start_date is None:
+            start_date = datetime(selected_year, 1, 1).date()
+    
+        # ---- Určení zobrazovaného rozsahu podle módu ----
         if mode == "weekly":
-            # Týden = 7 posledních dní v rámci zvoleného roku (nepřekročit dnešek ani hranice roku)
-            if selected_year == today.year:
-                week_end = today
-            else:
-                week_end = min(datetime(selected_year, 12, 31).date(), today)
-            week_start = max(week_end - timedelta(days=6), datetime(selected_year, 1, 1).date())
-            # Respektovat start cvičení
-            if week_start < settings_start_date:
-                week_start = settings_start_date
-            if week_end > today:
-                week_end = today
-    
-            range_start, range_end = week_start, week_end
-            title = f"Týden končící {range_end.strftime('%d.%m.%Y')}"
+            # posledních 7 dní v rámci roku, respektovat today a hranice + start
+            end_date = today if selected_year == today.year else min(datetime(selected_year, 12, 31).date(), today)
+            start_r = max(end_date - timedelta(days=6), datetime(selected_year, 1, 1).date(), start_date)
+            range_start, range_end = start_r, end_date
             xlabel_format = "%d.%m"
     
         elif mode == "monthly":
-            # Měsíc = aktuální měsíc (pokud je to letos), jinak prosinec zvoleného roku
+            # aktuální měsíc (je-li to tento rok), jinak prosinec, respektovat start + today
             month = today.month if selected_year == today.year else 12
             month_start = datetime(selected_year, month, 1).date()
-            # poslední den měsíce
             next_month = datetime(selected_year + (1 if month == 12 else 0), 1 if month == 12 else month + 1, 1).date()
             month_end = next_month - timedelta(days=1)
-    
-            # Respektovat začátek a dnešek
-            if month_start < settings_start_date:
-                month_start = settings_start_date
-            if month_end > today:
-                month_end = today
-    
+            month_start = max(month_start, start_date)
+            month_end = min(month_end, today)
             range_start, range_end = month_start, month_end
-            title = f"{month_start.strftime('%B %Y')} (od {month_start.strftime('%d.%m.')})"
             xlabel_format = "%d.%m"
     
         else:  # "yearly"
-            # Rok = 1.1.–31.12. (nebo do dneška) s respektem k začátku
-            if settings_start_date.year == selected_year:
-                year_start = settings_start_date
-            else:
-                year_start = datetime(selected_year, 1, 1).date()
+            year_start = max(datetime(selected_year, 1, 1).date(), start_date)
             year_end = min(datetime(selected_year, 12, 31).date(), today)
-    
             range_start, range_end = year_start, year_end
-            title = f"Rok {selected_year}"
             xlabel_format = "%d.%m."
     
-        # Sestavit datové řady
+        # Když není co zobrazit:
         if range_end < range_start:
-            # Nemáme co zobrazit
             ax.text(0.5, 0.5, 'Žádná data k zobrazení', ha='center', va='center',
                     transform=ax.transAxes, fontsize=14, color='#a0a0a0')
             fig.tight_layout()
@@ -3914,13 +3921,13 @@ class FitnessTrackerApp(QMainWindow):
                 self.chart_canvases[exercise_type].draw()
             return
     
+        # Datové řady
         dates = [range_start + timedelta(days=i) for i in range((range_end - range_start).days + 1)]
-        performed = []
-        goals = []
+        performed, goals = [], []
     
         for d in dates:
             ds = d.strftime("%Y-%m-%d")
-            # Výkony za den
+            # Výkon
             v = 0
             if ds in self.data.get('workouts', {}) and exercise_type in self.data['workouts'][ds]:
                 recs = self.data['workouts'][ds][exercise_type]
@@ -3930,53 +3937,39 @@ class FitnessTrackerApp(QMainWindow):
                     v = recs.get("value", 0)
             performed.append(v)
     
-            # Cíl za den
+            # Cíl
             g = self.calculate_goal(exercise_type, ds)
             if not isinstance(g, int):
                 g = int(g) if g else 0
             goals.append(g)
     
-        if not dates:
-            ax.text(0.5, 0.5, 'Žádná data k zobrazení', ha='center', va='center',
-                    transform=ax.transAxes, fontsize=14, color='#a0a0a0')
+        # Vykreslení
+        bar_w = 0.8 if mode == "weekly" else 0.6
+        ax.bar(dates, performed, width=bar_w, label='Výkon', color='#0d7377', alpha=0.8)
+        ax.plot(dates, goals, label='Cíl', color='#FFD700', linewidth=2, marker='o', markersize=3)
+    
+        # Označení začátku (pokud spadá do rozsahu)
+        if start_date >= dates[0] and start_date <= dates[-1]:
+            ax.axvline(x=start_date, color='#32c766', linestyle='--', linewidth=2, alpha=0.7, label='Začátek cvičení')
+            y_max = max(max(performed) if performed else 0, max(goals) if goals else 0)
+            if y_max > 0:
+                ax.text(start_date, y_max * 1.05, f"Start {start_date.strftime('%d.%m.')}",
+                        rotation=90, va='bottom', ha='right', fontsize=9, color='#32c766', weight='bold')
+    
+        # Osy / popisky
+        if mode == "yearly":
+            num_dates = len(dates)
+            step = max(1, num_dates // 12)
+            ax.set_xticks([dates[i] for i in range(0, num_dates, step)])
+            ax.set_xticklabels([dates[i].strftime(xlabel_format) for i in range(0, num_dates, step)], rotation=0)
         else:
-            # Sloupce = výkon
-            bar_width = 0.8 if mode == "weekly" else 0.6
-            ax.bar(dates, performed, width=bar_width, label='Výkon', color='#0d7377', alpha=0.8)
+            ax.set_xticks(dates)
+            ax.set_xticklabels([d.strftime(xlabel_format) for d in dates],
+                               rotation=45 if mode == "monthly" else 0)
     
-            # Čára = cíl
-            ax.plot(dates, goals, label='Cíl', color='#FFD700', linewidth=2, marker='o', markersize=3)
-    
-            # Svislá čára dne začátku cvičení (pokud je v zobrazeném rozsahu)
-            if settings_start_date >= dates[0] and settings_start_date <= dates[-1]:
-                ax.axvline(x=settings_start_date, color='#32c766', linestyle='--', linewidth=2, alpha=0.7, label='Začátek cvičení')
-                # Popisek nad čárou (pokud má smysl)
-                y_max = max(max(performed) if performed else 0, max(goals) if goals else 0)
-                if y_max > 0:
-                    ax.text(
-                        settings_start_date, y_max * 1.05,
-                        f"Start {settings_start_date.strftime('%d.%m.')}",
-                        rotation=90, va='bottom', ha='right',
-                        fontsize=9, color='#32c766', weight='bold'
-                    )
-    
-            # Osy + popisky
-            ax.set_title(title, fontsize=14, color='#e0e0e0')
-    
-            # X-osy – rozumné množství ticků
-            if mode == "yearly":
-                num_dates = len(dates)
-                step = max(1, num_dates // 12)  # cca 12 popisků přes rok
-                ax.set_xticks([dates[i] for i in range(0, num_dates, step)])
-                ax.set_xticklabels([dates[i].strftime(xlabel_format) for i in range(0, num_dates, step)], rotation=0)
-            else:
-                ax.set_xticks(dates)
-                ax.set_xticklabels([d.strftime(xlabel_format) for d in dates], rotation=45 if mode == "monthly" else 0)
-    
-            # Legenda – čitelná na tmavém pozadí
-            legend = ax.legend(loc='upper left', fontsize=9, facecolor='#2d2d2d', edgecolor='#3d3d3d')
-            for text in legend.get_texts():
-                text.set_color('#e0e0e0')
+        leg = ax.legend(loc='upper left', fontsize=9, facecolor='#2d2d2d', edgecolor='#3d3d3d')
+        for t in leg.get_texts():
+            t.set_color('#e0e0e0')
     
         fig.tight_layout()
         if hasattr(self, 'chart_canvases') and exercise_type in self.chart_canvases:
@@ -4551,114 +4544,118 @@ class FitnessTrackerApp(QMainWindow):
             self.show_message("Upraveno", f"Výkon upraven z {old_value} na {new_value}")
 
     def update_exercise_tab(self, exercise_type):
-        """Aktualizuje statistiky a tree se sbalovacími dny"""
+        """Aktualizuje statistiky a strom záznamů daného cvičení.
+        Minimal-change: přidáno uchování výběru (ID záznamů) přes refresh, aby se výběr „nesamo-odznačoval“.
+        """
         try:
             if exercise_type not in self.exercise_year_selectors:
                 return
-            
             selector = self.exercise_year_selectors[exercise_type]
             if not selector or not selector.currentText():
                 return
-            
+    
             selected_year = int(selector.currentText())
-            
+    
+            # Přehledy
             self.update_detailed_overview(exercise_type, selected_year)
-            
+    
             tree = self.findChild(QTreeWidget, f"tree_{exercise_type}")
-            if tree:
-                # NOVÉ: Uložit stav rozbalení
-                expanded_dates = set()
-                for i in range(tree.topLevelItemCount()):
-                    item = tree.topLevelItem(i)
-                    if item.isExpanded():
-                        date_text = item.text(0)
-                        date_str = date_text.split(' ', 1)[1] if ' ' in date_text else date_text
-                        expanded_dates.add(date_str)
-                
-                tree.clear()
-                
-                days_data = {}
-                for date_str in self.data['workouts'].keys():
-                    workout_year = int(date_str.split('-')[0])
-                    if workout_year == selected_year and exercise_type in self.data['workouts'][date_str]:
-                        records = self.data['workouts'][date_str][exercise_type]
-                        
-                        if date_str not in days_data:
-                            days_data[date_str] = []
-                        
-                        if isinstance(records, list):
-                            days_data[date_str].extend(records)
-                        elif isinstance(records, dict):
-                            days_data[date_str].append(records)
-                
-                sorted_dates = sorted(days_data.keys(), reverse=True)
-                
-                for date_str in sorted_dates:
-                    records = days_data[date_str]
-                    
-                    day_item = QTreeWidgetItem(tree)
-                    
-                    total_day_value = sum(r['value'] for r in records)
-                    record_count = len(records)
-                    
-                    goal = self.calculate_goal(exercise_type, date_str)
-                    if not isinstance(goal, int):
-                        goal = int(goal) if goal else 0
-                    
-                    percent = (total_day_value / goal * 100) if goal > 0 else 0
-                    
-                    if percent >= 100:
-                        status_icon = "✅"
-                        color = QColor(0, 100, 0)
-                    elif percent >= 50:
-                        status_icon = "⏳"
-                        color = QColor(255, 215, 0)
-                    else:
-                        status_icon = "❌"
-                        color = QColor(255, 0, 0)
-                    
-                    day_item.setText(0, f"{status_icon} {date_str}")
-                    day_item.setText(1, f"{total_day_value} ({record_count}×)")
-                    day_item.setText(2, f"{percent:.0f}%")
-                    day_item.setForeground(0, QColor(255, 255, 255))
-                    day_item.setForeground(1, QColor(200, 200, 200))
-                    day_item.setBackground(2, color)
-                    day_item.setForeground(2, QColor(255, 255, 255))
-                    
-                    # NOVÉ: Obnovit stav rozbalení
-                    day_item.setExpanded(date_str in expanded_dates)
-                    
-                    records_sorted = sorted(records, key=lambda x: x.get('timestamp', ''))
-                    
-                    for record in records_sorted:
-                        value = record['value']
-                        timestamp = record.get('timestamp', 'N/A')
-                        time_only = timestamp.split(' ')[1] if ' ' in timestamp else timestamp
-                        record_id = record.get('id', str(uuid.uuid4()))
-                        
-                        record_item = QTreeWidgetItem(day_item)
-                        
-                        record_item.setText(0, f"  📝 Záznam")
-                        record_item.setText(1, f"{time_only} | {value}")
-                        
-                        record_percent = (value / goal * 100) if goal > 0 else 0
-                        record_item.setText(2, f"{record_percent:.0f}%")
-                        
-                        if record_percent >= 100:
-                            record_item.setBackground(2, QColor(0, 100, 0))
-                        elif record_percent >= 75:
-                            record_item.setBackground(2, QColor(144, 238, 144))
-                        elif record_percent >= 50:
-                            record_item.setBackground(2, QColor(255, 215, 0))
-                        elif record_percent >= 25:
-                            record_item.setBackground(2, QColor(255, 140, 0))
-                        else:
-                            record_item.setBackground(2, QColor(255, 0, 0))
-                        
-                        record_item.setForeground(2, QColor(255, 255, 255))
-                        
-                        record_item.setData(3, Qt.UserRole, {'date': date_str, 'record_id': record_id, 'exercise': exercise_type})
-        
+            if not tree:
+                return
+    
+            # --- UCHOVÁNÍ VÝBĚRU ---
+            preserved = set()
+            selected_items = tree.selectedItems()
+            for it in selected_items:
+                payload = it.data(3, Qt.UserRole)
+                if isinstance(payload, dict) and 'date' in payload and 'record_id' in payload:
+                    preserved.add((payload['date'], payload['record_id']))
+                else:
+                    # Top-level den → projdi děti
+                    for i in range(it.childCount()):
+                        ch = it.child(i)
+                        p2 = ch.data(3, Qt.UserRole)
+                        if isinstance(p2, dict) and 'date' in p2 and 'record_id' in p2:
+                            preserved.add((p2['date'], p2['record_id']))
+    
+            # Uchování rozbalených dnů
+            expanded_dates = set()
+            for i in range(tree.topLevelItemCount()):
+                item = tree.topLevelItem(i)
+                if item and item.isExpanded():
+                    txt = item.text(0)
+                    date_str = txt.split(' ', 1)[1] if ' ' in txt else txt
+                    expanded_dates.add(date_str)
+    
+            tree.blockSignals(True)
+            tree.clear()
+            tree.setSelectionMode(QAbstractItemView.ExtendedSelection)
+            tree.setSelectionBehavior(QAbstractItemView.SelectItems)
+    
+            # Data po dnech (jen zvolený rok)
+            days_data: dict[str, list[dict]] = {}
+            for ds, perday in self.data.get('workouts', {}).items():
+                year_here = int(ds.split('-')[0]) if '-' in ds else None
+                if year_here != selected_year:
+                    continue
+                if exercise_type in perday:
+                    recs = perday[exercise_type]
+                    if isinstance(recs, list):
+                        days_data.setdefault(ds, []).extend(recs)
+                    elif isinstance(recs, dict):
+                        days_data.setdefault(ds, []).append(recs)
+    
+            sorted_dates = sorted(days_data.keys(), reverse=True)
+    
+            # Naplnění stromu
+            for date_str in sorted_dates:
+                records = days_data[date_str]
+                day_item = QTreeWidgetItem(tree)
+    
+                total_day_value = sum(r.get('value', 0) for r in records)
+                record_count = len(records)
+                goal = self.calculate_goal(exercise_type, date_str)
+                if not isinstance(goal, int):
+                    goal = int(goal) if goal else 0
+    
+                percent = (total_day_value / goal * 100) if goal > 0 else 0
+                if percent >= 100:
+                    status_icon = "✅"; color = QColor(0, 100, 0)
+                elif percent >= 50:
+                    status_icon = "⏳"; color = QColor(255, 215, 0)
+                else:
+                    status_icon = "❌"; color = QColor(255, 0, 0)
+    
+                day_item.setText(0, f"{status_icon} {date_str}")
+                day_item.setText(1, f"{total_day_value} ({record_count}×)")
+                day_item.setText(2, f"{percent:.0f}%")
+                day_item.setForeground(0, QColor(255, 255, 255))
+                day_item.setForeground(1, QColor(200, 200, 200))
+                day_item.setBackground(2, color)
+                day_item.setForeground(2, QColor(255, 255, 255))
+                day_item.setExpanded(date_str in expanded_dates)
+    
+                # Děti (záznamy)
+                for record in sorted(records, key=lambda x: x.get('timestamp', '')):
+                    value = record.get('value', 0)
+                    timestamp = record.get('timestamp', 'N/A')
+                    time_only = timestamp.split(' ')[1] if ' ' in timestamp else timestamp
+                    record_id = record.get('id', '')
+    
+                    rec_item = QTreeWidgetItem(day_item)
+                    rec_item.setText(0, "")
+                    rec_item.setText(1, str(value))
+                    rec_item.setText(2, time_only)
+                    rec_item.setText(3, record_id)
+                    rec_item.setData(3, Qt.UserRole, {'date': date_str, 'record_id': record_id, 'exercise': exercise_type})
+    
+                    # Re-select po refreshi
+                    if (date_str, record_id) in preserved:
+                        rec_item.setSelected(True)
+    
+            tree.expandToDepth(0)
+            tree.blockSignals(False)
+    
         except Exception as e:
             print(f"Chyba při update_exercise_tab pro {exercise_type}: {e}")
             import traceback
