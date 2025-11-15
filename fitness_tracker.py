@@ -13,8 +13,9 @@ from PySide6.QtWidgets import (
     QTableWidgetItem, QGroupBox, QFormLayout, QHeaderView, QMessageBox,
     QGridLayout, QComboBox, QScrollArea, QFrame, QProgressBar, QTextEdit,
     QDialog, QListWidget, QListWidgetItem, QInputDialog, QCheckBox, QFileDialog,
-    QTreeWidget, QTreeWidgetItem, QLineEdit  # ← PŘIDÁNO
+    QTreeWidget, QTreeWidgetItem, QLineEdit, QTextBrowser  # ← PŘIDÁNO
 )
+
 from PySide6.QtCore import Qt, QDate, QTimer
 from PySide6.QtGui import QColor, QAction
 
@@ -635,34 +636,7 @@ class NewYearWizardDialog(QDialog):
         ]
         
         self.show_page(0)
-    
-    def create_welcome_page(self):
-        """Stránka 1: Uvítání"""
-        page = QWidget()
-        layout = QVBoxLayout(page)
         
-        title = QLabel(f"🎉 Vytvoření roku {self.year}")
-        title.setStyleSheet("font-size: 20px; font-weight: bold; color: #14919b;")
-        layout.addWidget(title)
-        
-        intro = QLabel(
-            f"Vítej v průvodci vytvořením nového roku!\n\n"
-            f"Tento wizard ti pomůže nastavit <b>optimální cíle</b> pro rok {self.year} "
-            f"na základě tvého fitness levelu, dostupného času a cílů.\n\n"
-            f"<b>Proces má 5 kroků:</b>\n"
-            f"1️⃣ Uvítání a přehled\n"
-            f"2️⃣ Analýza předchozího roku\n"
-            f"3️⃣ Výběr fitness levelu\n"
-            f"4️⃣ Nastavení preferencí (čas + cíl)\n"
-            f"5️⃣ Chytré doporučení a potvrzení"
-        )
-        intro.setWordWrap(True)
-        intro.setStyleSheet("font-size: 13px; padding: 20px; background-color: #2d2d2d; border-radius: 5px;")
-        layout.addWidget(intro)
-        
-        layout.addStretch()
-        return page
-
     def create_analysis_page(self):
         """Stránka 2: Analýza předchozího roku - vylepšená verze"""
         page = QWidget()
@@ -672,12 +646,11 @@ class NewYearWizardDialog(QDialog):
         title.setStyleSheet("font-size: 18px; font-weight: bold; color: #14919b;")
         layout.addWidget(title)
         
-        # **VYLEPŠENÍ: Větší textové pole bez max výšky**
-        self.analysis_text = QTextEdit()
+        # Větší textové pole bez max výšky
+        self.analysis_text = QTextBrowser()
         self.analysis_text.setReadOnly(True)
-        # Odstraněno: setMaximumHeight → využije veškerý volný prostor
         self.analysis_text.setStyleSheet("""
-            QTextEdit {
+            QTextBrowser {
                 background-color: #2d2d2d;
                 border: 2px solid #3d3d3d;
                 border-radius: 5px;
@@ -686,13 +659,166 @@ class NewYearWizardDialog(QDialog):
                 padding: 10px;
             }
         """)
+        self.analysis_text.setOpenExternalLinks(True)
         layout.addWidget(self.analysis_text)
         
-        # Analýza
         self.perform_analysis()
         
         return page
     
+    def perform_analysis(self):
+        """Provede analýzu předchozího roku - vylepšená s barevnými indikacemi"""
+        previous_year = self.year - 1
+        analysis_html = f"<div style='font-size: 14px;'>"
+        analysis_html += f"<h2 style='color: #14919b;'>🔍 Analýza roku {previous_year}</h2><br>"
+    
+        found_data = False
+    
+        for exercise_id in self.parent_app.get_active_exercises():
+            config = self.parent_app.get_exercise_config(exercise_id)
+            analysis = self.calculator.analyze_previous_year(previous_year, exercise_id)
+            
+            if analysis and analysis["days_count"] > 0:
+                found_data = True
+                # Najít začátek a konec cvičení
+                first_date = None
+                last_date = None
+    
+                for date_str in sorted(self.parent_app.data.get("workouts", {}).keys()):
+                    date_obj = datetime.strptime(date_str, "%Y-%m-%d").date()
+                    if date_obj.year != previous_year:
+                        continue
+                    if exercise_id in self.parent_app.data["workouts"][date_str]:
+                        if not first_date:
+                            first_date = date_obj
+                        last_date = date_obj
+    
+                year_start = datetime(previous_year, 1, 1).date()
+                year_end = datetime(previous_year, 12, 31).date()
+                is_full_year = (first_date and first_date <= datetime(previous_year, 1, 15).date() and 
+                                last_date and last_date >= datetime(previous_year, 12, 15).date())
+    
+                # Barevná indikace
+                if is_full_year:
+                    status_color = "#32c766"
+                    status_icon = "✅"
+                    status_text = "Celý rok"
+                elif analysis["days_count"] >= 100:
+                    status_color = "#FFD700"
+                    status_icon = "🟡"
+                    status_text = "Částečný rok"
+                else:
+                    status_color = "#ff6b6b"
+                    status_icon = "🔴"
+                    status_text = "Málo dat"
+    
+                analysis_html += f"<div style='border: 2px solid {status_color}; border-radius: 5px; padding: 15px; margin: 10px 0; background-color: #1e1e1e;'>"
+                analysis_html += f"<h3 style='color: {status_color}; margin: 0;'>{status_icon} {config['icon']} {config['name']}</h3>"
+    
+                analysis_html += f"<table style='width: 100%; margin-top: 10px; color: #e0e0e0;'>"
+                analysis_html += f"<tr><td style='padding: 5px;'><b>Status:</b></td><td style='color: {status_color};'>{status_text}</td></tr>"
+    
+                if first_date and last_date:
+                    analysis_html += f"<tr><td style='padding: 5px;'><b>Začátek:</b></td><td>{first_date.strftime('%d.%m.%Y')}</td></tr>"
+                    analysis_html += f"<tr><td style='padding: 5px;'><b>Konec:</b></td><td>{last_date.strftime('%d.%m.%Y')}</td></tr>"
+                    training_days = (last_date - first_date).days
+                    analysis_html += f"<tr><td style='padding: 5px;'><b>Délka:</b></td><td>{training_days} dní</td></tr>"
+    
+                analysis_html += f"<tr><td style='padding: 5px;'><b>Dní s tréninkem:</b></td><td><span style='color: #14919b; font-weight: bold;'>{analysis['days_count']}</span></td></tr>"
+                analysis_html += f"<tr><td style='padding: 5px;'><b>Průměr/den:</b></td><td>{analysis['avg_daily']:.1f}</td></tr>"
+                analysis_html += f"<tr><td style='padding: 5px;'><b>Průměr (posl. 3 měs.):</b></td><td><span style='color: #32c766; font-weight: bold;'>{analysis['avg_last_3_months']:.1f}</span></td></tr>"
+                analysis_html += f"<tr><td style='padding: 5px;'><b>Finální cíl:</b></td><td>{analysis['final_goal']}</td></tr>"
+                analysis_html += "</table>"
+                analysis_html += "</div>"
+    
+        if not found_data:
+            analysis_html += f"<div style='border: 2px solid #ff6b6b; border-radius: 5px; padding: 20px; margin: 10px 0; background-color: #1e1e1e; text-align: center;'>"
+            analysis_html += f"<h3 style='color: #ff6b6b;'>❌ Nenašel jsem dostatek dat z roku {previous_year}</h3>"
+            analysis_html += f"<p style='color: #a0a0a0; margin-top: 10px;'>💡 Cíle budou nastaveny podle tvého fitness levelu a preferencí.</p>"
+            analysis_html += "</div>"
+    
+        analysis_html += "</div>"
+        self.analysis_text.setHtml(analysis_html)
+
+    
+    def create_welcome_page(self):
+        """Stránka 1: Uvítání - opravená verze s HTML"""
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        
+        # **TEXTOVÉ POLE S HTML místo QLabel**
+        welcome_text = QTextEdit()
+        welcome_text.setReadOnly(True)
+        welcome_text.setStyleSheet("""
+            QTextEdit {
+                background-color: #2d2d2d;
+                border: 2px solid #0d7377;
+                border-radius: 5px;
+                padding: 20px;
+                font-size: 14px;
+            }
+        """)
+        
+        welcome_html = f"""
+        <div style='line-height: 1.8;'>
+        <h1 style='color: #14919b; text-align: center; margin-bottom: 20px;'>
+        🎉 Vytvoření roku {self.year}
+        </h1>
+        
+        <p style='font-size: 15px; margin-bottom: 20px;'>
+        Vítej v průvodci vytvořením nového roku!
+        </p>
+        
+        <p style='font-size: 14px; margin-bottom: 25px;'>
+        Tento wizard ti pomůže nastavit <b style='color: #32c766;'>optimální cíle</b> pro rok {self.year} 
+        na základě tvého fitness levelu, dostupného času a cílů.
+        </p>
+        
+        <div style='background-color: #1e1e1e; border: 2px solid #14919b; border-radius: 5px; padding: 20px; margin: 20px 0;'>
+        <h3 style='color: #14919b; margin-top: 0;'>📋 Proces má 5 kroků:</h3>
+        
+        <table style='width: 100%; border-collapse: collapse;'>
+        <tr>
+            <td style='padding: 8px; vertical-align: top;'><span style='font-size: 20px;'>1️⃣</span></td>
+            <td style='padding: 8px;'><b>Uvítání a přehled</b><br><span style='color: #a0a0a0; font-size: 12px;'>Informace o wizardu</span></td>
+        </tr>
+        <tr>
+            <td style='padding: 8px; vertical-align: top;'><span style='font-size: 20px;'>2️⃣</span></td>
+            <td style='padding: 8px;'><b>Analýza předchozího roku</b><br><span style='color: #a0a0a0; font-size: 12px;'>Statistiky a trendy</span></td>
+        </tr>
+        <tr>
+            <td style='padding: 8px; vertical-align: top;'><span style='font-size: 20px;'>3️⃣</span></td>
+            <td style='padding: 8px;'><b>Výběr fitness levelu</b><br><span style='color: #a0a0a0; font-size: 12px;'>Začátečník / Intermediate / Pokročilý</span></td>
+        </tr>
+        <tr>
+            <td style='padding: 8px; vertical-align: top;'><span style='font-size: 20px;'>4️⃣</span></td>
+            <td style='padding: 8px;'><b>Nastavení preferencí</b><br><span style='color: #a0a0a0; font-size: 12px;'>Dostupný čas a hlavní cíl</span></td>
+        </tr>
+        <tr>
+            <td style='padding: 8px; vertical-align: top;'><span style='font-size: 20px;'>5️⃣</span></td>
+            <td style='padding: 8px;'><b>Chytré doporučení a potvrzení</b><br><span style='color: #a0a0a0; font-size: 12px;'>AI-powered výpočet cílů</span></td>
+        </tr>
+        </table>
+        </div>
+        
+        <div style='background-color: #1e1e1e; border-left: 4px solid #32c766; padding: 15px; margin-top: 20px;'>
+        <p style='margin: 0; color: #32c766;'>
+        <b>💡 Tip:</b> Průvodce trvá přibližně <b>2-3 minuty</b>. Můžeš kdykoli kliknout na <b>"← Zpět"</b> 
+        pro změnu předchozích odpovědí.
+        </p>
+        </div>
+        
+        <p style='text-align: center; margin-top: 30px; color: #a0a0a0; font-style: italic;'>
+        Klikni na <b>"Další →"</b> pro pokračování
+        </p>
+        </div>
+        """
+        
+        welcome_text.setHtml(welcome_html)
+        layout.addWidget(welcome_text)
+        
+        return page
+
     
     def perform_analysis(self):
         """Provede analýzu předchozího roku - vylepšená s barevnými indikacemi"""
@@ -2354,10 +2480,10 @@ class FitnessTrackerApp(QMainWindow):
         about_layout.addWidget(version_info)
         
         # Popis
-        description = QTextEdit()
+        description = QTextBrowser()  # ← ZMĚNA: QTextBrowser místo QTextEdit
         description.setReadOnly(True)
-        description.setMaximumHeight(400)
         description.setStyleSheet("background-color: #2d2d2d; border: 1px solid #3d3d3d; border-radius: 5px; padding: 15px;")
+        description.setOpenExternalLinks(True)  # ← Nyní funguje!
         
         about_html = f"""
         <div style='font-size: 13px; line-height: 1.6;'>
@@ -2381,7 +2507,7 @@ class FitnessTrackerApp(QMainWindow):
         <p>
         <b>Vytvořil:</b> safronus<br>
         <b>Licence:</b> MIT<br>
-        <b>GitHub:</b> <a href='https://github.com/safronus/FitnessApp' style='color: #14919b;'>FitnessApp</a>
+        <b>GitHub:</b> <a href='https://github.com/safronus/FitnessApp' style='color: #14919b; text-decoration: underline;'>https://github.com/safronus/FitnessApp</a>
         </p>
         
         <p style='margin-top: 20px; color: #a0a0a0; font-style: italic; text-align: center;'>
@@ -2392,7 +2518,6 @@ class FitnessTrackerApp(QMainWindow):
         
         description.setHtml(about_html)
         about_layout.addWidget(description)
-        about_layout.addStretch()
         
         help_tabs.addTab(about_widget, "ℹ️ O aplikaci")
         
@@ -2404,7 +2529,7 @@ class FitnessTrackerApp(QMainWindow):
         quickstart_scroll.setWidgetResizable(True)
         quickstart_scroll.setStyleSheet("QScrollArea { border: none; }")
         
-        quickstart_content = QTextEdit()
+        quickstart_content = QTextBrowser()
         quickstart_content.setReadOnly(True)
         quickstart_content.setStyleSheet("background-color: #2d2d2d; border: none; padding: 15px;")
         
@@ -2477,7 +2602,7 @@ class FitnessTrackerApp(QMainWindow):
         manual_scroll.setWidgetResizable(True)
         manual_scroll.setStyleSheet("QScrollArea { border: none; }")
         
-        manual_content = QTextEdit()
+        manual_content = QTextBrowser()
         manual_content.setReadOnly(True)
         manual_content.setStyleSheet("background-color: #2d2d2d; border: none; padding: 15px;")
         
@@ -2705,7 +2830,7 @@ class FitnessTrackerApp(QMainWindow):
         faq_scroll.setWidgetResizable(True)
         faq_scroll.setStyleSheet("QScrollArea { border: none; }")
         
-        faq_content = QTextEdit()
+        faq_content = QTextBrowser()
         faq_content.setReadOnly(True)
         faq_content.setStyleSheet("background-color: #2d2d2d; border: none; padding: 15px;")
         
@@ -2806,89 +2931,6 @@ class FitnessTrackerApp(QMainWindow):
         faq_layout.addWidget(faq_scroll)
         
         help_tabs.addTab(faq_widget, "❓ FAQ")
-        
-        # ==================== TAB 5: CHANGELOG ====================
-        changelog_widget = QWidget()
-        changelog_layout = QVBoxLayout(changelog_widget)
-        
-        changelog_scroll = QScrollArea()
-        changelog_scroll.setWidgetResizable(True)
-        changelog_scroll.setStyleSheet("QScrollArea { border: none; }")
-        
-        changelog_content = QTextEdit()
-        changelog_content.setReadOnly(True)
-        changelog_content.setStyleSheet("background-color: #2d2d2d; border: none; padding: 15px;")
-        
-        changelog_html = """
-        <div style='font-size: 13px; line-height: 1.6;'>
-        <h1 style='color: #14919b;'>📝 Historie verzí (Changelog)</h1>
-        
-        <div style='border-left: 4px solid #32c766; padding-left: 15px; margin: 15px 0;'>
-        <h2 style='color: #32c766;'>v3.0.4 (15.11.2025)</h2>
-        <ul>
-            <li>Step indicator místo progress baru</li>
-            <li>Vizuální indikátor s ikonami kroků</li>
-            <li>Zvýraznění aktuálního kroku</li>
-        </ul>
-        </div>
-        
-        <div style='border-left: 4px solid #32c766; padding-left: 15px; margin: 15px 0;'>
-        <h2 style='color: #32c766;'>v3.0 (15.11.2025)</h2>
-        <p><b>MAJOR UPDATE: Smart Year Wizard</b></p>
-        <ul>
-            <li>Multi-step průvodce vytvořením roku (5 kroků)</li>
-            <li>Analýza předchozího roku s detailními statistikami</li>
-            <li>Fitness level selector (začátečník/intermediate/pokročilý)</li>
-            <li>Personalizované doporučení podle času, cílů a historie</li>
-            <li>SmartGoalCalculator pro AI-powered výpočty</li>
-            <li>Inteligentní algoritmus založený na progressive overload</li>
-            <li>Vizualizace projekce finálního cíle</li>
-        </ul>
-        </div>
-        
-        <div style='border-left: 4px solid #FFD700; padding-left: 15px; margin: 15px 0;'>
-        <h2 style='color: #FFD700;'>v2.0 (14.11.2025)</h2>
-        <p><b>MAJOR UPDATE: Dynamické cvičení</b></p>
-        <ul>
-            <li>Možnost přidávat vlastní typy cvičení</li>
-            <li>Editace názvů, ikon a rychlých tlačítek</li>
-            <li>Dynamické záložky podle aktivních cvičení</li>
-            <li>Správa cvičení v Nastavení</li>
-            <li>Migrace na nový formát dat</li>
-        </ul>
-        </div>
-        
-        <div style='border-left: 4px solid #14919b; padding-left: 15px; margin: 15px 0;'>
-        <h2 style='color: #14919b;'>v1.8 (14.11.2025)</h2>
-        <ul>
-            <li>Grafy výkonu v záložkách cvičení</li>
-            <li>Přepínání: týden/měsíc/rok</li>
-            <li>Matplotlib integrace</li>
-            <li>Progress bar nad 100%</li>
-            <li>Barevné odlišení náskok/skluz</li>
-        </ul>
-        </div>
-        
-        <div style='border-left: 4px solid #14919b; padding-left: 15px; margin: 15px 0;'>
-        <h2 style='color: #14919b;'>v1.7 (14.11.2025)</h2>
-        <ul>
-            <li>Rychlá tlačítka v "Přidat výkon"</li>
-            <li>Okamžité přidání bez psaní</li>
-        </ul>
-        </div>
-        
-        <p style='color: #a0a0a0; font-style: italic; text-align: center; margin-top: 30px;'>
-        ... starší verze zkráceny ...
-        </p>
-        
-        </div>
-        """
-        
-        changelog_content.setHtml(changelog_html)
-        changelog_scroll.setWidget(changelog_content)
-        changelog_layout.addWidget(changelog_scroll)
-        
-        help_tabs.addTab(changelog_widget, "📝 Changelog")
         
         # Přidání sub-tabs do hlavního layoutu
         layout.addWidget(help_tabs)
