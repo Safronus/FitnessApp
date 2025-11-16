@@ -3764,7 +3764,7 @@ class FitnessTrackerApp(QMainWindow):
         mode_buttons_layout.addWidget(weekly_btn)
     
         # NOVĚ: tlačítko 'Den' – vložíme ho před 'Týden'
-        daily_btn = QPushButton("Den")
+        daily_btn = QPushButton("🕒 Den")
         daily_btn.setCheckable(True)
         daily_btn.setFixedWidth(100)
         daily_btn.setStyleSheet("padding: 8px; font-size: 12px;")
