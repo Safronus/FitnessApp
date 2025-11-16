@@ -31,7 +31,7 @@ from matplotlib.collections import LineCollection
 import matplotlib.pyplot as plt
 
 TITLE = "Fitness Tracker"
-VERSION = "3.3.0"
+VERSION = "3.4.0"
 VERSION_DATE = "16.11.2025"
 
 # Dark Theme Stylesheet
@@ -2731,10 +2731,13 @@ class FitnessTrackerApp(QMainWindow):
 
         Budoucí měření se ignorují.
         Zobrazuje spojnicový graf (propojené hodnoty) + barevné body.
+
         V režimu „Obojí“:
             - váha = plná modrá čára,
-            - BMI = čárkovaná křivka, kde barva každého úseku odpovídá BMI zóně.
-        Na BMI ose jsou barevné BMI zóny (podváha, normální, nadváha, obezita…).
+            - BMI = čárkovaná křivka rozdělená na úseky podle BMI zón
+              (pokud segment protíná hranici zóny, rozdělí se v průsečíku).
+
+        Horizontální BMI pásy v grafu zůstávají.
         Legenda je umístěna pod grafem.
         """
         if not hasattr(self, "bmi_time_fig") or not hasattr(self, "bmi_time_canvas"):
@@ -2808,9 +2811,9 @@ class FitnessTrackerApp(QMainWindow):
         now = datetime.now()
 
         # Připrav platná měření (bez budoucnosti, pouze v daném období)
-        all_times = []
-        all_weights = []
-        all_bmis = []
+        all_times: list[datetime] = []
+        all_weights: list[float] = []
+        all_bmis: list[float] = []
 
         for entry in sorted(history, key=lambda e: e.get("timestamp", "")):
             ts = entry.get("timestamp")
@@ -2872,7 +2875,7 @@ class FitnessTrackerApp(QMainWindow):
             )
             ax_weight.set_ylabel("Váha [kg]")
 
-        # BMI – spojitě barevná čárkovaná křivka podle BMI zóny
+        # BMI – čárkovaná křivka, rozdělená v místech průchodu zónami
         if mode in ("BMI", "Obojí"):
             if mode == "Obojí":
                 ax_bmi = ax_weight.twinx()
@@ -2882,30 +2885,66 @@ class FitnessTrackerApp(QMainWindow):
             else:
                 ax_for_bmi = ax_weight
 
-            # Převod časů na čísla pro LineCollection
+            # Hraniční BMI hodnoty mezi zónami
+            zone_thresholds = [18.5, 25.0, 30.0, 35.0]
+
+            # Převod časů na číselnou osu pro LineCollection
             xs = [mdates.date2num(t) for t in times]
-            segments = []
-            segment_colors = []
+
+            segments: list[list[list[float]]] = []
+            seg_colors: list[str] = []
 
             if len(xs) > 1:
                 for i in range(len(xs) - 1):
                     x0, y0 = xs[i], bmis[i]
                     x1, y1 = xs[i + 1], bmis[i + 1]
-                    segments.append([[x0, y0], [x1, y1]])
-                    # Barva podle průměrné hodnoty BMI na segmentu
-                    mid_bmi = (bmis[i] + bmis[i + 1]) / 2.0
-                    _, col = self.get_bmi_category(mid_bmi)
-                    segment_colors.append(col)
-                lc = LineCollection(
+
+                    # Pokud jsou stejné, nemusíme dělit – jeden úsek, barva podle zóny
+                    if y0 == y1:
+                        mid_bmi = y0
+                        _, col = self.get_bmi_category(mid_bmi)
+                        segments.append([[x0, y0], [x1, y1]])
+                        seg_colors.append(col)
+                        continue
+
+                    # Najdi průsečíky s prahy mezi y0 a y1
+                    crossings = []
+                    for thr in zone_thresholds:
+                        # Přesně uvnitř úseku (ne na koncích)
+                        if (y0 < thr < y1) or (y1 < thr < y0):
+                            t = (thr - y0) / (y1 - y0)  # poměr na úseku
+                            x_thr = x0 + t * (x1 - x0)
+                            crossings.append((t, x_thr, thr))
+
+                    # Seřaď průsečíky podle t (od začátku konce)
+                    crossings.sort(key=lambda c: c[0])
+
+                    # Sestav uzly úseku [start, případné průsečíky..., end]
+                    points = [(x0, y0)]
+                    for _, x_thr, y_thr in crossings:
+                        points.append((x_thr, y_thr))
+                    points.append((x1, y1))
+
+                    # Z každé dvojice sousedních bodů udělej segment
+                    for j in range(len(points) - 1):
+                        xa, ya = points[j]
+                        xb, yb = points[j + 1]
+                        mid_bmi = (ya + yb) / 2.0
+                        _, col = self.get_bmi_category(mid_bmi)
+                        segments.append([[xa, ya], [xb, yb]])
+                        seg_colors.append(col)
+
+                # Vykreslení barevných úseků BMI křivky
+                bmi_collection = LineCollection(
                     segments,
-                    colors=segment_colors,
+                    colors=seg_colors,
                     linewidths=1.5,
                     linestyles="--",
                 )
-                ax_for_bmi.add_collection(lc)
-                bmi_line = lc  # pro legendu
+                ax_for_bmi.add_collection(bmi_collection)
+                bmi_line = bmi_collection  # pro legendu jako celek
             else:
-                # Jen jeden bod – žádný segment, BMI křivku nahradíme bodovým "line"
+                # Jen jeden bod – žádný úsek, BMI čára bude jen bod
                 (bmi_line,) = ax_for_bmi.plot(
                     times,
                     bmis,
@@ -2915,24 +2954,19 @@ class FitnessTrackerApp(QMainWindow):
                 )
 
             ax_for_bmi.set_ylabel("BMI")
-            # Rozumné limity pro BMI osu
-            ymin = min(bmis)
-            ymax = max(bmis)
-            margin = max(1.0, (ymax - ymin) * 0.1)
-            ax_for_bmi.set_ylim(ymin - margin, ymax + margin)
         else:
             ax_for_bmi = None
 
-        # Barevné body podle BMI kategorie (pro lepší čitelnost)
+        # Barevné body podle BMI kategorie
         for t, w, bmi_val in zip(times, weights, bmis):
-            category, color = self.get_bmi_category(bmi_val)
+            _, color = self.get_bmi_category(bmi_val)
             if mode in ("Váha", "Obojí") and weight_line is not None:
                 ax_weight.scatter([t], [w], color=color, s=30, zorder=5)
-            if mode in ("BMI", "Obojí") and (bmi_line is not None):
+            if mode in ("BMI", "Obojí") and bmi_line is not None:
                 target_ax = ax_for_bmi if ax_for_bmi is not None else ax_weight
                 target_ax.scatter([t], [bmi_val], color=color, s=30, zorder=5)
 
-        # BMI zóny – barevně podbarvené horizontální pásy na BMI ose
+        # BMI zóny – horizontální pásy, které už máš (NECHÁVÁME)
         if mode in ("BMI", "Obojí"):
             target_ax = ax_for_bmi if ax_for_bmi is not None else ax_weight
             bmi_zones = [
@@ -2959,11 +2993,21 @@ class FitnessTrackerApp(QMainWindow):
         # Legenda – jen to, co je skutečně zobrazeno, pod grafem
         legend_handles = []
         legend_labels = []
+
         if mode in ("Váha", "Obojí") and weight_line is not None:
             legend_handles.append(weight_line)
             legend_labels.append("Váha [kg]")
+
         if mode in ("BMI", "Obojí") and bmi_line is not None:
-            legend_handles.append(bmi_line)
+            # Pro legendu vytvoříme neutrální čárkovanou čáru (BMI má více barev v grafu)
+            target_ax = ax_for_bmi if ax_for_bmi is not None else ax_weight
+            dummy_bmi_line, = target_ax.plot(
+                [], [],
+                linestyle="--",
+                linewidth=1.5,
+                color="#e0e0e0",
+            )
+            legend_handles.append(dummy_bmi_line)
             legend_labels.append("BMI")
 
         if legend_handles:
