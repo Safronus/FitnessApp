@@ -31,7 +31,7 @@ from matplotlib.collections import LineCollection
 import matplotlib.pyplot as plt
 
 TITLE = "Fitness Tracker"
-VERSION = "3.4.0"
+VERSION = "3.6.2"
 VERSION_DATE = "16.11.2025"
 
 # Dark Theme Stylesheet
@@ -3412,13 +3412,13 @@ class FitnessTrackerApp(QMainWindow):
         self.bmi_plan_summary_label.setStyleSheet("font-size: 12px; color: #dddddd;")
         plan_layout.addWidget(self.bmi_plan_summary_label)
 
-        # Hlavní tabulka plánu (po cvicích)
+        # Hlavní tabulka plánu (po cvicích) – co nejnižší, jen na pár řádků
         self.bmi_plan_tree = QTreeWidget()
         self.bmi_plan_tree.setColumnCount(4)
         self.bmi_plan_tree.setHeaderLabels(["Cvik", "Doporučeno týdně", "Celkem v období", "Poznámka"])
         self.bmi_plan_tree.setRootIsDecorated(False)
         self.bmi_plan_tree.setAlternatingRowColors(True)
-        self.bmi_plan_tree.setMinimumHeight(130)
+        self.bmi_plan_tree.setMinimumHeight(40)
         header = self.bmi_plan_tree.header()
         header.setStretchLastSection(False)
         header.setSectionResizeMode(0, QHeaderView.Stretch)
@@ -3427,7 +3427,7 @@ class FitnessTrackerApp(QMainWindow):
         header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
         plan_layout.addWidget(self.bmi_plan_tree)
 
-        # Týdenní rozpis a plnění plánu
+        # Týdenní rozpis a plnění plánu – dominantní část
         weekly_group = QGroupBox("📅 Týdenní rozpis a plnění plánu")
         weekly_layout = QVBoxLayout()
 
@@ -3438,7 +3438,7 @@ class FitnessTrackerApp(QMainWindow):
         )
         self.bmi_plan_weeks_tree.setRootIsDecorated(True)
         self.bmi_plan_weeks_tree.setAlternatingRowColors(True)
-        self.bmi_plan_weeks_tree.setMinimumHeight(180)
+        self.bmi_plan_weeks_tree.setMinimumHeight(260)
         w_header = self.bmi_plan_weeks_tree.header()
         w_header.setStretchLastSection(False)
         w_header.setSectionResizeMode(0, QHeaderView.Stretch)
@@ -3452,11 +3452,23 @@ class FitnessTrackerApp(QMainWindow):
         self.bmi_plan_fig = Figure(figsize=(6, 2.5), facecolor="#121212")
         self.bmi_plan_canvas = FigureCanvas(self.bmi_plan_fig)
         self.bmi_plan_canvas.setStyleSheet("background-color: #121212;")
-        self.bmi_plan_canvas.setMinimumHeight(180)
+        self.bmi_plan_canvas.setMinimumHeight(200)
         weekly_layout.addWidget(self.bmi_plan_canvas)
+
+        # Poměr výšek uvnitř týdenní sekce:
+        #   - Týdenní rozpis ~ 2
+        #   - Graf ~ 3
+        weekly_layout.setStretch(weekly_layout.indexOf(self.bmi_plan_weeks_tree), 2)
+        weekly_layout.setStretch(weekly_layout.indexOf(self.bmi_plan_canvas), 3)
 
         weekly_group.setLayout(weekly_layout)
         plan_layout.addWidget(weekly_group)
+
+        # Poměr výšek v rámci plánovací sekce:
+        #   - Cvik tabulka ~ 1
+        #   - Týdenní rozpis + graf ~ 6 (tedy výrazně vyšší)
+        plan_layout.setStretch(plan_layout.indexOf(self.bmi_plan_tree), 1)
+        plan_layout.setStretch(plan_layout.indexOf(weekly_group), 6)
 
         plan_group.setLayout(plan_layout)
         layout.addWidget(plan_group)
@@ -3467,7 +3479,7 @@ class FitnessTrackerApp(QMainWindow):
         self.bmi_plan_horizon_combo.currentIndexChanged.connect(self.recompute_bmi_plan)
         self.bmi_plan_mode_combo.currentIndexChanged.connect(self.recompute_bmi_plan)
 
-        # Bez layout.addStretch() – necháme skupiny využít výšku okna
+        # ŽÁDNÝ layout.addStretch() – necháme plánovací část využít výšku okna
 
         # Inicializace plánu (při otevření záložky / aplikace)
         self.recompute_bmi_plan()
@@ -3607,8 +3619,9 @@ class FitnessTrackerApp(QMainWindow):
             horizon_weeks = 52
 
         mode_text = self.bmi_plan_mode_combo.currentText()
+        # Tohle používáme pro odhad času (text) a pro navýšení objemu
         if mode_text == "Opatrný":
-            weekly_loss = 0.25   # kg/týden
+            weekly_loss = 0.35   # kg/týden
             mode_volume_factor = 0.15
         elif mode_text == "Agresivnější":
             weekly_loss = 0.75
@@ -3617,24 +3630,30 @@ class FitnessTrackerApp(QMainWindow):
             weekly_loss = 0.5
             mode_volume_factor = 0.25
 
+        # Intenzita: porovnání s "referenčním" středním tempem 0.5 kg/týden
         if delta_weight <= 0:
             weeks_needed = 0.0
             loss_in_horizon = 0.0
             intensity_factor = 1.0  # udržovací
         else:
+            # Odhad času při zvoleném režimu (pro text)
             weeks_needed = delta_weight / weekly_loss if weekly_loss > 0 else horizon_weeks
             loss_in_horizon = min(delta_weight, weekly_loss * horizon_weeks)
 
-            # intenzita = jak moc se liší dostupný horizont od "doporučeného" času
-            if horizon_weeks > 0:
-                raw_intensity = weeks_needed / horizon_weeks
+            # Referenční doba při středním tempu 0.5 kg/týden
+            moderate_loss = 0.5
+            if moderate_loss > 0:
+                weeks_needed_moderate = delta_weight / moderate_loss
             else:
-                raw_intensity = 1.0
+                weeks_needed_moderate = weeks_needed
 
-            # Pokud horizont < potřebných týdnů → >1 (víc práce),
-            # pokud horizont > potřebných týdnů → <1 (mírnější tempo).
-            # Omezíme na rozumné meze.
-            intensity_factor = max(0.5, min(2.0, raw_intensity))
+            if horizon_weeks > 0:
+                base_intensity = weeks_needed_moderate / horizon_weeks
+            else:
+                base_intensity = 1.0
+
+            # Omezit, aby plán nebyl úplně mimo (0.5× až 2×)
+            intensity_factor = max(0.5, min(2.0, base_intensity))
 
         predicted_weight = weight_now - loss_in_horizon
         predicted_bmi = predicted_weight / (height_m * height_m) if height_m > 0 else bmi_now
@@ -3688,12 +3707,12 @@ class FitnessTrackerApp(QMainWindow):
             base_weekly = baseline.get(exercise_id, 0.0)
 
             if base_weekly <= 0:
-                # Žádná historie – navrhneme jemný start, ale stále škálujeme intenzitou a režimem
+                # Žádná historie – jemný start, ale škálujeme režimem i intenzitou
                 base_value = 1.0 if delta_weight > 0 else 0.5
                 weekly_value = base_value * (1.0 + mode_volume_factor) * intensity_factor
                 note = "Žádná historie, navrženo jako jemný start."
             else:
-                # Základ * (1 + režim) * intenzita
+                # Základ * (1 + režim) * intenzita (horizont, cílové BMI)
                 weekly_value = base_weekly * (1.0 + mode_volume_factor) * intensity_factor
                 note = (
                     f"Průměrně {base_weekly:.1f}/týden → režim +{int(mode_volume_factor * 100)} %, "
