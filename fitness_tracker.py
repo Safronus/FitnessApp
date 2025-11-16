@@ -4545,7 +4545,12 @@ class FitnessTrackerApp(QMainWindow):
 
     def update_exercise_tab(self, exercise_type):
         """Aktualizuje statistiky a strom záznamů daného cvičení.
-        Minimal-change: přidáno uchování výběru (ID záznamů) přes refresh, aby se výběr „nesamo-odznačoval“.
+    
+        Styl: původní (emoji indikátory + barevný sloupec s %).
+        Funkčně: multi-select, uchování výběru a rozbalení napříč refreshem,
+        výchozí zobrazení DNŮ sbalené po prvním naplnění.
+        NOVĚ: když je vybrán celý den (top-level), zůstane viditelně vybraný i při sbalení
+        a po refreshi; parent den je označen jako vybraný i tehdy, když jsou vybrány všechny jeho děti.
         """
         try:
             if exercise_type not in self.exercise_year_selectors:
@@ -4556,7 +4561,7 @@ class FitnessTrackerApp(QMainWindow):
     
             selected_year = int(selector.currentText())
     
-            # Přehledy
+            # Přehledy (DEN/TÝDEN/MĚSÍC/ZBYTEK) a progress bar apod.
             self.update_detailed_overview(exercise_type, selected_year)
     
             tree = self.findChild(QTreeWidget, f"tree_{exercise_type}")
@@ -4564,21 +4569,34 @@ class FitnessTrackerApp(QMainWindow):
                 return
     
             # --- UCHOVÁNÍ VÝBĚRU ---
-            preserved = set()
-            selected_items = tree.selectedItems()
-            for it in selected_items:
+            preserved = set()             # {(date_str, record_id)}
+            preserved_days = set()        # {date_str} – když byl vybrán TOP-LEVEL den
+            # mapování pro počet vybraných dětí po dnech (abychom věděli "vybrány všechny děti")
+            preserved_children_by_day: dict[str, set] = {}
+    
+            for it in tree.selectedItems():
                 payload = it.data(3, Qt.UserRole)
                 if isinstance(payload, dict) and 'date' in payload and 'record_id' in payload:
-                    preserved.add((payload['date'], payload['record_id']))
+                    date_str = payload['date']
+                    rec_id = payload['record_id']
+                    preserved.add((date_str, rec_id))
+                    preserved_children_by_day.setdefault(date_str, set()).add(rec_id)
                 else:
-                    # Top-level den → projdi děti
+                    # Vybraný TOP-LEVEL den → ulož datum dne i všechny jeho děti
+                    # (kvůli případnému reselectu po refreshi)
+                    # Vytáhneme datum z textu (např. "✅ 2025-11-16" → "2025-11-16")
+                    txt = it.text(0) if it is not None else ""
+                    date_str = txt.split(' ', 1)[1] if ' ' in txt else txt
+                    if date_str:
+                        preserved_days.add(date_str)
                     for i in range(it.childCount()):
                         ch = it.child(i)
                         p2 = ch.data(3, Qt.UserRole)
                         if isinstance(p2, dict) and 'date' in p2 and 'record_id' in p2:
                             preserved.add((p2['date'], p2['record_id']))
+                            preserved_children_by_day.setdefault(p2['date'], set()).add(p2['record_id'])
     
-            # Uchování rozbalených dnů
+            # --- UCHOVÁNÍ ROZBALENÍ DNŮ ---
             expanded_dates = set()
             for i in range(tree.topLevelItemCount()):
                 item = tree.topLevelItem(i)
@@ -4587,12 +4605,18 @@ class FitnessTrackerApp(QMainWindow):
                     date_str = txt.split(' ', 1)[1] if ' ' in txt else txt
                     expanded_dates.add(date_str)
     
+            first_population = (tree.property("_ever_populated") is not True)
+    
             tree.blockSignals(True)
             tree.clear()
+    
+            # Multi-select
             tree.setSelectionMode(QAbstractItemView.ExtendedSelection)
             tree.setSelectionBehavior(QAbstractItemView.SelectItems)
+            tree.setAlternatingRowColors(False)
+            tree.setUniformRowHeights(True)
     
-            # Data po dnech (jen zvolený rok)
+            # --- Sestav data po dnech (jen zvolený rok) ---
             days_data: dict[str, list[dict]] = {}
             for ds, perday in self.data.get('workouts', {}).items():
                 year_here = int(ds.split('-')[0]) if '-' in ds else None
@@ -4605,37 +4629,53 @@ class FitnessTrackerApp(QMainWindow):
                     elif isinstance(recs, dict):
                         days_data.setdefault(ds, []).append(recs)
     
+            # Seřazení dnů – nejnovější nahoře
             sorted_dates = sorted(days_data.keys(), reverse=True)
     
-            # Naplnění stromu
             for date_str in sorted_dates:
                 records = days_data[date_str]
-                day_item = QTreeWidgetItem(tree)
     
+                # Souhrn dne
                 total_day_value = sum(r.get('value', 0) for r in records)
                 record_count = len(records)
                 goal = self.calculate_goal(exercise_type, date_str)
                 if not isinstance(goal, int):
                     goal = int(goal) if goal else 0
-    
                 percent = (total_day_value / goal * 100) if goal > 0 else 0
-                if percent >= 100:
-                    status_icon = "✅"; color = QColor(0, 100, 0)
-                elif percent >= 50:
-                    status_icon = "⏳"; color = QColor(255, 215, 0)
-                else:
-                    status_icon = "❌"; color = QColor(255, 0, 0)
     
+                # --- PŮVODNÍ STYL: emoji indikátory + barevný sloupec s % ---
+                if percent >= 100:
+                    status_icon = "✅"
+                    color = QColor(0, 100, 0)
+                elif percent >= 50:
+                    status_icon = "⏳"
+                    color = QColor(255, 215, 0)
+                else:
+                    status_icon = "❌"
+                    color = QColor(255, 0, 0)
+    
+                day_item = QTreeWidgetItem(tree)
                 day_item.setText(0, f"{status_icon} {date_str}")
                 day_item.setText(1, f"{total_day_value} ({record_count}×)")
                 day_item.setText(2, f"{percent:.0f}%")
+    
+                # Barvy/kontrasty (dark theme-friendly)
                 day_item.setForeground(0, QColor(255, 255, 255))
                 day_item.setForeground(1, QColor(200, 200, 200))
                 day_item.setBackground(2, color)
                 day_item.setForeground(2, QColor(255, 255, 255))
-                day_item.setExpanded(date_str in expanded_dates)
     
-                # Děti (záznamy)
+                # Zarovnání čísel
+                day_item.setTextAlignment(1, Qt.AlignCenter)
+                day_item.setTextAlignment(2, Qt.AlignCenter)
+    
+                # Stav rozbalení:
+                if not first_population:
+                    day_item.setExpanded(date_str in expanded_dates)
+                else:
+                    day_item.setExpanded(False)
+    
+                # --- Děti (záznamy) ---
                 for record in sorted(records, key=lambda x: x.get('timestamp', '')):
                     value = record.get('value', 0)
                     timestamp = record.get('timestamp', 'N/A')
@@ -4647,13 +4687,33 @@ class FitnessTrackerApp(QMainWindow):
                     rec_item.setText(1, str(value))
                     rec_item.setText(2, time_only)
                     rec_item.setText(3, record_id)
-                    rec_item.setData(3, Qt.UserRole, {'date': date_str, 'record_id': record_id, 'exercise': exercise_type})
+                    rec_item.setTextAlignment(1, Qt.AlignCenter)
+                    rec_item.setTextAlignment(2, Qt.AlignCenter)
     
-                    # Re-select po refreshi
+                    # payload pro mazání / reselect
+                    rec_item.setData(3, Qt.UserRole, {
+                        'date': date_str,
+                        'record_id': record_id,
+                        'exercise': exercise_type
+                    })
+    
+                    # Re-select po refreshi (pokud byl vybrán)
                     if (date_str, record_id) in preserved:
                         rec_item.setSelected(True)
     
-            tree.expandToDepth(0)
+                # --- Viditelné označení TOP-LEVEL dne ---
+                # Den označíme jako vybraný, pokud:
+                # 1) byl dříve zvolen jako den (v preserved_days), NEBO
+                # 2) jsou vybrány všechny děti tohoto dne (typický scénář "vybral jsem den").
+                sel_children = preserved_children_by_day.get(date_str, set())
+                if date_str in preserved_days or (record_count > 0 and len(sel_children) == record_count):
+                    day_item.setSelected(True)
+    
+            # Výchozí chování po PRVNÍM naplnění: vše sbalené
+            if first_population:
+                tree.collapseAll()
+                tree.setProperty("_ever_populated", True)
+    
             tree.blockSignals(False)
     
         except Exception as e:
