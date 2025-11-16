@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
     QTableWidgetItem, QGroupBox, QFormLayout, QHeaderView, QMessageBox,
     QGridLayout, QComboBox, QScrollArea, QFrame, QProgressBar, QTextEdit,
     QDialog, QListWidget, QListWidgetItem, QInputDialog, QCheckBox, QFileDialog,
-    QTreeWidget, QTreeWidgetItem, QLineEdit, QTextBrowser, QAbstractItemView  # ← PŘIDÁNO
+    QTreeWidget, QTreeWidgetItem, QLineEdit, QTextBrowser, QAbstractItemView, QRadioButton  # ← PŘIDÁNO
 )
 
 from PySide6.QtCore import Qt, QDate, QTimer
@@ -22,7 +22,12 @@ from PySide6.QtGui import QColor, QAction
 # Matplotlib imports
 import matplotlib
 matplotlib.use('Qt5Agg')
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+# Matplotlib canvas alias pro volání FigureCanvas(fig)
+try:
+    from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+except ImportError:
+    # fallback pro starší Matplotlib/back-end
+    from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
 
@@ -3744,13 +3749,12 @@ class FitnessTrackerApp(QMainWindow):
                 color: #14919b;
             }
         """)
-        
         chart_layout = QVBoxLayout()
-        
+    
         # Přepínače zobrazení
         mode_buttons_layout = QHBoxLayout()
         mode_buttons_layout.addStretch()
-        
+    
         weekly_btn = QPushButton("📅 Týden")
         weekly_btn.setCheckable(True)
         weekly_btn.setChecked(True)
@@ -3758,39 +3762,48 @@ class FitnessTrackerApp(QMainWindow):
         weekly_btn.setStyleSheet("padding: 8px; font-size: 12px;")
         weekly_btn.clicked.connect(lambda: self.update_performance_chart(exercisetype, "weekly"))
         mode_buttons_layout.addWidget(weekly_btn)
-        
+    
+        # NOVĚ: tlačítko 'Den' – vložíme ho před 'Týden'
+        daily_btn = QPushButton("Den")
+        daily_btn.setCheckable(True)
+        daily_btn.setFixedWidth(100)
+        daily_btn.setStyleSheet("padding: 8px; font-size: 12px;")
+        daily_btn.clicked.connect(lambda: self.update_performance_chart(exercisetype, "daily"))
+        mode_buttons_layout.insertWidget(mode_buttons_layout.indexOf(weekly_btn), daily_btn)
+    
         monthly_btn = QPushButton("📆 Měsíc")
         monthly_btn.setCheckable(True)
         monthly_btn.setFixedWidth(100)
         monthly_btn.setStyleSheet("padding: 8px; font-size: 12px;")
         monthly_btn.clicked.connect(lambda: self.update_performance_chart(exercisetype, "monthly"))
         mode_buttons_layout.addWidget(monthly_btn)
-        
+    
         yearly_btn = QPushButton("📊 Rok")
         yearly_btn.setCheckable(True)
         yearly_btn.setFixedWidth(100)
         yearly_btn.setStyleSheet("padding: 8px; font-size: 12px;")
         yearly_btn.clicked.connect(lambda: self.update_performance_chart(exercisetype, "yearly"))
         mode_buttons_layout.addWidget(yearly_btn)
-        
+    
         mode_buttons_layout.addStretch()
         chart_layout.addLayout(mode_buttons_layout)
-        
-        # Uložení tlačítek pro toggle
+    
+        # Registrace tlačítek (doplněn 'daily')
         if not hasattr(self, 'chart_mode_buttons'):
             self.chart_mode_buttons = {}
         self.chart_mode_buttons[exercisetype] = {
+            'daily': daily_btn,
             'weekly': weekly_btn,
             'monthly': monthly_btn,
             'yearly': yearly_btn
         }
-        
+    
         # Matplotlib figure
         fig = Figure(figsize=(12, 4), facecolor='#1e1e1e')
         canvas = FigureCanvas(fig)
         canvas.setStyleSheet("background-color: #1e1e1e;")
         chart_layout.addWidget(canvas)
-        
+    
         # Uložení reference
         if not hasattr(self, 'chart_canvases'):
             self.chart_canvases = {}
@@ -3798,29 +3811,30 @@ class FitnessTrackerApp(QMainWindow):
             self.chart_figures = {}
         if not hasattr(self, 'chart_modes'):
             self.chart_modes = {}
-        
+    
         self.chart_canvases[exercisetype] = canvas
         self.chart_figures[exercisetype] = fig
         self.chart_modes[exercisetype] = "weekly"
-        
+    
         chart_group.setLayout(chart_layout)
         parent_layout.addWidget(chart_group)
-        
+    
         # Iniciální vykreslení
         self.update_performance_chart(exercisetype, "weekly")
 
     def update_performance_chart(self, exercise_type, mode):
-        """Aktualizuje graf výkonu (weekly/monthly/yearly) a vyznačí den začátku cvičení.
-        Per-exercise start: year_settings.exercise_start_dates › exercises[...].start_dates › year_settings.start_date › YYYY-01-01.
+        """Aktualizuje graf výkonu podle zvoleného módu (daily/weekly/monthly/yearly).
+        - daily: průběh aktuálně zvoleného dne (čas → kumulativní výkon), + vodorovná čára denního cíle
+        - ostatní módy beze změny (výkon vs. cíl; svislá čára startu cvičení, pokud spadá do rozsahu)
         """
-        # Obrana: musíme mít figure
+        # Ověření figure/canvas struktur
         if not hasattr(self, 'chart_figures') or exercise_type not in self.chart_figures:
             return
-    
-        # Ulož mód + případné přepnutí toggle tlačítek (bez změny stávajícího UI)
         if not hasattr(self, 'chart_modes'):
             self.chart_modes = {}
         self.chart_modes[exercise_type] = mode
+    
+        # Přepnout stav tlačítek (pokud existují)
         if hasattr(self, 'chart_mode_buttons') and exercise_type in self.chart_mode_buttons:
             for btn_mode, btn in self.chart_mode_buttons[exercise_type].items():
                 try:
@@ -3832,38 +3846,34 @@ class FitnessTrackerApp(QMainWindow):
         fig.clear()
         ax = fig.add_subplot(111)
     
-        # Dark-theme
+        # Tmavé pozadí a osy
         ax.set_facecolor('#1e1e1e')
         ax.tick_params(axis='x', colors='#e0e0e0')
         ax.tick_params(axis='y', colors='#e0e0e0')
     
-        # Titulek
         cfg = self.get_exercise_config(exercise_type) if hasattr(self, 'get_exercise_config') else {"name": exercise_type}
         ax.set_title(f"Výkon – {cfg.get('name', exercise_type)}", color='#e0e0e0', fontsize=14)
     
         today = datetime.now().date()
     
-        # Zvolený rok z per-exercise comboboxu (beze změny stávající logiky)
+        # Zvolený rok z per-exercise comboboxu
         if hasattr(self, 'exercise_year_selectors') and exercise_type in self.exercise_year_selectors \
            and self.exercise_year_selectors[exercise_type].currentText():
             selected_year = int(self.exercise_year_selectors[exercise_type].currentText())
         else:
             selected_year = today.year
     
-        # ---- Rozhodnutí o PER-EXERCISE startu ----
-        # 1) year_settings.exercise_start_dates[exercise_type]
-        start_date = None
+        # ---- Získání startu cvičení pro značku (pro non-daily módy) ----
         ys = self.get_year_settings(selected_year) if hasattr(self, 'get_year_settings') else {}
         ex_starts = (ys.get("exercise_start_dates") or {}) if isinstance(ys, dict) else {}
         ex_start_str = ex_starts.get(exercise_type)
     
+        start_date = None
         if ex_start_str:
             try:
                 start_date = datetime.strptime(ex_start_str, "%Y-%m-%d").date()
             except Exception:
                 start_date = None
-    
-        # 2) exercises[exercise_type].start_dates[str(selected_year)]
         if start_date is None:
             try:
                 ex_def = (self.data.get("exercises", {}) or {}).get(exercise_type, {})
@@ -3873,8 +3883,6 @@ class FitnessTrackerApp(QMainWindow):
                     start_date = datetime.strptime(ex2_str, "%Y-%m-%d").date()
             except Exception:
                 start_date = None
-    
-        # 3) year_settings.start_date
         if start_date is None:
             try:
                 ys_start = (ys or {}).get("start_date")
@@ -3882,21 +3890,137 @@ class FitnessTrackerApp(QMainWindow):
                     start_date = datetime.strptime(ys_start, "%Y-%m-%d").date()
             except Exception:
                 start_date = None
-    
-        # 4) fallback
         if start_date is None:
             start_date = datetime(selected_year, 1, 1).date()
     
-        # ---- Určení zobrazovaného rozsahu podle módu ----
+        # =================================================================
+        #                          DAILY MODE
+        # =================================================================
+        if mode == "daily":
+            # 1) Zkusit zjistit vybraný den z přehledového stromu (top-level výběr dne)
+            day_date = None
+            try:
+                tree = self.findChild(QTreeWidget, f"tree_{exercise_type}")
+                if tree:
+                    for it in tree.selectedItems():
+                        payload = it.data(3, Qt.UserRole)
+                        # top-level den nemá payload s 'record_id'
+                        if not (isinstance(payload, dict) and 'record_id' in payload):
+                            txt = it.text(0) if it is not None else ""
+                            ds = txt.split(' ', 1)[1] if ' ' in txt else txt
+                            # očekáváme formát YYYY-MM-DD
+                            if len(ds) == 10 and ds[4] == '-' and ds[7] == '-':
+                                day_date = datetime.strptime(ds, "%Y-%m-%d").date()
+                                break
+            except Exception:
+                day_date = None
+    
+            # 2) Fallback: dnešek (pokud ve zvoleném roce), případně poslední den v roce s daty pro dané cvičení
+            if day_date is None:
+                if selected_year == today.year:
+                    day_date = today
+                else:
+                    # poslední den v roce s nějakým záznamem
+                    days_with_data = []
+                    for ds, perday in (self.data.get('workouts', {}) or {}).items():
+                        if not isinstance(ds, str) or len(ds) < 10: 
+                            continue
+                        try:
+                            y = int(ds[:4])
+                        except Exception:
+                            continue
+                        if y != selected_year:
+                            continue
+                        if exercise_type in perday:
+                            days_with_data.append(ds)
+                    if days_with_data:
+                        ds = sorted(days_with_data)[-1]
+                        try:
+                            day_date = datetime.strptime(ds, "%Y-%m-%d").date()
+                        except Exception:
+                            day_date = datetime(selected_year, 1, 1).date()
+                    else:
+                        day_date = datetime(selected_year, 1, 1).date()
+    
+            # Vytažení všech záznamů daného dne
+            day_str = day_date.strftime("%Y-%m-%d")
+            recs = []
+            if day_str in self.data.get('workouts', {}) and exercise_type in self.data['workouts'][day_str]:
+                raw = self.data['workouts'][day_str][exercise_type]
+                if isinstance(raw, list):
+                    recs = raw[:]
+                elif isinstance(raw, dict):
+                    recs = [raw]
+    
+            # Setřídění podle času
+            def _ts_to_dt(ts: str) -> datetime:
+                # očekávaný formát "YYYY-MM-DD HH:MM[:SS]"
+                try:
+                    if len(ts) >= 19:
+                        return datetime.strptime(ts[:19], "%Y-%m-%d %H:%M:%S")
+                    elif len(ts) >= 16:
+                        return datetime.strptime(ts[:16], "%Y-%m-%d %H:%M")
+                    else:
+                        # bez času → 12:00
+                        return datetime.strptime(day_str + " 12:00", "%Y-%m-%d %H:%M")
+                except Exception:
+                    return datetime.strptime(day_str + " 12:00", "%Y-%m-%d %H:%M")
+    
+            recs_sorted = sorted(recs, key=lambda r: _ts_to_dt(r.get("timestamp", f"{day_str} 12:00")))
+    
+            # Kumulativní výkon během dne
+            times = []
+            cumul = []
+            running = 0
+            for r in recs_sorted:
+                dt = _ts_to_dt(r.get("timestamp", f"{day_str} 12:00"))
+                running += int(r.get("value", 0))
+                times.append(dt)
+                cumul.append(running)
+    
+            # Denní cíl
+            daily_goal = self.calculate_goal(exercise_type, day_str)
+            if not isinstance(daily_goal, int):
+                daily_goal = int(daily_goal) if daily_goal else 0
+    
+            # vykreslení
+            import matplotlib.dates as mdates
+            if not times:
+                ax.text(0.5, 0.5, 'Žádné záznamy v tomto dni', ha='center', va='center',
+                        transform=ax.transAxes, fontsize=14, color='#a0a0a0')
+            else:
+                # čára kumulativního výkonu + body v časech
+                ax.plot(times, cumul, label='Kumulativně (den)', linewidth=2, marker='o', markersize=4, color='#0d7377')
+                # denní cíl jako horizontála
+                if daily_goal > 0:
+                    ax.axhline(daily_goal, linestyle='--', linewidth=1.8, color='#FFD700', label='Denní cíl')
+    
+                # časová osa v HH:MM
+                ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+                ax.set_xlim(datetime(day_date.year, day_date.month, day_date.day, 0, 0),
+                            datetime(day_date.year, day_date.month, day_date.day, 23, 59, 59))
+    
+            ax.set_title(f"Den {day_date.strftime('%d.%m.%Y')}", color='#e0e0e0', fontsize=14)
+            leg = ax.legend(loc='upper left', bbox_to_anchor=(1.02, 1), borderaxespad=0., fontsize=9, facecolor='#2d2d2d', edgecolor='#3d3d3d')
+            for t in leg.get_texts():
+                t.set_color('#e0e0e0')
+    
+            fig.tight_layout()
+            if hasattr(self, 'chart_canvases') and exercise_type in self.chart_canvases:
+                self.chart_canvases[exercise_type].draw()
+            return  # daily zpracován; dál nepokračujeme
+    
+        # =================================================================
+        #                WEEKLY / MONTHLY / YEARLY (beze změn)
+        # =================================================================
+        # Vypočet rozsahu dle módu + vykreslení jako dříve
         if mode == "weekly":
-            # posledních 7 dní v rámci roku, respektovat today a hranice + start
             end_date = today if selected_year == today.year else min(datetime(selected_year, 12, 31).date(), today)
             start_r = max(end_date - timedelta(days=6), datetime(selected_year, 1, 1).date(), start_date)
             range_start, range_end = start_r, end_date
             xlabel_format = "%d.%m"
     
         elif mode == "monthly":
-            # aktuální měsíc (je-li to tento rok), jinak prosinec, respektovat start + today
             month = today.month if selected_year == today.year else 12
             month_start = datetime(selected_year, month, 1).date()
             next_month = datetime(selected_year + (1 if month == 12 else 0), 1 if month == 12 else month + 1, 1).date()
@@ -3912,7 +4036,6 @@ class FitnessTrackerApp(QMainWindow):
             range_start, range_end = year_start, year_end
             xlabel_format = "%d.%m."
     
-        # Když není co zobrazit:
         if range_end < range_start:
             ax.text(0.5, 0.5, 'Žádná data k zobrazení', ha='center', va='center',
                     transform=ax.transAxes, fontsize=14, color='#a0a0a0')
@@ -3921,13 +4044,10 @@ class FitnessTrackerApp(QMainWindow):
                 self.chart_canvases[exercise_type].draw()
             return
     
-        # Datové řady
         dates = [range_start + timedelta(days=i) for i in range((range_end - range_start).days + 1)]
         performed, goals = [], []
-    
         for d in dates:
             ds = d.strftime("%Y-%m-%d")
-            # Výkon
             v = 0
             if ds in self.data.get('workouts', {}) and exercise_type in self.data['workouts'][ds]:
                 recs = self.data['workouts'][ds][exercise_type]
@@ -3935,20 +4055,17 @@ class FitnessTrackerApp(QMainWindow):
                     v = sum(r.get("value", 0) for r in recs)
                 elif isinstance(recs, dict):
                     v = recs.get("value", 0)
-            performed.append(v)
-    
-            # Cíl
             g = self.calculate_goal(exercise_type, ds)
             if not isinstance(g, int):
                 g = int(g) if g else 0
+            performed.append(v)
             goals.append(g)
     
-        # Vykreslení
         bar_w = 0.8 if mode == "weekly" else 0.6
         ax.bar(dates, performed, width=bar_w, label='Výkon', color='#0d7377', alpha=0.8)
         ax.plot(dates, goals, label='Cíl', color='#FFD700', linewidth=2, marker='o', markersize=3)
     
-        # Označení začátku (pokud spadá do rozsahu)
+        # Svislá čára dne zahájení (pokud spadá do rozsahu)
         if start_date >= dates[0] and start_date <= dates[-1]:
             ax.axvline(x=start_date, color='#32c766', linestyle='--', linewidth=2, alpha=0.7, label='Začátek cvičení')
             y_max = max(max(performed) if performed else 0, max(goals) if goals else 0)
@@ -3956,7 +4073,6 @@ class FitnessTrackerApp(QMainWindow):
                 ax.text(start_date, y_max * 1.05, f"Start {start_date.strftime('%d.%m.')}",
                         rotation=90, va='bottom', ha='right', fontsize=9, color='#32c766', weight='bold')
     
-        # Osy / popisky
         if mode == "yearly":
             num_dates = len(dates)
             step = max(1, num_dates // 12)
@@ -3967,7 +4083,7 @@ class FitnessTrackerApp(QMainWindow):
             ax.set_xticklabels([d.strftime(xlabel_format) for d in dates],
                                rotation=45 if mode == "monthly" else 0)
     
-        leg = ax.legend(loc='upper left', fontsize=9, facecolor='#2d2d2d', edgecolor='#3d3d3d')
+        leg = ax.legend(loc='upper left', bbox_to_anchor=(1.02, 1), borderaxespad=0., fontsize=9, facecolor='#2d2d2d', edgecolor='#3d3d3d')
         for t in leg.get_texts():
             t.set_color('#e0e0e0')
     
@@ -3976,7 +4092,10 @@ class FitnessTrackerApp(QMainWindow):
             self.chart_canvases[exercise_type].draw()
         
     def create_exercise_tab(self, exercise_type, icon):
-        """Vytvoří záložku pro konkrétní cvičení - BEZ přidávání"""
+        """Vytvoří záložku pro konkrétní cvičení - BEZ přidávání (layout beze změny).
+        MINIMAL-CHANGE: pouze přidán řádek s přepínači Den/Týden/Měsíc/Rok pod kalendář (nad graf),
+        které volají update_performance_chart(...). Ničeho dalšího se nedotýkáme.
+        """
         widget = QWidget()
         main_layout = QHBoxLayout(widget)
         
@@ -4154,8 +4273,47 @@ class FitnessTrackerApp(QMainWindow):
         stats_year_label.setObjectName(f"stats_year_label_{exercise_type}")
         stats_year_label.setStyleSheet("font-size: 11px; padding: 5px; background-color: #2d2d2d; color: #e0e0e0; border-radius: 5px;")
         calendar_layout.addWidget(stats_year_label)
-        
-        # ==================== NOVĚ: PŘIDÁNÍ GRAFU POD KALENDÁŘ ====================
+    
+        # ==================== JEN TOTO NAVÍC: přepínače režimu grafu ====================
+        # (Malý vodorovný řádek s tlačítky Den/Týden/Měsíc/Rok; bez dopadu na zbytek layoutu)
+        mode_row = QHBoxLayout()
+        mode_row.setSpacing(8)
+        btn_day = QRadioButton("Den")
+        btn_week = QRadioButton("Týden")
+        btn_month = QRadioButton("Měsíc")
+        btn_year = QRadioButton("Rok")
+        # výchozí režim necháme jako doposud – Týden
+        btn_week.setChecked(True)
+    
+        # uložíme odkazy pro pozdější synchronizaci (bez dalších zásahů do app)
+        if not hasattr(self, "chart_mode_buttons"):
+            self.chart_mode_buttons = {}
+        self.chart_mode_buttons[exercise_type] = {
+            "daily": btn_day,
+            "weekly": btn_week,
+            "monthly": btn_month,
+            "yearly": btn_year,
+        }
+    
+        # signály: volají update_performance_chart se zvoleným módem
+        for b in (btn_day, btn_week, btn_month, btn_year):
+            b.toggled.connect(
+                lambda _=None, m=b: m.isChecked()
+                and self.update_performance_chart(
+                    exercise_type,
+                    "daily" if m is btn_day else "weekly" if m is btn_week else "monthly" if m is btn_month else "yearly"
+                )
+            )
+    
+        mode_row.addWidget(btn_day)
+        mode_row.addWidget(btn_week)
+        mode_row.addWidget(btn_month)
+        mode_row.addWidget(btn_year)
+        mode_row.addStretch()
+        calendar_layout.addLayout(mode_row)
+        # ==================== KONEC DOPLNĚNÍ ====================
+    
+        # ==================== GRAF POD KALENDÁŘEM (beze změny) ====================
         self.create_performance_chart(exercise_type, calendar_layout)
         
         calendar_layout.addStretch()
