@@ -4542,6 +4542,34 @@ class FitnessTrackerApp(QMainWindow):
             self.refresh_add_tab_goals()
             
             self.show_message("Upraveno", f"Výkon upraven z {old_value} na {new_value}")
+            
+    def _calendar_tooltip_with_contrast(self, tooltip_text: str, bg_hex: str) -> str:
+        """
+        Vrátí HTML tooltip se správným kontrastem textu podle světlosti barvy pozadí (hex).
+        - Světlé pozadí  -> tmavý text
+        - Tmavé pozadí   -> světlý text
+        Zachová původní řádky (\\n) pomocí white-space: pre-line.
+        """
+        try:
+            if not isinstance(bg_hex, str) or not bg_hex.startswith("#") or len(bg_hex) < 7:
+                # Bezpečný fallback – světlý text pro dark theme
+                return f"<div style='color:#f0f0f0; white-space:pre-line'>{tooltip_text}</div>"
+    
+            c = bg_hex.lstrip("#")
+            r, g, b = int(c[0:2], 16), int(c[2:4], 16), int(c[4:6], 16)
+    
+            def _lin(v: float) -> float:
+                v = v / 255.0
+                return v/12.92 if v <= 0.04045 else ((v+0.055)/1.055)**2.4
+    
+            # Relativní luminance (sRGB)
+            lum = 0.2126 * _lin(r) + 0.7152 * _lin(g) + 0.0722 * _lin(b)
+            text_color = "#111111" if lum >= 0.60 else "#f0f0f0"
+    
+            return f"<div style='color:{text_color}; white-space:pre-line'>{tooltip_text}</div>"
+        except Exception:
+            # V nouzi ponech světlý text (dark theme)
+            return f"<div style='color:#f0f0f0; white-space:pre-line'>{tooltip_text}</div>"
 
     def update_exercise_tab(self, exercise_type):
         """Aktualizuje statistiky a strom záznamů daného cvičení.
@@ -5120,7 +5148,7 @@ class FitnessTrackerApp(QMainWindow):
             color, tooltip_text = self.get_day_color_gradient(date_str, date.date(), today, start_date, exercise_type)
             border_style = "border: 2px solid #87CEEB;" if date.date() == today else "border: 1px solid #3d3d3d;"
             day_label.setStyleSheet(f"background-color: {color}; font-weight: bold; {border_style} font-size: 16px;")
-            day_label.setToolTip(tooltip_text)
+            day_label.setToolTip(self._calendar_tooltip_with_contrast(tooltip_text, color))
             
             layout.addWidget(day_label, row, col)
             col += 1
