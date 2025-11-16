@@ -3238,15 +3238,15 @@ class FitnessTrackerApp(QMainWindow):
                 self.exercise_spinboxes[exercise_id].setValue(0)
 
     def create_add_workout_tab(self):
-        """Záložka pro přidávání výkonů - dynamická podle aktivních cvičení"""
+        """Záložka pro přidávání výkonů - dynamická podle aktivních cvičení + plán k dosažení BMI."""
         widget = QWidget()
         layout = QVBoxLayout(widget)
-        
+
         # Titulek
         title_label = QLabel("📝 Přidání výkonů")
         title_label.setStyleSheet("font-size: 18px; font-weight: bold; color: #14919b; padding: 10px;")
         layout.addWidget(title_label)
-        
+
         # Výběr data
         date_row = QHBoxLayout()
         date_row.addWidget(QLabel("Datum:"))
@@ -3257,29 +3257,32 @@ class FitnessTrackerApp(QMainWindow):
         date_row.addWidget(self.add_date_edit)
         date_row.addStretch()
         layout.addLayout(date_row)
-        
+
         # Přehled cílů pro zvolené datum
         goals_group = QGroupBox("🎯 Cíle pro zvolené datum")
         goals_layout = QVBoxLayout()
         goals_layout.setObjectName("add_goals_layout")
-        
+
         self.add_goals_labels = {}
         selected_date_str = self.add_date_edit.date().toString("yyyy-MM-dd")
-        
+
         active_exercises = self.get_active_exercises()
         for exercise_id in active_exercises:
             config = self.get_exercise_config(exercise_id)
             goal = self.calculate_goal(exercise_id, selected_date_str)
-            
+
             # Spočítej aktuální hodnotu
             current_value = 0
-            if selected_date_str in self.data["workouts"] and exercise_id in self.data["workouts"][selected_date_str]:
+            if (
+                selected_date_str in self.data["workouts"]
+                and exercise_id in self.data["workouts"][selected_date_str]
+            ):
                 records = self.data["workouts"][selected_date_str][exercise_id]
                 if isinstance(records, list):
-                    current_value = sum(r["value"] for r in records)
+                    current_value = sum(r.get("value", 0) for r in records)
                 elif isinstance(records, dict):
                     current_value = records.get("value", 0)
-            
+
             if current_value >= goal:
                 status = f"✅ Splněno ({current_value}/{goal})"
                 color = "#32c766"
@@ -3289,37 +3292,40 @@ class FitnessTrackerApp(QMainWindow):
             else:
                 status = f"❌ Nesplněno (0/{goal})"
                 color = "#ff6b6b"
-            
+
             goal_label = QLabel(f"{config['icon']} {config['name']}: {status}")
             goal_label.setStyleSheet(f"font-size: 13px; padding: 5px; color: {color}; font-weight: bold;")
             goal_label.setObjectName(f"goal_label_{exercise_id}")
             self.add_goals_labels[exercise_id] = goal_label
             goals_layout.addWidget(goal_label)
-        
+
         goals_group.setLayout(goals_layout)
         layout.addWidget(goals_group)
-        
+
         # Přidávání výkonů - dynamické řádky
         add_group = QGroupBox("➕ Zadat výkon")
         add_layout = QVBoxLayout()
-        
+
         # Společné styly
         main_button_style = "font-size: 12px; padding: 8px; min-height: 35px; background-color: #0d7377;"
-        quick_button_style = "font-size: 11px; padding: 8px; min-height: 35px; background-color: #2a4d50; color: #b0b0b0;"
-        
-        # **DYNAMICKY VYTVOŘIT ŘÁDEK PRO KAŽDÉ CVIČENÍ**
-        self.exercise_spinboxes = {}  # Uložení SpinBoxů
-        
+        quick_button_style = (
+            "font-size: 11px; padding: 8px; min-height: 35px; "
+            "background-color: #2a4d50; color: #b0b0b0;"
+        )
+
+        # Dynamicky vytvořit řádek pro každé cvičení
+        self.exercise_spinboxes = {}
+
         for exercise_id in active_exercises:
             config = self.get_exercise_config(exercise_id)
-            
+
             exercise_row = QHBoxLayout()
-            
+
             # Label
             label = QLabel(f"{config['icon']} {config['name']}:")
             label.setFixedWidth(80)
             exercise_row.addWidget(label)
-            
+
             # SpinBox
             spinbox = QSpinBox()
             spinbox.setRange(0, 10000)
@@ -3327,37 +3333,309 @@ class FitnessTrackerApp(QMainWindow):
             spinbox.setFixedWidth(100)
             exercise_row.addWidget(spinbox)
             self.exercise_spinboxes[exercise_id] = spinbox
-            
+
             # Hlavní tlačítko "Přidat"
             main_btn = QPushButton("Přidat")
             main_btn.setStyleSheet(main_button_style)
             main_btn.setFixedWidth(80)
-            main_btn.clicked.connect(lambda checked, ex=exercise_id: self.add_single_workout(ex, self.exercise_spinboxes[ex].value()))
+            main_btn.clicked.connect(
+                lambda checked, ex_id=exercise_id: self.add_single_workout(
+                    ex_id,
+                    self.exercise_spinboxes[ex_id].value(),
+                )
+            )
             exercise_row.addWidget(main_btn)
-            
+
             # Rychlá tlačítka
             quick_buttons = config.get("quick_buttons", [10, 20, 30])
             for quick_val in quick_buttons:
                 quick_btn = QPushButton(str(quick_val))
                 quick_btn.setFixedWidth(50)
                 quick_btn.setStyleSheet(quick_button_style)
-                quick_btn.clicked.connect(lambda checked, ex=exercise_id, val=quick_val: self.add_single_workout(ex, val))
+                quick_btn.clicked.connect(
+                    lambda checked, ex_id=exercise_id, val=quick_val: self.add_single_workout(
+                        ex_id,
+                        val,
+                    )
+                )
                 exercise_row.addWidget(quick_btn)
-            
+
             exercise_row.addStretch()
             add_layout.addLayout(exercise_row)
-        
+
         add_group.setLayout(add_layout)
         layout.addWidget(add_group)
-        
+
         # Tlačítko pro přidání všeho najednou
         add_all_btn = QPushButton("➕ Přidat všechny výkony najednou")
         add_all_btn.setStyleSheet("font-size: 14px; padding: 12px; background-color: #0d7377;")
         add_all_btn.clicked.connect(self.add_all_workouts)
         layout.addWidget(add_all_btn)
-        
+
+        # Plán k dosažení cílového BMI
+        plan_group = QGroupBox("🎯 Plán k dosažení cílového BMI")
+        plan_layout = QVBoxLayout()
+
+        params_row = QHBoxLayout()
+        params_row.addWidget(QLabel("Cílové BMI:"))
+        self.bmi_plan_target_spin = QDoubleSpinBox()
+        self.bmi_plan_target_spin.setRange(18.5, 25.0)
+        self.bmi_plan_target_spin.setSingleStep(0.1)
+        self.bmi_plan_target_spin.setDecimals(1)
+        self.bmi_plan_target_spin.setValue(22.0)
+        params_row.addWidget(self.bmi_plan_target_spin)
+
+        params_row.addSpacing(12)
+        params_row.addWidget(QLabel("Horizont:"))
+        self.bmi_plan_horizon_combo = QComboBox()
+        self.bmi_plan_horizon_combo.addItems(["3 měsíce", "6 měsíců", "12 měsíců"])
+        self.bmi_plan_horizon_combo.setCurrentIndex(1)
+        params_row.addWidget(self.bmi_plan_horizon_combo)
+
+        params_row.addSpacing(12)
+        params_row.addWidget(QLabel("Režim:"))
+        self.bmi_plan_mode_combo = QComboBox()
+        self.bmi_plan_mode_combo.addItems(["Opatrný", "Střední", "Agresivnější"])
+        self.bmi_plan_mode_combo.setCurrentText("Střední")
+        params_row.addWidget(self.bmi_plan_mode_combo)
+
+        params_row.addStretch()
+
+        self.bmi_plan_recompute_button = QPushButton("Přepočítat plán")
+        self.bmi_plan_recompute_button.setStyleSheet("padding: 6px 12px;")
+        params_row.addWidget(self.bmi_plan_recompute_button)
+
+        plan_layout.addLayout(params_row)
+
+        self.bmi_plan_summary_label = QLabel("")
+        self.bmi_plan_summary_label.setWordWrap(True)
+        self.bmi_plan_summary_label.setStyleSheet("font-size: 12px; color: #dddddd;")
+        plan_layout.addWidget(self.bmi_plan_summary_label)
+
+        self.bmi_plan_tree = QTreeWidget()
+        self.bmi_plan_tree.setColumnCount(4)
+        self.bmi_plan_tree.setHeaderLabels(["Cvik", "Doporučeno týdně", "Celkem v období", "Poznámka"])
+        self.bmi_plan_tree.setRootIsDecorated(False)
+        self.bmi_plan_tree.setAlternatingRowColors(True)
+        header = self.bmi_plan_tree.header()
+        header.setStretchLastSection(True)
+        header.setSectionResizeMode(QHeaderView.ResizeToContents)
+        plan_layout.addWidget(self.bmi_plan_tree)
+
+        plan_group.setLayout(plan_layout)
+        layout.addWidget(plan_group)
+
+        # Signály pro plán
+        self.bmi_plan_recompute_button.clicked.connect(self.recompute_bmi_plan)
+
         layout.addStretch()
+
+        # Inicializace plánu
+        self.recompute_bmi_plan()
+
         return widget
+    
+    def get_current_weight_and_bmi(self) -> tuple[float | None, float | None, float | None]:
+        """Vrátí aktuální váhu, výšku a BMI z posledního měření, nebo (None, None, None).
+
+        Očekává uložení v self.data["body_metrics"] se strukturou:
+            {
+                "height_cm": float,
+                "weight_history": [
+                    {"value": kg, "timestamp": "YYYY-MM-DD HH:MM:SS", ...},
+                    ...
+                ]
+            }
+        """
+        body = self.data.get("body_metrics", {})
+        height_cm_raw = body.get("height_cm", 0)
+        try:
+            height_cm = float(height_cm_raw)
+        except (TypeError, ValueError):
+            height_cm = 0.0
+
+        if height_cm <= 0:
+            return None, None, None
+
+        history = body.get("weight_history", [])
+        if not history:
+            return None, height_cm, None
+
+        # Najdi poslední záznam podle timestampu (nebo date)
+        try:
+            latest = max(
+                history,
+                key=lambda e: e.get("timestamp", "") or e.get("date", ""),
+            )
+            weight_raw = latest.get("value", 0.0)
+            weight = float(weight_raw)
+        except Exception:
+            return None, height_cm, None
+
+        if weight <= 0:
+            return None, height_cm, None
+
+        height_m = height_cm / 100.0
+        bmi = weight / (height_m * height_m) if height_m > 0 else None
+        return weight, height_cm, bmi
+
+    def get_weekly_exercise_baseline(self, weeks: int = 8) -> dict[str, float]:
+        """Spočítá průměrný týdenní objem cvičení podle historie za posledních `weeks` týdnů.
+
+        Vrací mapu:
+            {exercise_id: průměrná hodnota za týden}
+        """
+        workouts = self.data.get("workouts", {})
+        if not workouts:
+            return {}
+
+        all_dates: list[datetime.date] = []
+        for date_str in workouts.keys():
+            try:
+                d = datetime.strptime(date_str, "%Y-%m-%d").date()
+                all_dates.append(d)
+            except ValueError:
+                continue
+
+        if not all_dates:
+            return {}
+
+        max_date = max(all_dates)
+        min_date = max_date - timedelta(days=weeks * 7 - 1)
+
+        totals: dict[str, float] = {}
+
+        current = min_date
+        while current <= max_date:
+            date_key = current.strftime("%Y-%m-%d")
+            day_data = workouts.get(date_key)
+            if day_data:
+                for exercise_id, records in day_data.items():
+                    value = 0.0
+                    if isinstance(records, list):
+                        value = sum(float(r.get("value", 0.0)) for r in records)
+                    elif isinstance(records, dict):
+                        value = float(records.get("value", 0.0))
+                    if value:
+                        totals[exercise_id] = totals.get(exercise_id, 0.0) + value
+            current += timedelta(days=1)
+
+        period_days = (max_date - min_date).days + 1
+        if period_days <= 0:
+            return {}
+
+        weeks_effective = max(1.0, period_days / 7.0)
+
+        baseline: dict[str, float] = {
+            exercise_id: total / weeks_effective for exercise_id, total in totals.items()
+        }
+        return baseline
+
+    def recompute_bmi_plan(self):
+        """Spočítá a zobrazí plán cvičení k dosažení cílového BMI v záložce „Přidat výkon“."""
+        if not hasattr(self, "bmi_plan_tree"):
+            return
+
+        # Vyčisti předchozí řádky
+        self.bmi_plan_tree.clear()
+
+        weight_now, height_cm, bmi_now = self.get_current_weight_and_bmi()
+        if height_cm is None or weight_now is None or bmi_now is None:
+            self.bmi_plan_summary_label.setText(
+                "Pro výpočet plánu je potřeba mít nastavenou výšku "
+                "a alespoň jedno měření váhy v záložce „BMI & váha“."
+            )
+            return
+
+        target_bmi = float(self.bmi_plan_target_spin.value())
+        height_m = height_cm / 100.0
+        weight_target = target_bmi * (height_m * height_m)
+        delta_weight = max(0.0, weight_now - weight_target)
+
+        horizon_text = self.bmi_plan_horizon_combo.currentText()
+        if "3" in horizon_text:
+            horizon_weeks = 12
+        elif "6" in horizon_text:
+            horizon_weeks = 26
+        else:
+            horizon_weeks = 52
+
+        mode_text = self.bmi_plan_mode_combo.currentText()
+        if mode_text == "Opatrný":
+            weekly_loss = 0.25
+            volume_factor = 0.15
+        elif mode_text == "Agresivnější":
+            weekly_loss = 0.75
+            volume_factor = 0.35
+        else:
+            weekly_loss = 0.5
+            volume_factor = 0.25
+
+        if delta_weight <= 0:
+            weeks_needed = 0.0
+            loss_in_horizon = 0.0
+        else:
+            weeks_needed = delta_weight / weekly_loss
+            loss_in_horizon = min(delta_weight, weekly_loss * horizon_weeks)
+
+        predicted_weight = weight_now - loss_in_horizon
+        predicted_bmi = predicted_weight / (height_m * height_m)
+
+        # Textový souhrn
+        if delta_weight <= 0:
+            summary = (
+                f"Aktuální BMI: {bmi_now:.1f} (≈ {weight_now:.1f} kg). "
+                f"Nacházíš se v cílové zóně nebo pod ní. Plán je nastaven jako udržovací "
+                f"pro horizont {horizon_weeks} týdnů."
+            )
+        else:
+            summary = (
+                f"Aktuální BMI: {bmi_now:.1f} (≈ {weight_now:.1f} kg). "
+                f"Cílové BMI: {target_bmi:.1f} (≈ {weight_target:.1f} kg).\n"
+                f"Při režimu „{mode_text}“ by bylo potřeba přibližně {weeks_needed:.1f} týdne/týdnů "
+                f"pro dosažení cíle. V zvoleném horizontu {horizon_weeks} týdnů se odhaduje, "
+                f"že bys mohl/a dosáhnout cca {predicted_weight:.1f} kg (BMI ≈ {predicted_bmi:.1f})."
+            )
+
+        self.bmi_plan_summary_label.setText(summary)
+
+        # Základní objem cvičení z historie
+        baseline = self.get_weekly_exercise_baseline(weeks=8)
+        active_exercises = self.get_active_exercises()
+
+        if not baseline and delta_weight > 0:
+            # Nemáme historii – nabídneme jemný start
+            self.bmi_plan_summary_label.setText(
+                summary
+                + "\n\n"
+                + "Nebyla nalezena historie výkonů, plán proto používá konzervativní výchozí hodnoty."
+            )
+
+        for exercise_id in active_exercises:
+            config = self.get_exercise_config(exercise_id)
+            base_weekly = baseline.get(exercise_id, 0.0)
+
+            if base_weekly <= 0:
+                # Žádná historie – navrhneme jemný start
+                weekly_value = 1.0 if delta_weight > 0 else 0.5
+                note = "Žádná historie, navrženo jako jemný start."
+            else:
+                weekly_value = base_weekly * (1.0 + volume_factor)
+                note = f"Průměrně {base_weekly:.1f}/týden → +{int(volume_factor * 100)} % navýšení."
+
+            total_value = weekly_value * horizon_weeks
+
+            item = QTreeWidgetItem([
+                f"{config['icon']} {config['name']}",
+                f"{weekly_value:.1f}",
+                f"{total_value:.1f}",
+                note,
+            ])
+            # zarovnání čísel na střed
+            item.setTextAlignment(1, Qt.AlignCenter)
+            item.setTextAlignment(2, Qt.AlignCenter)
+
+            self.bmi_plan_tree.addTopLevelItem(item)
 
     def refresh_add_tab_goals(self):
         """Aktualizuje přehled cílů při změně data"""
