@@ -15,14 +15,12 @@ from PySide6.QtWidgets import (
     QDialog, QListWidget, QListWidgetItem, QInputDialog, QCheckBox, QFileDialog,
     QTreeWidget, QTreeWidgetItem, QLineEdit, QTextBrowser, QAbstractItemView, QRadioButton  # ← PŘIDÁNO
 )
-
-from PySide6.QtCore import Qt, QDate, QTimer
-from PySide6.QtGui import QColor, QAction
+from PySide6.QtCore import Qt, QDate, QTime, QTimer
+from PySide6.QtGui import QColor, QAction, QBrush
 
 # Matplotlib imports
 import matplotlib
 matplotlib.use('Qt5Agg')
-# Matplotlib canvas alias pro volání FigureCanvas(fig)
 try:
     from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 except ImportError:
@@ -32,7 +30,7 @@ from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
 
 TITLE = "Fitness Tracker"
-VERSION = "3.2.3c"
+VERSION = "3.3.0"
 VERSION_DATE = "16.11.2025"
 
 # Dark Theme Stylesheet
@@ -1616,7 +1614,6 @@ class EditWorkoutDialog(QDialog):
         self.delete_requested = True
         self.accept()
 
-
 class FitnessTrackerApp(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -1624,25 +1621,42 @@ class FitnessTrackerApp(QMainWindow):
         # macOS/HiDPI: aby se pohodlně vešly graf + celý kalendář
         self.setMinimumSize(1680, 1000)
         self.resize(1680, 1050)
-    
+
         self.data_file = Path("fitness_data.json")
         self.exercise_year_selectors = {}
         self.exercise_calendar_widgets = {}
         self.current_settings_year = datetime.now().year
-    
+
         self.load_data()
         self.ensure_app_state()
         self.migrate_data()
         self.migrate_to_year_settings()
         self.migrate_to_exercises()
         self.migrate_exercise_keys()  # migrace klíčů (bez zásahu)
-    
+        self.ensure_body_metrics()
+
         self.setup_ui()
         self.restore_app_state()
-    
+
         self.update_timer = QTimer()
         self.update_timer.timeout.connect(self.auto_refresh)
         self.update_timer.start(5000)
+        
+    def ensure_body_metrics(self):
+        """Zajistí existenci sekce body_metrics pro BMI/váhu."""
+        if "body_metrics" not in self.data or not isinstance(self.data["body_metrics"], dict):
+            self.data["body_metrics"] = {}
+        body = self.data["body_metrics"]
+
+        # Výchozí výška (cm)
+        height = body.get("height_cm")
+        if not isinstance(height, (int, float)) or height <= 0:
+            body["height_cm"] = 180
+
+        # Historie měření váhy
+        history = body.get("weight_history")
+        if not isinstance(history, list):
+            body["weight_history"] = []
 
     def backup_data_file(self):
         """Vytvoří časovou zálohu JSON dat před migračními zásahy."""
@@ -2146,29 +2160,479 @@ class FitnessTrackerApp(QMainWindow):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         layout = QVBoxLayout(central_widget)
-    
+
         self.tabs = QTabWidget()
         self.tabs.currentChanged.connect(self.on_tab_changed)
         layout.addWidget(self.tabs)
-    
+
         # Záložka "Přidat výkon" - vždy první
         self.tabs.addTab(self.create_add_workout_tab(), "➕ Přidat výkon")
-    
+        # Záložka "BMI & váha"
+        self.tabs.addTab(self.create_bmi_tab(), "⚖️ BMI & váha")
+
         # DYNAMICKÉ ZÁLOŽKY PRO CVIČENÍ
         active_exercises = self.get_active_exercises()
         for exercise_id in active_exercises:
             config = self.get_exercise_config(exercise_id)
             tab_label = f"{config['icon']} {config['name']}"
             self.tabs.addTab(self.create_exercise_tab(exercise_id, config['icon']), tab_label)
-    
+
         # Záložka "Nastavení"
         self.tabs.addTab(self.create_settings_tab(), "⚙️ Nastavení")
-    
+
         # Záložka "O aplikaci"
         self.tabs.addTab(self.create_about_tab(), "ℹ️ O aplikaci")
-    
+
         # >>> Přidej nenarušující „Novinky“ do About (nová podzáložka)
         self.inject_about_updates()
+        
+    def create_bmi_tab(self):
+        """Záložka pro sledování váhy a výpočet BMI."""
+        tab = QWidget()
+        main_layout = QHBoxLayout(tab)
+
+        # Levý panel – osobní údaje, nové měření, historie
+        left_layout = QVBoxLayout()
+
+        # 📏 Osobní údaje
+        personal_group = QGroupBox("📏 Osobní údaje")
+        personal_form = QFormLayout()
+
+        self.bmi_height_spin = QSpinBox()
+        self.bmi_height_spin.setRange(120, 230)
+        body = self.data.get("body_metrics", {})
+        height_cm = int(body.get("height_cm", 180))
+        if height_cm < 120 or height_cm > 230:
+            height_cm = 180
+        self.bmi_height_spin.setValue(height_cm)
+        personal_form.addRow("Výška (cm):", self.bmi_height_spin)
+        personal_group.setLayout(personal_form)
+        left_layout.addWidget(personal_group)
+
+        # ⚖️ Nové měření
+        measurement_group = QGroupBox("⚖️ Nové měření")
+        measurement_layout = QGridLayout()
+
+        # Datum a čas měření
+        measurement_layout.addWidget(QLabel("Datum:"), 0, 0)
+        self.bmi_date_edit = QDateEdit()
+        self.bmi_date_edit.setDate(QDate.currentDate())
+        self.bmi_date_edit.setCalendarPopup(True)
+        measurement_layout.addWidget(self.bmi_date_edit, 0, 1)
+
+        measurement_layout.addWidget(QLabel("Čas:"), 0, 2)
+        self.bmi_time_edit = QTimeEdit()
+        self.bmi_time_edit.setTime(QTime.currentTime())
+        measurement_layout.addWidget(self.bmi_time_edit, 0, 3)
+
+        # Váha
+        measurement_layout.addWidget(QLabel("Váha (kg):"), 1, 0)
+        self.bmi_weight_spin = QDoubleSpinBox()
+        self.bmi_weight_spin.setRange(40.0, 200.0)
+        self.bmi_weight_spin.setSingleStep(0.1)
+        self.bmi_weight_spin.setDecimals(1)
+        self.bmi_weight_spin.setValue(80.0)
+        measurement_layout.addWidget(self.bmi_weight_spin, 1, 1)
+
+        # Aktuální BMI náhled
+        self.bmi_current_label = QLabel("BMI: -")
+        self.bmi_current_label.setStyleSheet("font-weight: bold;")
+        measurement_layout.addWidget(self.bmi_current_label, 1, 2, 1, 2)
+
+        # Uložit měření
+        self.bmi_save_button = QPushButton("💾 Uložit měření")
+        measurement_layout.addWidget(self.bmi_save_button, 2, 0, 1, 4)
+
+        measurement_group.setLayout(measurement_layout)
+        left_layout.addWidget(measurement_group)
+
+        # 📜 Historie měření
+        history_group = QGroupBox("📜 Historie měření")
+        history_layout = QVBoxLayout()
+
+        self.bmi_history_tree = QTreeWidget()
+        self.bmi_history_tree.setColumnCount(5)
+        self.bmi_history_tree.setHeaderLabels(["Datum", "Čas", "Váha [kg]", "BMI", "Kategorie"])
+        self.bmi_history_tree.setRootIsDecorated(False)
+        self.bmi_history_tree.setAlternatingRowColors(True)
+        self.bmi_history_tree.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.bmi_history_tree.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        header = self.bmi_history_tree.header()
+        header.setStretchLastSection(True)
+        header.setSectionResizeMode(QHeaderView.ResizeToContents)
+
+        history_layout.addWidget(self.bmi_history_tree)
+        history_group.setLayout(history_layout)
+        left_layout.addWidget(history_group, 1)
+
+        main_layout.addLayout(left_layout, 1)
+
+        # Pravý panel – grafy
+        right_layout = QVBoxLayout()
+
+        # 📈 Časový graf
+        time_group = QGroupBox("📈 Vývoj váhy a BMI")
+        time_layout = QVBoxLayout()
+
+        mode_row = QHBoxLayout()
+        mode_row.addWidget(QLabel("Režim:"))
+        self.bmi_chart_mode_combo = QComboBox()
+        self.bmi_chart_mode_combo.addItems(["Váha", "BMI", "Obojí"])
+        mode_row.addWidget(self.bmi_chart_mode_combo)
+        mode_row.addStretch()
+        time_layout.addLayout(mode_row)
+
+        self.bmi_time_fig = Figure(figsize=(8, 3), facecolor="#1e1e1e")
+        self.bmi_time_canvas = FigureCanvas(self.bmi_time_fig)
+        self.bmi_time_canvas.setStyleSheet("background-color: #1e1e1e;")
+        time_layout.addWidget(self.bmi_time_canvas)
+
+        time_group.setLayout(time_layout)
+        right_layout.addWidget(time_group, 2)
+
+        # 🧪 BMI zóny
+        zones_group = QGroupBox("🧪 BMI zóny – přehled")
+        zones_layout = QVBoxLayout()
+
+        self.bmi_zones_fig = Figure(figsize=(8, 2), facecolor="#1e1e1e")
+        self.bmi_zones_canvas = FigureCanvas(self.bmi_zones_fig)
+        self.bmi_zones_canvas.setStyleSheet("background-color: #1e1e1e;")
+        zones_layout.addWidget(self.bmi_zones_canvas)
+
+        zones_group.setLayout(zones_layout)
+        right_layout.addWidget(zones_group, 1)
+
+        main_layout.addLayout(right_layout, 1)
+
+        # Signály
+        self.bmi_height_spin.valueChanged.connect(self.on_bmi_height_changed)
+        self.bmi_weight_spin.valueChanged.connect(self.update_bmi_current_display)
+        self.bmi_date_edit.dateChanged.connect(self.update_bmi_current_display)
+        self.bmi_time_edit.timeChanged.connect(self.update_bmi_current_display)
+        self.bmi_save_button.clicked.connect(self.add_weight_measurement)
+        self.bmi_chart_mode_combo.currentIndexChanged.connect(self.update_bmi_charts)
+
+        # Inicializace
+        self.refresh_bmi_history()
+        self.update_bmi_current_display()
+        self.update_bmi_charts()
+
+        return tab
+
+    def on_bmi_height_changed(self, value: int):
+        """Uložení výšky a aktualizace BMI výpočtů."""
+        try:
+            if "body_metrics" not in self.data or not isinstance(self.data["body_metrics"], dict):
+                self.data["body_metrics"] = {}
+            self.data["body_metrics"]["height_cm"] = int(value)
+            self.save_data()
+        except Exception as e:
+            print(f"Chyba při ukládání výšky: {e}")
+        self.update_bmi_current_display()
+        self.update_bmi_charts()
+
+    def add_weight_measurement(self):
+        """Přidá nové měření váhy do historie."""
+        if not hasattr(self, "bmi_weight_spin"):
+            return
+
+        body = self.data.get("body_metrics", {})
+        height_cm = float(body.get("height_cm", 0))
+        weight = float(self.bmi_weight_spin.value())
+
+        if height_cm <= 0 or weight <= 0:
+            self.show_message("Neplatné hodnoty", "Nastav prosím výšku a váhu větší než 0.", QMessageBox.Warning)
+            return
+
+        date = self.bmi_date_edit.date()
+        time = self.bmi_time_edit.time()
+        dt = datetime(date.year(), date.month(), date.day(), time.hour(), time.minute(), 0)
+        date_str = dt.strftime("%Y-%m-%d")
+        timestamp_str = dt.strftime("%Y-%m-%d %H:%M:%S")
+
+        entry = {
+            "id": str(uuid.uuid4()),
+            "timestamp": timestamp_str,
+            "date": date_str,
+            "value": float(weight)
+        }
+
+        if "body_metrics" not in self.data or not isinstance(self.data["body_metrics"], dict):
+            self.data["body_metrics"] = {}
+        if "weight_history" not in self.data["body_metrics"] or not isinstance(self.data["body_metrics"]["weight_history"], list):
+            self.data["body_metrics"]["weight_history"] = []
+
+        self.data["body_metrics"]["weight_history"].append(entry)
+        self.save_data()
+
+        self.refresh_bmi_history()
+        self.update_bmi_current_display()
+        self.update_bmi_charts()
+
+    def refresh_bmi_history(self):
+        """Obnoví strom historie měření BMI/váhy."""
+        if not hasattr(self, "bmi_history_tree"):
+            return
+
+        self.bmi_history_tree.clear()
+        body = self.data.get("body_metrics", {})
+        history = body.get("weight_history", [])
+        height_cm = float(body.get("height_cm", 0))
+
+        # Setřídit podle timestampu
+        try:
+            sorted_history = sorted(history, key=lambda e: e.get("timestamp", ""))
+        except Exception:
+            sorted_history = history
+
+        for entry in sorted_history:
+            ts = entry.get("timestamp")
+            try:
+                dt = datetime.strptime(ts, "%Y-%m-%d %H:%M:%S")
+            except Exception:
+                # Fallback jen na datum
+                dt = None
+
+            if dt:
+                date_str = dt.strftime("%d.%m.%Y")
+                time_str = dt.strftime("%H:%M")
+            else:
+                date_str = entry.get("date", "")
+                time_str = ""
+
+            weight = float(entry.get("value", 0.0))
+            bmi = self.calculate_bmi(weight, height_cm) if height_cm > 0 else 0.0
+            cat_name, color = self.get_bmi_category(bmi) if bmi > 0 else ("-", None)
+
+            item = QTreeWidgetItem([
+                date_str,
+                time_str,
+                f"{weight:.1f}" if weight > 0 else "-",
+                f"{bmi:.1f}" if bmi > 0 else "-",
+                cat_name
+            ])
+
+            if bmi > 0 and color:
+                brush = QBrush(QColor(color))
+                for col in range(item.columnCount()):
+                    item.setForeground(col, brush)
+
+            self.bmi_history_tree.addTopLevelItem(item)
+
+        self.bmi_history_tree.scrollToBottom()
+
+    def update_bmi_current_display(self):
+        """Aktualizuje náhled aktuálního BMI podle zadané váhy a výšky."""
+        if not hasattr(self, "bmi_current_label"):
+            return
+
+        body = self.data.get("body_metrics", {})
+        height_cm = float(body.get("height_cm", 0))
+        weight = float(self.bmi_weight_spin.value()) if hasattr(self, "bmi_weight_spin") else 0.0
+
+        if height_cm <= 0 or weight <= 0:
+            self.bmi_current_label.setText("BMI: -")
+            self.bmi_current_label.setStyleSheet("font-weight: bold; color: #e0e0e0;")
+            return
+
+        bmi = self.calculate_bmi(weight, height_cm)
+        category, color = self.get_bmi_category(bmi)
+        self.bmi_current_label.setText(f"BMI: {bmi:.1f} – {category}")
+        self.bmi_current_label.setStyleSheet(f"font-weight: bold; color: {color};")
+
+    def calculate_bmi(self, weight_kg: float, height_cm: float) -> float:
+        """Výpočet BMI (kg / m^2), výsledek zaokrouhlený na jedno desetinné místo."""
+        if height_cm <= 0:
+            return 0.0
+        height_m = height_cm / 100.0
+        if height_m <= 0:
+            return 0.0
+        return round(weight_kg / (height_m * height_m), 1)
+
+    def get_bmi_category(self, bmi: float):
+        """Vrátí (název, barva) BMI kategorie pro dané BMI."""
+        if bmi <= 0:
+            return "Nedefinováno", "#e0e0e0"
+        if bmi < 18.5:
+            return "Podváha", "#4ea5ff"
+        if bmi < 25.0:
+            return "Normální hmotnost", "#32c766"
+        if bmi < 30.0:
+            return "Nadváha", "#ffc107"
+        if bmi < 35.0:
+            return "Obezita I", "#ff7043"
+        return "Obezita II+", "#ff1744"
+
+    def get_latest_bmi(self) -> float:
+        """Vrátí BMI z posledního měření (nebo 0.0, pokud není k dispozici)."""
+        body = self.data.get("body_metrics", {})
+        height_cm = float(body.get("height_cm", 0))
+        history = body.get("weight_history", [])
+        if height_cm <= 0 or not history:
+            return 0.0
+        try:
+            latest = max(history, key=lambda e: e.get("timestamp", ""))
+        except Exception:
+            latest = history[-1]
+        weight = float(latest.get("value", 0.0))
+        return self.calculate_bmi(weight, height_cm)
+
+    def update_bmi_charts(self):
+        """Aktualizuje oba BMI grafy (časový i zónový)."""
+        self.update_bmi_time_chart()
+        self.update_bmi_zones_chart()
+
+    def update_bmi_time_chart(self):
+        """Časový graf pro váhu a BMI s možností přepínání režimů."""
+        if not hasattr(self, "bmi_time_fig") or not hasattr(self, "bmi_time_canvas"):
+            return
+
+        mode = "Váha"
+        if hasattr(self, "bmi_chart_mode_combo"):
+            mode = self.bmi_chart_mode_combo.currentText()
+
+        body = self.data.get("body_metrics", {})
+        history = body.get("weight_history", [])
+        height_cm = float(body.get("height_cm", 0))
+
+        fig = self.bmi_time_fig
+        fig.clear()
+        ax_weight = fig.add_subplot(111)
+        ax_weight.set_facecolor("#1e1e1e")
+
+        if not history or height_cm <= 0:
+            ax_weight.set_title("Zatím nejsou žádná měření nebo není nastavena výška.")
+            ax_weight.set_xlabel("Datum")
+            ax_weight.set_ylabel("Hodnota")
+            self.bmi_time_canvas.draw()
+            return
+
+        # Data pro graf
+        times = []
+        weights = []
+        bmis = []
+        for entry in sorted(history, key=lambda e: e.get("timestamp", "")):
+            ts = entry.get("timestamp")
+            try:
+                dt = datetime.strptime(ts, "%Y-%m-%d %H:%M:%S")
+            except Exception:
+                # Fallback jen na datum
+                date_str = entry.get("date", "")
+                try:
+                    dt = datetime.strptime(date_str, "%Y-%m-%d")
+                except Exception:
+                    continue
+            times.append(dt)
+            w = float(entry.get("value", 0.0))
+            weights.append(w)
+            bmis.append(self.calculate_bmi(w, height_cm))
+
+        if not times:
+            ax_weight.set_title("Zatím nejsou platná měření pro vykreslení.")
+            self.bmi_time_canvas.draw()
+            return
+
+        import matplotlib.dates as mdates
+
+        ax_weight.xaxis.set_major_formatter(mdates.DateFormatter("%d.%m.%Y"))
+        fig.autofmt_xdate(rotation=30)
+
+        if mode in ("Váha", "Obojí"):
+            ax_weight.plot(times, weights, marker="o", linestyle="-", label="Váha [kg]")
+            ax_weight.set_ylabel("Váha [kg]")
+
+        ax_bmi = None
+        if mode in ("BMI", "Obojí"):
+            if mode == "Obojí":
+                ax_bmi = ax_weight.twinx()
+                ax = ax_bmi
+            else:
+                ax = ax_weight
+            ax.plot(times, bmis, marker="o", linestyle="-", label="BMI")
+            ax.set_ylabel("BMI")
+
+        # Barevné označení bodů podle BMI kategorie
+        for t, w, bmi_val in zip(times, weights, bmis):
+            category, color = self.get_bmi_category(bmi_val)
+            ax_weight.scatter([t], [w], color=color, s=30, zorder=5)
+            if ax_bmi is not None:
+                ax_bmi.scatter([t], [bmi_val], color=color, s=30, zorder=5)
+
+        title = "Vývoj váhy"
+        if mode == "BMI":
+            title = "Vývoj BMI"
+        elif mode == "Obojí":
+            title = "Vývoj váhy a BMI"
+        ax_weight.set_title(title)
+
+        handles, labels = ax_weight.get_legend_handles_labels()
+        if ax_bmi is not None:
+            h2, l2 = ax_bmi.get_legend_handles_labels()
+            handles += h2
+            labels += l2
+        if handles:
+            ax_weight.legend(handles, labels, loc="upper left")
+
+        self.bmi_time_canvas.draw()
+
+    def update_bmi_zones_chart(self):
+        """„Vědecký“ graf BMI zón s vyznačením aktuálního BMI."""
+        if not hasattr(self, "bmi_zones_fig") or not hasattr(self, "bmi_zones_canvas"):
+            return
+
+        fig = self.bmi_zones_fig
+        fig.clear()
+        ax = fig.add_subplot(111)
+        ax.set_facecolor("#1e1e1e")
+
+        # Rozsah BMI osy
+        min_bmi = 10
+        max_bmi = 40
+        ax.set_xlim(min_bmi, max_bmi)
+        ax.set_ylim(0, 1)
+        ax.set_yticks([])
+        ax.set_xlabel("BMI")
+
+        zones = [
+            (10.0, 18.5, "Podváha", "#4ea5ff"),
+            (18.5, 25.0, "Normální", "#32c766"),
+            (25.0, 30.0, "Nadváha", "#ffc107"),
+            (30.0, 35.0, "Obezita I", "#ff7043"),
+            (35.0, 40.0, "Obezita II+", "#ff1744"),
+        ]
+
+        for start, end, label, color in zones:
+            ax.axvspan(start, end, color=color, alpha=0.35)
+            ax.text(
+                (start + end) / 2.0,
+                0.5,
+                label,
+                ha="center",
+                va="center",
+                fontsize=9,
+                color="#000000"
+            )
+
+        current_bmi = self.get_latest_bmi()
+        if current_bmi > 0:
+            category, color = self.get_bmi_category(current_bmi)
+            # Omez čáru do rozsahu grafu
+            x = max(min(current_bmi, max_bmi), min_bmi)
+            ax.axvline(x, color=color, linewidth=2)
+            ax.text(
+                x,
+                0.9,
+                f"{current_bmi:.1f}",
+                ha="center",
+                va="bottom",
+                fontsize=9,
+                color=color
+            )
+            ax.set_title(f"Poslední BMI: {current_bmi:.1f} – {category}")
+        else:
+            ax.set_title("BMI zóny (zatím žádné měření)")
+
+        self.bmi_zones_canvas.draw()
         
     def inject_about_updates(self):
         """

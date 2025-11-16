@@ -1,6 +1,6 @@
 # Fitness Tracker (PySide6, macOS-friendly)
 
-**Aktuální verze:** 3.2.3b  
+**Aktuální verze:** 3.3.0  
 **Datum vydání:** 16.11.2025 (Europe/Prague)
 
 Desktopová aplikace pro **sledování výkonu v jednotlivých cvičeních**, s možností **individuálního data zahájení** pro každé cvičení.
@@ -20,6 +20,9 @@ PySide6 GUI s tmavým tématem, přehledy, kalendářem, grafy a správou dat (e
 - **💾 Správa dat** – export/import JSON, migrace s automatickou zálohou.
 
 ---
+
+## 🆕 Novinky v řadě 3.3.x
+- **3.3.0 (16. 11. 2025)** – Přidána záložka „⚖️ BMI & váha“ pro sledování hmotnosti, výpočet BMI, historii a grafické zobrazení BMI zón.
 
 ## 🆕 Novinky v řadě 3.2.x
 - **3.2.3b (16. 11. 2025)** – „O aplikaci“ kompletně aktualizováno (About/Quickstart/Manuál/FAQ).
