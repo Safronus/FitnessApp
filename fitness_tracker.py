@@ -32,7 +32,7 @@ from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
 
 TITLE = "Fitness Tracker"
-VERSION = "3.2.3b"
+VERSION = "3.2.3c"
 VERSION_DATE = "16.11.2025"
 
 # Dark Theme Stylesheet
@@ -2589,7 +2589,7 @@ class FitnessTrackerApp(QMainWindow):
                 self.years_list.addItem(item)
     
     def create_about_tab(self):
-        """Záložka O aplikaci s kompletním helpem a manuálem (aktualizováno pro 3.2.3b)"""
+        """Záložka O aplikaci s kompletním helpem a manuálem (rozšířená, podrobnější verze)"""
         widget = QWidget()
         layout = QVBoxLayout(widget)
     
@@ -2613,7 +2613,7 @@ class FitnessTrackerApp(QMainWindow):
         about_layout.addWidget(version_info)
     
         # Popis
-        description = QTextBrowser()  # QTextBrowser kvůli odkazům
+        description = QTextBrowser()
         description.setReadOnly(True)
         description.setStyleSheet("background-color: #2d2d2d; border: 1px solid #3d3d3d; border-radius: 5px; padding: 15px;")
         description.setOpenExternalLinks(True)
@@ -2624,26 +2624,28 @@ class FitnessTrackerApp(QMainWindow):
           <p>
             <b>Fitness Tracker</b> je desktopová aplikace pro sledování pokroku v&nbsp;cvičení
             s inteligentním doporučením cílů. Umožňuje zaznamenávat denní výkony,
-            sledovat splnění cílů a vizualizovat pokrok v přehledech.
+            průběžně hodnotit splnění cílů a vizualizovat výsledky v přehledech.
           </p>
     
           <h3 style='color: #32c766;'>✨ Hlavní funkce</h3>
           <ul>
-            <li><b>🧙‍♂️ Smart Year Wizard</b> — průvodce vytvořením roku</li>
-            <li><b>🏋️ Dynamické cvičení</b> — přidávej vlastní typy cvičení</li>
-            <li><b>🗓️ Start pro každé cvičení</b> — <i>individuální datum zahájení</i> pro každý typ</li>
-            <li><b>📈 Grafy</b> — <i>🕒 Den</i> / 📅 Týden / 📆 Měsíc / 📊 Rok</li>
-            <li><b>📍 Zvýraznění začátku</b> — svislá čára <i>Start</i> podle zvoleného cvičení</li>
-            <li><b>🧩 Přehled záznamů</b> — seskupení po dnech, multi-select mazání</li>
-            <li><b>💾 Správa dat</b> — export/import a bezpečná migrace (záloha před úpravou struktury)</li>
+            <li><b>🧙‍♂️ Smart Year Wizard</b> — průvodce vytvořením roku (analýza historie / level-based režim).</li>
+            <li><b>🏋️ Vlastní cvičení</b> — přidávání typů cvičení (název, ikona, rychlá tlačítka).</li>
+            <li><b>🗓️ Individuální start</b> — každé cvičení má <i>vlastní datum zahájení</i>, promítá se do grafů i kalendáře.</li>
+            <li><b>📈 Grafy výkonu</b> — <i>🕒 Den</i> (kumulativně), 📅 Týden, 📆 Měsíc, 📊 Rok; <i>titulek dynamický</i> dle módu.</li>
+            <li><b>📍 Start v grafech</b> — svislá čára „Start“ přesně podle zvoleného cvičení.</li>
+            <li><b>↔️ Legenda vpravo</b> — umístěná mimo plochu grafu (žádné překrytí dat).</li>
+            <li><b>🧩 Přehled záznamů</b> — strom po dnech, <i>multi-select</i> mazání, kumulativní % vůči dennímu cíli.</li>
+            <li><b>📅 Kalendář</b> — barevné značení splnění, adaptivní barva textu při hoveru (čitelná na gradientu).</li>
+            <li><b>💾 Export/Import</b> — JSON, migrace se <i>zálohou</i> před úpravou struktury.</li>
           </ul>
     
-          <h3 style='color: #32c766;'>🆕 Novinky</h3>
+          <h3 style='color: #32c766;'>🆕 Co je nového</h3>
           <ul>
-            <li><b>🕒 Denní graf</b> s kumulativním průběhem během dne a čarou <i>Denní cíl</i>.</li>
-            <li><b>↔️ Legenda vpravo</b> — mimo plochu grafu pro lepší čitelnost.</li>
-            <li><b>🗓️ Per-cvičení start</b> — každý typ má vlastní počáteční datum (promítá se do grafů i kalendáře).</li>
-            <li><b>🧭 Titulek grafu</b> — dynamicky dle módu (den/týden/měsíc/rok).</li>
+            <li><b>🕒 Denní graf</b> s kumulativním průběhem dne a čarou <i>Denní cíl</i>.</li>
+            <li><b>↔️ Legenda mimo graf</b> — vpravo vedle os; přidána rezerva pravého okraje.</li>
+            <li><b>🗓️ Start per-cvičení</b> — nezávislé starty pro cvičení (grafy, kalendář, přehledy).</li>
+            <li><b>🧭 Titulek grafu</b> — Den (název dne + datum), Týden (číslo), Měsíc (název + rok), Rok (rok).</li>
           </ul>
     
           <h3 style='color: #32c766;'>👤 Autor</h3>
@@ -2679,21 +2681,36 @@ class FitnessTrackerApp(QMainWindow):
         <div style='font-size: 13px; line-height: 1.6;'>
           <h1 style='color: #14919b;'>🚀 Rychlý start</h1>
     
-          <h2 style='color: #32c766;'>1) Nastavení roku</h2>
-          <p>V <b>⚙️ Nastavení</b> vyber <b>rok</b> a pro každé cvičení nastav <b>datum zahájení</b> (volitelné).</p>
+          <h2 style='color: #32c766;'>1) Nastavení roku & startů</h2>
+          <ol>
+            <li>Otevři <b>⚙️ Nastavení</b> a vyber <b>rok</b> (výchozí je aktuální).</li>
+            <li>Pro <b>každé cvičení</b> nastav <b>datum zahájení</b> (volitelné). Grafy i kalendář se dle něj přepočítají.</li>
+            <li>Ulož – změny se projeví ihned.</li>
+          </ol>
     
           <h2 style='color: #32c766;'>2) Přidávání výkonu</h2>
-          <p>V záložce cvičení použij tlačítko <b>„Přidat výkon“</b>. Záznam se ihned projeví v přehledech i grafu.</p>
-    
-          <h2 style='color: #32c766;'>3) Přehled & graf</h2>
           <ul>
-            <li>Přepínej módy grafu: <b>🕒 Den</b> / <b>📅 Týden</b> / <b>📆 Měsíc</b> / <b>📊 Rok</b>.</li>
-            <li>Legenda je <b>vpravo vedle grafu</b> a nezasahuje do dat.</li>
-            <li>Titulek grafu se <b>dynamicky</b> přizpůsobí zvolenému módu.</li>
+            <li>V záložce cvičení klikni <b>„Přidat výkon“</b> (pro dnešek) nebo vyber jiné datum.</li>
+            <li>Využij <b>rychlá tlačítka</b> (např. +10 / +15 / +20) pro okamžité přidání bez psaní.</li>
+            <li>Záznamy se obratem projeví v přehledech, kalendáři i grafu.</li>
           </ul>
     
-          <h2 style='color: #32c766;'>4) Export/Import</h2>
-          <p>V <b>⚙️ Nastavení</b> najdeš <b>Export/Import</b> pro zálohu a přenos dat (JSON). Před migrací se vytváří záloha.</p>
+          <h2 style='color: #32c766;'>3) Přehled, kalendář a graf</h2>
+          <ul>
+            <li><b>Strom záznamů</b> – seskupeno po dnech; výběr <i>celého dne</i> označí všechny vnitřní záznamy.</li>
+            <li><b>Kalendář</b> – barvy splnění; při hoveru se barva textu přizpůsobí pozadí pro čitelnost.</li>
+            <li><b>Graf</b> – přepínej tlačítky: <b>🕒 Den</b> / <b>📅 Týden</b> / <b>📆 Měsíc</b> / <b>📊 Rok</b>.</li>
+          </ul>
+    
+          <div style='background-color: #1e1e1e; border: 2px solid #14919b; border-radius: 5px; padding: 12px; margin: 12px 0;'>
+            <b>Tip:</b> Denní graf preferuje <i>vybraný den</i> ve stromu. Bez výběru ukáže dnešek (nebo poslední den s daty).
+          </div>
+    
+          <h2 style='color: #32c766;'>4) Export & Import</h2>
+          <ul>
+            <li><b>Export</b> – uloží JSON (záloha).</li>
+            <li><b>Import</b> – načte data; před migrací se vytváří <b>automatická záloha</b>.</li>
+          </ul>
         </div>
         """
         quickstart_content.setHtml(quickstart_html)
@@ -2720,25 +2737,42 @@ class FitnessTrackerApp(QMainWindow):
     
           <h2>Grafy</h2>
           <ul>
-            <li><b>🕒 Den</b> — kumulativní křivka během dne, čára <i>Denní cíl</i>, časová osa HH:MM.</li>
-            <li><b>📅 Týden</b> — posledních 7 dní včetně dneška.</li>
-            <li><b>📆 Měsíc</b> — aktuální měsíc; respektuje <i>start cvičení</i>.</li>
-            <li><b>📊 Rok</b> — celý rok; svislá čára <i>Start</i> dle data zahájení daného cvičení.</li>
-            <li><b>Legenda</b> — vpravo mimo graf; je rezervován pravý okraj.</li>
-            <li><b>Titulek</b> — dynamický (den/č. týdne/název měsíce/rok).</li>
+            <li><b>🕒 Den</b> – kumulativní křivka v rámci dne; horizontála <i>Denní cíl</i>; osa X v HH:MM; titulek „Název dne + datum“.</li>
+            <li><b>📅 Týden</b> – posledních 7 dní; titulek „Týden &lt;číslo&gt;“.</li>
+            <li><b>📆 Měsíc</b> – aktuální měsíc (respektuje <i>start cvičení</i>); titulek „Název měsíce + rok“.</li>
+            <li><b>📊 Rok</b> – celý rok; svislá čára <i>Start</i> v rozsahu grafu; titulek „Rok &lt;rok&gt;“.</li>
+            <li><b>Legenda</b> – vpravo vedle grafu; je vyhrazen pravý okraj (žádné překrytí dat).</li>
           </ul>
     
-          <h2>Přehled záznamů</h2>
+          <h2>Přehled záznamů (strom)</h2>
           <ul>
-            <li>Seskupení po dnech (nadpis dne).</li>
-            <li><b>Multi-select</b> pro smazání více záznamů najednou.</li>
-            <li>Kliknutím rozbalíš/sbalíš detail dne.</li>
+            <li><b>Nadpis dne</b> – top-level uzel; kliknutím rozbalíš/sbalíš; výběr označí všechny vnitřní záznamy.</li>
+            <li><b>Vnitřní položky</b> – jednotlivé záznamy; multi-select (Shift/Cmd) a hromadné mazání.</li>
+            <li><b>% vůči cíli</b> – u vnitřních položek vidíš procento vůči <i>dennímu cíli</i> (může být &gt; 100%).</li>
+            <li><b>Kumulativně</b> – součet od první položky dne; barvou zvýrazněno překročení cíle.</li>
+          </ul>
+    
+          <h2>Kalendář</h2>
+          <ul>
+            <li><b>Barvy</b> – zelená (splněno), žlutá (50–99%), červená (1–49%), šedá (0%).</li>
+            <li><b>Hover text</b> – adaptivní barva (na světlém pozadí tmavý text, na tmavém světlý) pro lepší čitelnost.</li>
+            <li><b>Začátky</b> – respektuje <i>individuální start</i> cvičení; dny před startem jsou „mimo“.</li>
           </ul>
     
           <h2>Nastavení</h2>
           <ul>
-            <li>Volba roku a <b>individuálních startů</b> pro cvičení.</li>
-            <li>Export/Import dat (JSON) s automatickou zálohou při migraci.</li>
+            <li><b>Rok</b> – seznam roků; výběr = filtrace přehledů.</li>
+            <li><b>Starty cvičení</b> – nastavíš pro každý typ zvlášť (DatePicker v Nastavení).</li>
+            <li><b>Export/Import</b> – JSON záloha/obnova; před migrací se dělá automatická záloha.</li>
+          </ul>
+    
+          <h2>Klávesové zkratky</h2>
+          <ul>
+            <li><b>Tab</b> – přesun fokusů / záložek</li>
+            <li><b>Enter</b> – potvrzení dialogů</li>
+            <li><b>Esc</b> – zavření dialogu</li>
+            <li><b>Cmd/Ctrl + Click</b> – multi-select položek ve stromu</li>
+            <li><b>Shift + Click</b> – souvislý výběr ve stromu</li>
           </ul>
         </div>
         """
@@ -2764,24 +2798,29 @@ class FitnessTrackerApp(QMainWindow):
         <div style='font-size: 13px; line-height: 1.6;'>
           <h1 style='color: #14919b;'>❓ Často kladené otázky (FAQ)</h1>
     
-          <div style='background-color: #1e1e1e; border-left: 4px solid #14919b; padding: 15px; margin: 10px 0;'>
-            <h3 style='color: #14919b; margin-top: 0;'>Jak přepnu na denní graf?</h3>
-            <p>V liště nad grafem klikni na <b>🕒 Den</b>. Zobrazí se kumulativní průběh dne a čára <i>Denní cíl</i>.</p>
+          <div style='background-color: #1e1e1e; border-left: 4px solid #14919b; padding: 12px; margin: 10px 0;'>
+            <h3 style='color: #14919b; margin-top: 0;'>Denní graf mi ukazuje jiný den – proč?</h3>
+            <p>Denní graf upřednostní <b>vybraný den</b> ve stromu. Pokud není vybrán, zobrazí <b>dnešek</b> nebo poslední den s daty.</p>
           </div>
     
-          <div style='background-color: #1e1e1e; border-left: 4px solid #14919b; padding: 15px; margin: 10px 0;'>
-            <h3 style='color: #14919b; margin-top: 0;'>K čemu je „Start“ v grafu?</h3>
-            <p>Svislá čára označuje <b>datum zahájení</b> konkrétního cvičení (nastavíš v ⚙️ Nastavení). Pomáhá sledovat reálný začátek.</p>
+          <div style='background-color: #1e1e1e; border-left: 4px solid #14919b; padding: 12px; margin: 10px 0;'>
+            <h3 style='color: #14919b; margin-top: 0;'>Proč je v ročním/měsíčním grafu svislá čára?</h3>
+            <p>Označuje <b>začátek cvičení</b> pro daný typ (nastavíš v Nastavení). Díky tomu vidíš reálný „start“ i při posunutém začátku.</p>
           </div>
     
-          <div style='background-color: #1e1e1e; border-left: 4px solid #14919b; padding: 15px; margin: 10px 0;'>
-            <h3 style='color: #14919b; margin-top: 0;'>Proč je legenda vpravo?</h3>
-            <p>Aby <b>nezakrývala data</b>. Je umístěna vpravo vedle grafu a je tomu přizpůsoben pravý okraj.</p>
+          <div style='background-color: #1e1e1e; border-left: 4px solid #14919b; padding: 12px; margin: 10px 0;'>
+            <h3 style='color: #14919b; margin-top: 0;'>Legenda mi někdy překrývala graf – je to opraveno?</h3>
+            <p>Ano. Legenda je nyní <b>vpravo mimo graf</b> a je vyhrazen <b>pravý okraj</b>, takže data nic nepřekrývá.</p>
           </div>
     
-          <div style='background-color: #1e1e1e; border-left: 4px solid #14919b; padding: 15px; margin: 10px 0;'>
-            <h3 style='color: #14919b; margin-top: 0;'>Kde se ukládají data?</h3>
-            <p>Do souboru <b>fitness_data.json</b> ve stejné složce jako aplikace. Doporučujeme pravidelný export (záloha).</p>
+          <div style='background-color: #1e1e1e; border-left: 4px solid #14919b; padding: 12px; margin: 10px 0;'>
+            <h3 style='color: #14919b; margin-top: 0;'>Jak hromadně smazat záznamy?</h3>
+            <p>Ve stromu označ <b>více položek</b> (Cmd/Ctrl + Click nebo Shift + Click) a použij <b>„Smazat vybrané“</b>. Lze označit i <b>celý den</b> (top-level).</p>
+          </div>
+    
+          <div style='background-color: #1e1e1e; border-left: 4px solid #14919b; padding: 12px; margin: 10px 0;'>
+            <h3 style='color: #14919b; margin-top: 0;'>Kde jsou data a jak je zálohovat?</h3>
+            <p>V souboru <b>fitness_data.json</b>. Použij <b>Export</b> v Nastavení pro zálohu a <b>Import</b> pro obnovu/migraci. Před změnou struktury se dělá automatická záloha.</p>
           </div>
         </div>
         """
