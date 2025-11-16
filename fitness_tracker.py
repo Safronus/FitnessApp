@@ -27,6 +27,7 @@ except ImportError:
     # fallback pro starší Matplotlib/back-end
     from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
+from matplotlib.collections import LineCollection
 import matplotlib.pyplot as plt
 
 TITLE = "Fitness Tracker"
@@ -2730,7 +2731,9 @@ class FitnessTrackerApp(QMainWindow):
 
         Budoucí měření se ignorují.
         Zobrazuje spojnicový graf (propojené hodnoty) + barevné body.
-        V režimu „Obojí“ jsou váha a BMI odlišeny stylem čáry.
+        V režimu „Obojí“:
+            - váha = plná modrá čára,
+            - BMI = čárkovaná křivka, kde barva každého úseku odpovídá BMI zóně.
         Na BMI ose jsou barevné BMI zóny (podváha, normální, nadváha, obezita…).
         Legenda je umístěna pod grafem.
         """
@@ -2742,7 +2745,7 @@ class FitnessTrackerApp(QMainWindow):
         if hasattr(self, "bmi_chart_mode_combo"):
             mode = self.bmi_chart_mode_combo.currentText()
 
-        from datetime import datetime, timedelta
+        from datetime import datetime
 
         today = QDate.currentDate()
         period_mode = getattr(self, "bmi_period_mode", "week")
@@ -2857,7 +2860,7 @@ class FitnessTrackerApp(QMainWindow):
         bmi_line = None
         ax_bmi = None
 
-        # Váha – spojnicový graf (plná čára)
+        # Váha – spojnicový graf (plná modrá čára)
         if mode in ("Váha", "Obojí"):
             (weight_line,) = ax_weight.plot(
                 times,
@@ -2865,10 +2868,11 @@ class FitnessTrackerApp(QMainWindow):
                 linestyle="-",
                 linewidth=1.8,
                 label="Váha [kg]",
+                color="#4ea5ff",
             )
             ax_weight.set_ylabel("Váha [kg]")
 
-        # BMI – spojnicový graf, jiný styl (čárkovaná)
+        # BMI – spojitě barevná čárkovaná křivka podle BMI zóny
         if mode in ("BMI", "Obojí"):
             if mode == "Obojí":
                 ax_bmi = ax_weight.twinx()
@@ -2878,23 +2882,53 @@ class FitnessTrackerApp(QMainWindow):
             else:
                 ax_for_bmi = ax_weight
 
-            (bmi_line,) = ax_for_bmi.plot(
-                times,
-                bmis,
-                linestyle="--",
-                linewidth=1.5,
-                label="BMI",
-            )
+            # Převod časů na čísla pro LineCollection
+            xs = [mdates.date2num(t) for t in times]
+            segments = []
+            segment_colors = []
+
+            if len(xs) > 1:
+                for i in range(len(xs) - 1):
+                    x0, y0 = xs[i], bmis[i]
+                    x1, y1 = xs[i + 1], bmis[i + 1]
+                    segments.append([[x0, y0], [x1, y1]])
+                    # Barva podle průměrné hodnoty BMI na segmentu
+                    mid_bmi = (bmis[i] + bmis[i + 1]) / 2.0
+                    _, col = self.get_bmi_category(mid_bmi)
+                    segment_colors.append(col)
+                lc = LineCollection(
+                    segments,
+                    colors=segment_colors,
+                    linewidths=1.5,
+                    linestyles="--",
+                )
+                ax_for_bmi.add_collection(lc)
+                bmi_line = lc  # pro legendu
+            else:
+                # Jen jeden bod – žádný segment, BMI křivku nahradíme bodovým "line"
+                (bmi_line,) = ax_for_bmi.plot(
+                    times,
+                    bmis,
+                    linestyle="--",
+                    linewidth=1.5,
+                    label="BMI",
+                )
+
             ax_for_bmi.set_ylabel("BMI")
+            # Rozumné limity pro BMI osu
+            ymin = min(bmis)
+            ymax = max(bmis)
+            margin = max(1.0, (ymax - ymin) * 0.1)
+            ax_for_bmi.set_ylim(ymin - margin, ymax + margin)
         else:
             ax_for_bmi = None
 
-        # Barevné body podle BMI kategorie
+        # Barevné body podle BMI kategorie (pro lepší čitelnost)
         for t, w, bmi_val in zip(times, weights, bmis):
             category, color = self.get_bmi_category(bmi_val)
             if mode in ("Váha", "Obojí") and weight_line is not None:
                 ax_weight.scatter([t], [w], color=color, s=30, zorder=5)
-            if mode in ("BMI", "Obojí") and bmi_line is not None:
+            if mode in ("BMI", "Obojí") and (bmi_line is not None):
                 target_ax = ax_for_bmi if ax_for_bmi is not None else ax_weight
                 target_ax.scatter([t], [bmi_val], color=color, s=30, zorder=5)
 
@@ -2933,7 +2967,6 @@ class FitnessTrackerApp(QMainWindow):
             legend_labels.append("BMI")
 
         if legend_handles:
-            # legenda pod grafem uprostřed
             legend = ax_weight.legend(
                 legend_handles,
                 legend_labels,
