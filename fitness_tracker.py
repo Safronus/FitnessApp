@@ -3824,8 +3824,8 @@ class FitnessTrackerApp(QMainWindow):
 
     def update_performance_chart(self, exercise_type, mode):
         """Aktualizuje graf výkonu podle zvoleného módu (daily/weekly/monthly/yearly).
-        - daily: průběh aktuálně zvoleného dne (čas → kumulativní výkon), + vodorovná čára denního cíle
-        - ostatní módy beze změny (výkon vs. cíl; svislá čára startu cvičení, pokud spadá do rozsahu)
+        ZMĚNA: legenda je vpravo vedle grafu; přidána rezerva místa na pravém okraji.
+        Ostatní chování ponecháno beze změn (titulek dle módu, data, styly).
         """
         # Ověření figure/canvas struktur
         if not hasattr(self, 'chart_figures') or exercise_type not in self.chart_figures:
@@ -3851,9 +3851,6 @@ class FitnessTrackerApp(QMainWindow):
         ax.tick_params(axis='x', colors='#e0e0e0')
         ax.tick_params(axis='y', colors='#e0e0e0')
     
-        cfg = self.get_exercise_config(exercise_type) if hasattr(self, 'get_exercise_config') else {"name": exercise_type}
-        ax.set_title(f"Výkon – {cfg.get('name', exercise_type)}", color='#e0e0e0', fontsize=14)
-    
         today = datetime.now().date()
     
         # Zvolený rok z per-exercise comboboxu
@@ -3862,6 +3859,13 @@ class FitnessTrackerApp(QMainWindow):
             selected_year = int(self.exercise_year_selectors[exercise_type].currentText())
         else:
             selected_year = today.year
+    
+        # Pomocné CZ mapy (lokální, aby se nic globálně neměnilo)
+        _CZ_WEEKDAY = {0: "Pondělí", 1: "Úterý", 2: "Středa", 3: "Čtvrtek", 4: "Pátek", 5: "Sobota", 6: "Neděle"}
+        _CZ_MONTH = {
+            1: "Leden", 2: "Únor", 3: "Březen", 4: "Duben", 5: "Květen", 6: "Červen",
+            7: "Červenec", 8: "Srpen", 9: "Září", 10: "Říjen", 11: "Prosinec"
+        }
     
         # ---- Získání startu cvičení pro značku (pro non-daily módy) ----
         ys = self.get_year_settings(selected_year) if hasattr(self, 'get_year_settings') else {}
@@ -4000,18 +4004,23 @@ class FitnessTrackerApp(QMainWindow):
                 ax.set_xlim(datetime(day_date.year, day_date.month, day_date.day, 0, 0),
                             datetime(day_date.year, day_date.month, day_date.day, 23, 59, 59))
     
-            ax.set_title(f"Den {day_date.strftime('%d.%m.%Y')}", color='#e0e0e0', fontsize=14)
-            leg = ax.legend(loc='upper left', bbox_to_anchor=(1.02, 1), borderaxespad=0., fontsize=9, facecolor='#2d2d2d', edgecolor='#3d3d3d')
-            for t in leg.get_texts():
+            # Titulek pro DEN
+            dw = _CZ_WEEKDAY[day_date.weekday()]
+            ax.set_title(f"{dw} {day_date.strftime('%d.%m.%Y')}", color='#e0e0e0', fontsize=14)
+    
+            # Rezerva na pravé straně a legenda vpravo vedle grafu
+            fig.subplots_adjust(right=0.78)
+            legend = ax.legend(loc='upper left', bbox_to_anchor=(1.02, 1), borderaxespad=0.,
+                               fontsize=9, facecolor='#2d2d2d', edgecolor='#3d3d3d')
+            for t in legend.get_texts():
                 t.set_color('#e0e0e0')
     
-            fig.tight_layout()
             if hasattr(self, 'chart_canvases') and exercise_type in self.chart_canvases:
                 self.chart_canvases[exercise_type].draw()
             return  # daily zpracován; dál nepokračujeme
     
         # =================================================================
-        #                WEEKLY / MONTHLY / YEARLY (beze změn)
+        #                WEEKLY / MONTHLY / YEARLY  (beze změn)
         # =================================================================
         # Vypočet rozsahu dle módu + vykreslení jako dříve
         if mode == "weekly":
@@ -4039,7 +4048,8 @@ class FitnessTrackerApp(QMainWindow):
         if range_end < range_start:
             ax.text(0.5, 0.5, 'Žádná data k zobrazení', ha='center', va='center',
                     transform=ax.transAxes, fontsize=14, color='#a0a0a0')
-            fig.tight_layout()
+            # Rezerva + vykreslení
+            fig.subplots_adjust(right=0.78)
             if hasattr(self, 'chart_canvases') and exercise_type in self.chart_canvases:
                 self.chart_canvases[exercise_type].draw()
             return
@@ -4073,6 +4083,7 @@ class FitnessTrackerApp(QMainWindow):
                 ax.text(start_date, y_max * 1.05, f"Start {start_date.strftime('%d.%m.')}",
                         rotation=90, va='bottom', ha='right', fontsize=9, color='#32c766', weight='bold')
     
+        # Popisky X osy zachovány
         if mode == "yearly":
             num_dates = len(dates)
             step = max(1, num_dates // 12)
@@ -4083,11 +4094,23 @@ class FitnessTrackerApp(QMainWindow):
             ax.set_xticklabels([d.strftime(xlabel_format) for d in dates],
                                rotation=45 if mode == "monthly" else 0)
     
-        leg = ax.legend(loc='upper left', bbox_to_anchor=(1.02, 1), borderaxespad=0., fontsize=9, facecolor='#2d2d2d', edgecolor='#3d3d3d')
-        for t in leg.get_texts():
+        # Titulek podle módu (týden/měsíc/rok)
+        if mode == "weekly":
+            week_no = range_end.isocalendar().week
+            ax.set_title(f"Týden {week_no}", color='#e0e0e0', fontsize=14)
+        elif mode == "monthly":
+            month_name = _CZ_MONTH[range_start.month]
+            ax.set_title(f"{month_name} {range_start.year}", color='#e0e0e0', fontsize=14)
+        else:  # yearly
+            ax.set_title(f"Rok {selected_year}", color='#e0e0e0', fontsize=14)
+    
+        # Rezerva na pravé straně a legenda vpravo vedle grafu
+        fig.subplots_adjust(right=0.78)
+        legend = ax.legend(loc='upper left', bbox_to_anchor=(1.02, 1), borderaxespad=0.,
+                           fontsize=9, facecolor='#2d2d2d', edgecolor='#3d3d3d')
+        for t in legend.get_texts():
             t.set_color('#e0e0e0')
     
-        fig.tight_layout()
         if hasattr(self, 'chart_canvases') and exercise_type in self.chart_canvases:
             self.chart_canvases[exercise_type].draw()
         
