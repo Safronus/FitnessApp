@@ -4574,11 +4574,10 @@ class FitnessTrackerApp(QMainWindow):
     def update_exercise_tab(self, exercise_type):
         """Aktualizuje statistiky a strom záznamů daného cvičení.
     
-        Styl: původní (emoji indikátory + barevný sloupec s %).
-        Funkčně: multi-select, uchování výběru a rozbalení napříč refreshem,
-        výchozí zobrazení DNŮ sbalené po prvním naplnění.
-        NOVĚ: když je vybrán celý den (top-level), zůstane viditelně vybraný i při sbalení
-        a po refreshi; parent den je označen jako vybraný i tehdy, když jsou vybrány všechny jeho děti.
+        Styl top-level dne: beze změny (emoji + barevný % sloupec).
+        Nově: child záznamy v 1. sloupci zobrazují KUMULATIVNÍ podíl vůči dennímu cíli
+        (např. 20 %, 120 %, 180 % …) s barevným zvýrazněním. Funkčně zachován multi-select,
+        uchování výběru i výchozí sbalení po prvním naplnění.
         """
         try:
             if exercise_type not in self.exercise_year_selectors:
@@ -4589,7 +4588,7 @@ class FitnessTrackerApp(QMainWindow):
     
             selected_year = int(selector.currentText())
     
-            # Přehledy (DEN/TÝDEN/MĚSÍC/ZBYTEK) a progress bar apod.
+            # Přehledové boxy / progress bar apod.
             self.update_detailed_overview(exercise_type, selected_year)
     
             tree = self.findChild(QTreeWidget, f"tree_{exercise_type}")
@@ -4598,8 +4597,7 @@ class FitnessTrackerApp(QMainWindow):
     
             # --- UCHOVÁNÍ VÝBĚRU ---
             preserved = set()             # {(date_str, record_id)}
-            preserved_days = set()        # {date_str} – když byl vybrán TOP-LEVEL den
-            # mapování pro počet vybraných dětí po dnech (abychom věděli "vybrány všechny děti")
+            preserved_days = set()        # {date_str}
             preserved_children_by_day: dict[str, set] = {}
     
             for it in tree.selectedItems():
@@ -4610,9 +4608,7 @@ class FitnessTrackerApp(QMainWindow):
                     preserved.add((date_str, rec_id))
                     preserved_children_by_day.setdefault(date_str, set()).add(rec_id)
                 else:
-                    # Vybraný TOP-LEVEL den → ulož datum dne i všechny jeho děti
-                    # (kvůli případnému reselectu po refreshi)
-                    # Vytáhneme datum z textu (např. "✅ 2025-11-16" → "2025-11-16")
+                    # Vybraný den (top-level) → ulož datum i děti
                     txt = it.text(0) if it is not None else ""
                     date_str = txt.split(' ', 1)[1] if ' ' in txt else txt
                     if date_str:
@@ -4638,13 +4634,13 @@ class FitnessTrackerApp(QMainWindow):
             tree.blockSignals(True)
             tree.clear()
     
-            # Multi-select
+            # Multi-select a výkon
             tree.setSelectionMode(QAbstractItemView.ExtendedSelection)
             tree.setSelectionBehavior(QAbstractItemView.SelectItems)
-            tree.setAlternatingRowColors(False)
+            tree.setAlternatingRowColors(False)  # child řádky prokládáme ručně
             tree.setUniformRowHeights(True)
     
-            # --- Sestav data po dnech (jen zvolený rok) ---
+            # --- Data po dnech (jen zvolený rok) ---
             days_data: dict[str, list[dict]] = {}
             for ds, perday in self.data.get('workouts', {}).items():
                 year_here = int(ds.split('-')[0]) if '-' in ds else None
@@ -4660,6 +4656,31 @@ class FitnessTrackerApp(QMainWindow):
             # Seřazení dnů – nejnovější nahoře
             sorted_dates = sorted(days_data.keys(), reverse=True)
     
+            # Připrav fonty pro child řádky
+            try:
+                from PySide6.QtGui import QFont
+                child_val_font = QFont()
+                child_val_font.setBold(True)
+    
+                # Monospace pro čas (macOS: Menlo; fallback funguje i jinde)
+                child_time_font = QFont("Menlo")
+                base_size = tree.font().pointSize() if tree.font().pointSize() > 0 else 11
+                child_time_font.setPointSize(max(base_size - 1, 9))
+            except Exception:
+                child_val_font = None
+                child_time_font = None
+    
+            # Pomocná funkce pro barvu kumulativního % v 1. sloupci (dark-friendly)
+            def _pct_color(p: int) -> "QColor":
+                # <50 % šedá, 50–99 % zlatá, 100–149 % zelená, 150 %+ tyrkys
+                if p < 50:
+                    return QColor(176, 176, 176)
+                if p < 100:
+                    return QColor(255, 215, 0)   # zlatá
+                if p < 150:
+                    return QColor(50, 199, 102)  # zelená
+                return QColor(0, 188, 212)       # tyrkys
+    
             for date_str in sorted_dates:
                 records = days_data[date_str]
     
@@ -4671,7 +4692,7 @@ class FitnessTrackerApp(QMainWindow):
                     goal = int(goal) if goal else 0
                 percent = (total_day_value / goal * 100) if goal > 0 else 0
     
-                # --- PŮVODNÍ STYL: emoji indikátory + barevný sloupec s % ---
+                # Top-level (den) – PŮVODNÍ vzhled (emoji + barevný %)
                 if percent >= 100:
                     status_icon = "✅"
                     color = QColor(0, 100, 0)
@@ -4687,36 +4708,82 @@ class FitnessTrackerApp(QMainWindow):
                 day_item.setText(1, f"{total_day_value} ({record_count}×)")
                 day_item.setText(2, f"{percent:.0f}%")
     
-                # Barvy/kontrasty (dark theme-friendly)
                 day_item.setForeground(0, QColor(255, 255, 255))
                 day_item.setForeground(1, QColor(200, 200, 200))
                 day_item.setBackground(2, color)
                 day_item.setForeground(2, QColor(255, 255, 255))
-    
-                # Zarovnání čísel
                 day_item.setTextAlignment(1, Qt.AlignCenter)
                 day_item.setTextAlignment(2, Qt.AlignCenter)
     
-                # Stav rozbalení:
-                if not first_population:
-                    day_item.setExpanded(date_str in expanded_dates)
-                else:
-                    day_item.setExpanded(False)
+                # Respektuj stav rozbalení / výchozí sbalení
+                day_item.setExpanded(date_str in expanded_dates if not first_population else False)
     
-                # --- Děti (záznamy) ---
-                for record in sorted(records, key=lambda x: x.get('timestamp', '')):
+                # --- Child záznamy: 1. sloupec = KUMULATIVNÍ podíl vůči dennímu cíli ---
+                running_total = 0
+                for idx, record in enumerate(sorted(records, key=lambda x: x.get('timestamp', ''))):
                     value = record.get('value', 0)
                     timestamp = record.get('timestamp', 'N/A')
                     time_only = timestamp.split(' ')[1] if ' ' in timestamp else timestamp
                     record_id = record.get('id', '')
     
+                    running_total += value
+                    if goal > 0:
+                        rec_cum_pct = int(round((running_total / goal) * 100))
+                        pct_text = f"{rec_cum_pct} %"
+                    else:
+                        rec_cum_pct = None
+                        pct_text = "—"
+    
                     rec_item = QTreeWidgetItem(day_item)
-                    rec_item.setText(0, "")
+    
+                    # Sloupce: [kumulativní % vůči cíli] [hodnota] [čas] [id]
+                    rec_item.setText(0, pct_text)
                     rec_item.setText(1, str(value))
                     rec_item.setText(2, time_only)
                     rec_item.setText(3, record_id)
+    
+                    # Zarovnání
+                    rec_item.setTextAlignment(0, Qt.AlignCenter)
                     rec_item.setTextAlignment(1, Qt.AlignCenter)
                     rec_item.setTextAlignment(2, Qt.AlignCenter)
+    
+                    # Barvy textu (dark-friendly)
+                    if rec_cum_pct is None:
+                        rec_item.setForeground(0, QColor(200, 200, 200))  # neutrální, když goal=0
+                    else:
+                        rec_item.setForeground(0, _pct_color(rec_cum_pct))
+                    rec_item.setForeground(1, QColor(240, 240, 240))   # hodnota výrazněji
+                    rec_item.setForeground(2, QColor(180, 180, 180))   # čas jemněji
+    
+                    # Fonty
+                    if child_val_font:
+                        rec_item.setFont(1, child_val_font)
+                    if child_time_font:
+                        rec_item.setFont(2, child_time_font)
+    
+                    # Lehký „striping“ child řádků (jen uvnitř dne)
+                    if idx % 2 == 1:
+                        shade = QColor(255, 255, 255, 14)  # velmi jemné
+                        rec_item.setBackground(0, shade)
+                        rec_item.setBackground(1, shade)
+                        rec_item.setBackground(2, shade)
+    
+                    # Malý spacing pro child řádky (vyšší řádek)
+                    try:
+                        from PySide6.QtCore import QSize
+                        rec_item.setData(0, Qt.SizeHintRole, QSize(0, 22))
+                    except Exception:
+                        pass
+    
+                    # Tooltip s detaily včetně kumulativního podílu
+                    if rec_cum_pct is None:
+                        tt_pct = "n/a"
+                    else:
+                        tt_pct = f"{rec_cum_pct} %"
+                    tt = f"Hodnota: {value}\nKumulativně: {running_total} ({tt_pct})\nČas: {time_only}\nID: {record_id}"
+                    rec_item.setToolTip(0, tt)
+                    rec_item.setToolTip(1, tt)
+                    rec_item.setToolTip(2, tt)
     
                     # payload pro mazání / reselect
                     rec_item.setData(3, Qt.UserRole, {
@@ -4729,10 +4796,7 @@ class FitnessTrackerApp(QMainWindow):
                     if (date_str, record_id) in preserved:
                         rec_item.setSelected(True)
     
-                # --- Viditelné označení TOP-LEVEL dne ---
-                # Den označíme jako vybraný, pokud:
-                # 1) byl dříve zvolen jako den (v preserved_days), NEBO
-                # 2) jsou vybrány všechny děti tohoto dne (typický scénář "vybral jsem den").
+                # Viditelné označení dne (když byl vybrán den, nebo všechny jeho děti)
                 sel_children = preserved_children_by_day.get(date_str, set())
                 if date_str in preserved_days or (record_count > 0 and len(sel_children) == record_count):
                     day_item.setSelected(True)
