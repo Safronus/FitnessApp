@@ -8,12 +8,12 @@ import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
 from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QDoubleSpinBox, 
     QTabWidget, QLabel, QSpinBox, QPushButton, QDateEdit, QTableWidget,
     QTableWidgetItem, QGroupBox, QFormLayout, QHeaderView, QMessageBox,
     QGridLayout, QComboBox, QScrollArea, QFrame, QProgressBar, QTextEdit,
     QDialog, QListWidget, QListWidgetItem, QInputDialog, QCheckBox, QFileDialog,
-    QTreeWidget, QTreeWidgetItem, QLineEdit, QTextBrowser, QAbstractItemView, QRadioButton  # ← PŘIDÁNO
+    QTreeWidget, QTreeWidgetItem, QLineEdit, QTextBrowser, QAbstractItemView, QRadioButton, QTimeEdit
 )
 from PySide6.QtCore import Qt, QDate, QTime, QTimer
 from PySide6.QtGui import QColor, QAction, QBrush
@@ -2276,15 +2276,32 @@ class FitnessTrackerApp(QMainWindow):
 
         mode_row = QHBoxLayout()
         mode_row.addWidget(QLabel("Režim:"))
+
         self.bmi_chart_mode_combo = QComboBox()
         self.bmi_chart_mode_combo.addItems(["Váha", "BMI", "Obojí"])
+        # aby se celý text voleb zobrazil
+        self.bmi_chart_mode_combo.setSizeAdjustPolicy(QComboBox.AdjustToContents)
+        self.bmi_chart_mode_combo.setMinimumContentsLength(10)
+        self.bmi_chart_mode_combo.setMinimumWidth(150)
         mode_row.addWidget(self.bmi_chart_mode_combo)
+
+        mode_row.addSpacing(16)
+        mode_row.addWidget(QLabel("Období:"))
+
+        self.bmi_range_combo = QComboBox()
+        self.bmi_range_combo.addItems(["Poslední týden", "Poslední měsíc", "Poslední rok"])
+        self.bmi_range_combo.setCurrentIndex(1)  # default: poslední měsíc
+        self.bmi_range_combo.setSizeAdjustPolicy(QComboBox.AdjustToContents)
+        self.bmi_range_combo.setMinimumContentsLength(14)
+        self.bmi_range_combo.setMinimumWidth(170)
+        mode_row.addWidget(self.bmi_range_combo)
+
         mode_row.addStretch()
         time_layout.addLayout(mode_row)
 
-        self.bmi_time_fig = Figure(figsize=(8, 3), facecolor="#1e1e1e")
+        self.bmi_time_fig = Figure(figsize=(8, 3), facecolor="#121212")
         self.bmi_time_canvas = FigureCanvas(self.bmi_time_fig)
-        self.bmi_time_canvas.setStyleSheet("background-color: #1e1e1e;")
+        self.bmi_time_canvas.setStyleSheet("background-color: #121212;")
         time_layout.addWidget(self.bmi_time_canvas)
 
         time_group.setLayout(time_layout)
@@ -2294,9 +2311,9 @@ class FitnessTrackerApp(QMainWindow):
         zones_group = QGroupBox("🧪 BMI zóny – přehled")
         zones_layout = QVBoxLayout()
 
-        self.bmi_zones_fig = Figure(figsize=(8, 2), facecolor="#1e1e1e")
+        self.bmi_zones_fig = Figure(figsize=(8, 2), facecolor="#121212")
         self.bmi_zones_canvas = FigureCanvas(self.bmi_zones_fig)
-        self.bmi_zones_canvas.setStyleSheet("background-color: #1e1e1e;")
+        self.bmi_zones_canvas.setStyleSheet("background-color: #121212;")
         zones_layout.addWidget(self.bmi_zones_canvas)
 
         zones_group.setLayout(zones_layout)
@@ -2311,6 +2328,7 @@ class FitnessTrackerApp(QMainWindow):
         self.bmi_time_edit.timeChanged.connect(self.update_bmi_current_display)
         self.bmi_save_button.clicked.connect(self.add_weight_measurement)
         self.bmi_chart_mode_combo.currentIndexChanged.connect(self.update_bmi_charts)
+        self.bmi_range_combo.currentIndexChanged.connect(self.update_bmi_charts)
 
         # Inicializace
         self.refresh_bmi_history()
@@ -2483,13 +2501,26 @@ class FitnessTrackerApp(QMainWindow):
         self.update_bmi_zones_chart()
 
     def update_bmi_time_chart(self):
-        """Časový graf pro váhu a BMI s možností přepínání režimů."""
+        """Časový graf pro váhu a BMI s možností přepínání režimů a období."""
         if not hasattr(self, "bmi_time_fig") or not hasattr(self, "bmi_time_canvas"):
             return
 
+        # Režim (Váha / BMI / Obojí)
         mode = "Váha"
         if hasattr(self, "bmi_chart_mode_combo"):
             mode = self.bmi_chart_mode_combo.currentText()
+
+        # Období (poslední týden / měsíc / rok)
+        days_window = 365
+        if hasattr(self, "bmi_range_combo"):
+            txt = self.bmi_range_combo.currentText().lower()
+            if "týden" in txt:
+                days_window = 7
+            elif "měsíc" in txt:
+                days_window = 30
+            elif "rok" in txt:
+                days_window = 365
+        cutoff = datetime.now() - timedelta(days=days_window)
 
         body = self.data.get("body_metrics", {})
         history = body.get("weight_history", [])
@@ -2497,8 +2528,21 @@ class FitnessTrackerApp(QMainWindow):
 
         fig = self.bmi_time_fig
         fig.clear()
+        fig.patch.set_facecolor("#121212")
+
         ax_weight = fig.add_subplot(111)
-        ax_weight.set_facecolor("#1e1e1e")
+        ax_weight.set_facecolor("#121212")
+
+        # Základní styling pro dark theme
+        def style_axes(ax):
+            ax.tick_params(colors="#e0e0e0")
+            ax.xaxis.label.set_color("#e0e0e0")
+            ax.yaxis.label.set_color("#e0e0e0")
+            ax.title.set_color("#e0e0e0")
+            for spine in ax.spines.values():
+                spine.set_color("#e0e0e0")
+
+        style_axes(ax_weight)
 
         if not history or height_cm <= 0:
             ax_weight.set_title("Zatím nejsou žádná měření nebo není nastavena výška.")
@@ -2507,71 +2551,105 @@ class FitnessTrackerApp(QMainWindow):
             self.bmi_time_canvas.draw()
             return
 
-        # Data pro graf
+        # Data pro graf – jen v rámci zvoleného období
         times = []
         weights = []
         bmis = []
+
         for entry in sorted(history, key=lambda e: e.get("timestamp", "")):
             ts = entry.get("timestamp")
             try:
                 dt = datetime.strptime(ts, "%Y-%m-%d %H:%M:%S")
             except Exception:
-                # Fallback jen na datum
                 date_str = entry.get("date", "")
                 try:
                     dt = datetime.strptime(date_str, "%Y-%m-%d")
                 except Exception:
                     continue
-            times.append(dt)
+
+            if dt < cutoff:
+                continue
+
             w = float(entry.get("value", 0.0))
+            bmi_val = self.calculate_bmi(w, height_cm)
+
+            times.append(dt)
             weights.append(w)
-            bmis.append(self.calculate_bmi(w, height_cm))
+            bmis.append(bmi_val)
 
         if not times:
-            ax_weight.set_title("Zatím nejsou platná měření pro vykreslení.")
+            ax_weight.set_title("V daném období nejsou žádná měření.")
+            ax_weight.set_xlabel("Datum")
+            ax_weight.set_ylabel("Hodnota")
             self.bmi_time_canvas.draw()
             return
 
         import matplotlib.dates as mdates
 
         ax_weight.xaxis.set_major_formatter(mdates.DateFormatter("%d.%m.%Y"))
+        ax_weight.xaxis.set_label_position("bottom")
+        ax_weight.xaxis.tick_bottom()
         fig.autofmt_xdate(rotation=30)
 
+        weight_line = None
+        bmi_line = None
+        ax_bmi = None
+
+        # Váha
         if mode in ("Váha", "Obojí"):
-            ax_weight.plot(times, weights, marker="o", linestyle="-", label="Váha [kg]")
+            weight_line, = ax_weight.plot(times, weights, marker="o", linestyle="-", label="Váha [kg]")
             ax_weight.set_ylabel("Váha [kg]")
 
-        ax_bmi = None
+        # BMI
         if mode in ("BMI", "Obojí"):
             if mode == "Obojí":
                 ax_bmi = ax_weight.twinx()
+                ax_bmi.set_facecolor("#121212")
+                style_axes(ax_bmi)
                 ax = ax_bmi
             else:
                 ax = ax_weight
-            ax.plot(times, bmis, marker="o", linestyle="-", label="BMI")
+            bmi_line, = ax.plot(times, bmis, marker="o", linestyle="-", label="BMI")
             ax.set_ylabel("BMI")
 
         # Barevné označení bodů podle BMI kategorie
         for t, w, bmi_val in zip(times, weights, bmis):
             category, color = self.get_bmi_category(bmi_val)
-            ax_weight.scatter([t], [w], color=color, s=30, zorder=5)
-            if ax_bmi is not None:
-                ax_bmi.scatter([t], [bmi_val], color=color, s=30, zorder=5)
+            if mode in ("Váha", "Obojí") and weight_line is not None:
+                ax_weight.scatter([t], [w], color=color, s=30, zorder=5)
+            if mode in ("BMI", "Obojí") and bmi_line is not None:
+                target_ax = ax_bmi if (ax_bmi is not None and mode == "Obojí") else ax_weight
+                target_ax.scatter([t], [bmi_val], color=color, s=30, zorder=5)
 
-        title = "Vývoj váhy"
-        if mode == "BMI":
+        # Titulek podle režimu + období
+        if mode == "Váha":
+            title = "Vývoj váhy"
+        elif mode == "BMI":
             title = "Vývoj BMI"
-        elif mode == "Obojí":
+        else:
             title = "Vývoj váhy a BMI"
+
+        if days_window == 7:
+            title += " – poslední týden"
+        elif days_window == 30:
+            title += " – poslední měsíc"
+        elif days_window == 365:
+            title += " – poslední rok"
+
         ax_weight.set_title(title)
 
-        handles, labels = ax_weight.get_legend_handles_labels()
-        if ax_bmi is not None:
-            h2, l2 = ax_bmi.get_legend_handles_labels()
-            handles += h2
-            labels += l2
-        if handles:
-            ax_weight.legend(handles, labels, loc="upper left")
+        # Legenda – přesně podle zvoleného režimu
+        legend_handles = []
+        legend_labels = []
+        if mode in ("Váha", "Obojí") and weight_line is not None:
+            legend_handles.append(weight_line)
+            legend_labels.append("Váha [kg]")
+        if mode in ("BMI", "Obojí") and bmi_line is not None:
+            legend_handles.append(bmi_line)
+            legend_labels.append("BMI")
+
+        if legend_handles:
+            ax_weight.legend(legend_handles, legend_labels, loc="upper left", facecolor="#222222", edgecolor="#e0e0e0", labelcolor="#e0e0e0")
 
         self.bmi_time_canvas.draw()
 
@@ -2582,8 +2660,10 @@ class FitnessTrackerApp(QMainWindow):
 
         fig = self.bmi_zones_fig
         fig.clear()
+        fig.patch.set_facecolor("#121212")
+
         ax = fig.add_subplot(111)
-        ax.set_facecolor("#1e1e1e")
+        ax.set_facecolor("#121212")
 
         # Rozsah BMI osy
         min_bmi = 10
@@ -2592,6 +2672,10 @@ class FitnessTrackerApp(QMainWindow):
         ax.set_ylim(0, 1)
         ax.set_yticks([])
         ax.set_xlabel("BMI")
+        ax.xaxis.label.set_color("#e0e0e0")
+        ax.tick_params(colors="#e0e0e0")
+        for spine in ax.spines.values():
+            spine.set_color("#e0e0e0")
 
         zones = [
             (10.0, 18.5, "Podváha", "#4ea5ff"),
@@ -2602,7 +2686,7 @@ class FitnessTrackerApp(QMainWindow):
         ]
 
         for start, end, label, color in zones:
-            ax.axvspan(start, end, color=color, alpha=0.35)
+            ax.axvspan(start, end, color=color, alpha=0.4)
             ax.text(
                 (start + end) / 2.0,
                 0.5,
@@ -2610,13 +2694,13 @@ class FitnessTrackerApp(QMainWindow):
                 ha="center",
                 va="center",
                 fontsize=9,
-                color="#000000"
+                color="#000000",  # na barevném pruhu černý text je dobře vidět
+                fontweight="bold"
             )
 
         current_bmi = self.get_latest_bmi()
         if current_bmi > 0:
             category, color = self.get_bmi_category(current_bmi)
-            # Omez čáru do rozsahu grafu
             x = max(min(current_bmi, max_bmi), min_bmi)
             ax.axvline(x, color=color, linewidth=2)
             ax.text(
@@ -2626,11 +2710,14 @@ class FitnessTrackerApp(QMainWindow):
                 ha="center",
                 va="bottom",
                 fontsize=9,
-                color=color
+                color=color,
+                fontweight="bold"
             )
-            ax.set_title(f"Poslední BMI: {current_bmi:.1f} – {category}")
+            title = f"Poslední BMI: {current_bmi:.1f} – {category}"
         else:
-            ax.set_title("BMI zóny (zatím žádné měření)")
+            title = "BMI zóny (zatím žádné měření)"
+
+        ax.set_title(title, color="#e0e0e0")
 
         self.bmi_zones_canvas.draw()
         
