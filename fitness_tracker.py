@@ -4092,10 +4092,7 @@ class FitnessTrackerApp(QMainWindow):
             self.chart_canvases[exercise_type].draw()
         
     def create_exercise_tab(self, exercise_type, icon):
-        """Vytvoří záložku pro konkrétní cvičení - BEZ přidávání (layout beze změny).
-        MINIMAL-CHANGE: pouze přidán řádek s přepínači Den/Týden/Měsíc/Rok pod kalendář (nad graf),
-        které volají update_performance_chart(...). Ničeho dalšího se nedotýkáme.
-        """
+        """Vytvoří záložku pro konkrétní cvičení - BEZ přidávání"""
         widget = QWidget()
         main_layout = QHBoxLayout(widget)
         
@@ -4273,47 +4270,8 @@ class FitnessTrackerApp(QMainWindow):
         stats_year_label.setObjectName(f"stats_year_label_{exercise_type}")
         stats_year_label.setStyleSheet("font-size: 11px; padding: 5px; background-color: #2d2d2d; color: #e0e0e0; border-radius: 5px;")
         calendar_layout.addWidget(stats_year_label)
-    
-        # ==================== JEN TOTO NAVÍC: přepínače režimu grafu ====================
-        # (Malý vodorovný řádek s tlačítky Den/Týden/Měsíc/Rok; bez dopadu na zbytek layoutu)
-        mode_row = QHBoxLayout()
-        mode_row.setSpacing(8)
-        btn_day = QRadioButton("Den")
-        btn_week = QRadioButton("Týden")
-        btn_month = QRadioButton("Měsíc")
-        btn_year = QRadioButton("Rok")
-        # výchozí režim necháme jako doposud – Týden
-        btn_week.setChecked(True)
-    
-        # uložíme odkazy pro pozdější synchronizaci (bez dalších zásahů do app)
-        if not hasattr(self, "chart_mode_buttons"):
-            self.chart_mode_buttons = {}
-        self.chart_mode_buttons[exercise_type] = {
-            "daily": btn_day,
-            "weekly": btn_week,
-            "monthly": btn_month,
-            "yearly": btn_year,
-        }
-    
-        # signály: volají update_performance_chart se zvoleným módem
-        for b in (btn_day, btn_week, btn_month, btn_year):
-            b.toggled.connect(
-                lambda _=None, m=b: m.isChecked()
-                and self.update_performance_chart(
-                    exercise_type,
-                    "daily" if m is btn_day else "weekly" if m is btn_week else "monthly" if m is btn_month else "yearly"
-                )
-            )
-    
-        mode_row.addWidget(btn_day)
-        mode_row.addWidget(btn_week)
-        mode_row.addWidget(btn_month)
-        mode_row.addWidget(btn_year)
-        mode_row.addStretch()
-        calendar_layout.addLayout(mode_row)
-        # ==================== KONEC DOPLNĚNÍ ====================
-    
-        # ==================== GRAF POD KALENDÁŘEM (beze změny) ====================
+        
+        # ==================== GRAF POD KALENDÁŘEM ====================
         self.create_performance_chart(exercise_type, calendar_layout)
         
         calendar_layout.addStretch()
