@@ -32,8 +32,8 @@ from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
 
 TITLE = "Fitness Tracker"
-VERSION = "3.0.5"
-VERSION_DATE = "15.11.2025"
+VERSION = "3.2.3b"
+VERSION_DATE = "16.11.2025"
 
 # Dark Theme Stylesheet
 DARK_THEME = """
@@ -2589,485 +2589,211 @@ class FitnessTrackerApp(QMainWindow):
                 self.years_list.addItem(item)
     
     def create_about_tab(self):
-        """Záložka O aplikaci s kompletním helpm a manuálem"""
+        """Záložka O aplikaci s kompletním helpem a manuálem (aktualizováno pro 3.2.3b)"""
         widget = QWidget()
         layout = QVBoxLayout(widget)
-        
+    
         # **SUB-TABS pro různé sekce helpu**
         help_tabs = QTabWidget()
-        
+    
         # ==================== TAB 1: O APLIKACI ====================
         about_widget = QWidget()
         about_layout = QVBoxLayout(about_widget)
-        
+    
         # Logo/Titulek
         title = QLabel(f"🏋️ {TITLE}")
         title.setStyleSheet("font-size: 24px; font-weight: bold; color: #14919b; padding: 20px;")
         title.setAlignment(Qt.AlignCenter)
         about_layout.addWidget(title)
-        
+    
         # Verze a datum
         version_info = QLabel(f"<b>Verze:</b> {VERSION}<br><b>Datum:</b> {VERSION_DATE}")
         version_info.setStyleSheet("font-size: 13px; padding: 10px; text-align: center;")
         version_info.setAlignment(Qt.AlignCenter)
         about_layout.addWidget(version_info)
-        
+    
         # Popis
-        description = QTextBrowser()  # ← ZMĚNA: QTextBrowser místo QTextEdit
+        description = QTextBrowser()  # QTextBrowser kvůli odkazům
         description.setReadOnly(True)
         description.setStyleSheet("background-color: #2d2d2d; border: 1px solid #3d3d3d; border-radius: 5px; padding: 15px;")
-        description.setOpenExternalLinks(True)  # ← Nyní funguje!
-        
+        description.setOpenExternalLinks(True)
+    
         about_html = f"""
         <div style='font-size: 13px; line-height: 1.6;'>
-        <h2 style='color: #14919b;'>📋 O aplikaci</h2>
-        <p>
-        <b>Fitness Tracker</b> je desktopová aplikace pro sledování pokroku v cvičení 
-        s inteligentním doporučením cílů. Umožňuje zaznamenávat denní výkony, 
-        sledovat splnění cílů a vizualizovat pokrok v ročním přehledu.
-        </p>
-        
-        <h3 style='color: #32c766;'>✨ Hlavní funkce</h3>
-        <ul>
-            <li><b>🧙‍♂️ Smart Year Wizard</b> — AI-powered průvodce vytvořením roku</li>
+          <h2 style='color: #14919b;'>📋 O aplikaci</h2>
+          <p>
+            <b>Fitness Tracker</b> je desktopová aplikace pro sledování pokroku v&nbsp;cvičení
+            s inteligentním doporučením cílů. Umožňuje zaznamenávat denní výkony,
+            sledovat splnění cílů a vizualizovat pokrok v přehledech.
+          </p>
+    
+          <h3 style='color: #32c766;'>✨ Hlavní funkce</h3>
+          <ul>
+            <li><b>🧙‍♂️ Smart Year Wizard</b> — průvodce vytvořením roku</li>
             <li><b>🏋️ Dynamické cvičení</b> — přidávej vlastní typy cvičení</li>
-            <li><b>📊 Sledování výkonu</b> — progresivní týdenní cíle</li>
-            <li><b>📈 Grafy a vizualizace</b> — týden/měsíc/rok</li>
-            <li><b>💾 Správa dat</b> — export/import, migrace</li>
-        </ul>
-        
-        <h3 style='color: #32c766;'>👤 Autor</h3>
-        <p>
-        <b>Vytvořil:</b> safronus<br>
-        <b>Licence:</b> MIT<br>
-        <b>GitHub:</b> <a href='https://github.com/safronus/FitnessApp' style='color: #14919b; text-decoration: underline;'>https://github.com/safronus/FitnessApp</a>
-        </p>
-        
-        <p style='margin-top: 20px; color: #a0a0a0; font-style: italic; text-align: center;'>
-        💪 Vytvořeno s láskou pro fitness nadšence! 🏋️
-        </p>
+            <li><b>🗓️ Start pro každé cvičení</b> — <i>individuální datum zahájení</i> pro každý typ</li>
+            <li><b>📈 Grafy</b> — <i>🕒 Den</i> / 📅 Týden / 📆 Měsíc / 📊 Rok</li>
+            <li><b>📍 Zvýraznění začátku</b> — svislá čára <i>Start</i> podle zvoleného cvičení</li>
+            <li><b>🧩 Přehled záznamů</b> — seskupení po dnech, multi-select mazání</li>
+            <li><b>💾 Správa dat</b> — export/import a bezpečná migrace (záloha před úpravou struktury)</li>
+          </ul>
+    
+          <h3 style='color: #32c766;'>🆕 Novinky</h3>
+          <ul>
+            <li><b>🕒 Denní graf</b> s kumulativním průběhem během dne a čarou <i>Denní cíl</i>.</li>
+            <li><b>↔️ Legenda vpravo</b> — mimo plochu grafu pro lepší čitelnost.</li>
+            <li><b>🗓️ Per-cvičení start</b> — každý typ má vlastní počáteční datum (promítá se do grafů i kalendáře).</li>
+            <li><b>🧭 Titulek grafu</b> — dynamicky dle módu (den/týden/měsíc/rok).</li>
+          </ul>
+    
+          <h3 style='color: #32c766;'>👤 Autor</h3>
+          <p>
+            <b>Vytvořil:</b> safronus<br>
+            <b>Licence:</b> MIT<br>
+            <b>GitHub:</b> <a href='https://github.com/safronus/FitnessApp' style='color: #14919b; text-decoration: underline;'>https://github.com/safronus/FitnessApp</a>
+          </p>
+    
+          <p style='margin-top: 20px; color: #a0a0a0; font-style: italic; text-align: center;'>
+            💪 Vytvořeno s láskou pro fitness nadšence! 🏋️
+          </p>
         </div>
         """
-        
         description.setHtml(about_html)
         about_layout.addWidget(description)
-        
+    
         help_tabs.addTab(about_widget, "ℹ️ O aplikaci")
-        
+    
         # ==================== TAB 2: RYCHLÝ START ====================
         quickstart_widget = QWidget()
         quickstart_layout = QVBoxLayout(quickstart_widget)
-        
+    
         quickstart_scroll = QScrollArea()
         quickstart_scroll.setWidgetResizable(True)
         quickstart_scroll.setStyleSheet("QScrollArea { border: none; }")
-        
+    
         quickstart_content = QTextBrowser()
         quickstart_content.setReadOnly(True)
         quickstart_content.setStyleSheet("background-color: #2d2d2d; border: none; padding: 15px;")
-        
+    
         quickstart_html = """
         <div style='font-size: 13px; line-height: 1.6;'>
-        <h1 style='color: #14919b;'>🚀 Rychlý start</h1>
-        
-        <h2 style='color: #32c766;'>Krok 1: První spuštění</h2>
-        <p>
-        Po prvním spuštění aplikace se automaticky vytvoří <b>aktuální rok</b> s výchozím nastavením:
-        </p>
-        <ul>
-            <li>💪 Kliky: 50/den, +10/týden</li>
-            <li>🦵 Dřepy: 20/den, +5/týden</li>
-            <li>🧘 Skrčky: 20/den, +10/týden</li>
-        </ul>
-        
-        <h2 style='color: #32c766;'>Krok 2: Přidání výkonu</h2>
-        <ol>
-            <li>Jdi do záložky <b>"➕ Přidat výkon"</b></li>
-            <li>Vyber datum (defaultně dnes)</li>
-            <li>Zadej počet opakování pro jednotlivá cvičení</li>
-            <li>Klikni <b>"Přidat"</b> nebo použij rychlá tlačítka</li>
-        </ol>
-        
-        <div style='background-color: #1e1e1e; border: 2px solid #14919b; border-radius: 5px; padding: 15px; margin: 10px 0;'>
-        <b>💡 Tip:</b> Můžeš použít <b>rychlá tlačítka</b> (10, 15, 20) pro okamžité přidání výkonu bez psaní!
-        </div>
-        
-        <h2 style='color: #32c766;'>Krok 3: Sledování pokroku</h2>
-        <p>
-        Přepni na záložku konkrétního cvičení (💪 Kliky, 🦵 Dřepy, 🧘 Skrčky) a sleduj:
-        </p>
-        <ul>
-            <li><b>📊 Přehled DNES/TÝDEN/MĚSÍC</b> — aktuální status</li>
-            <li><b>📈 Graf výkonu</b> — vizualizace pokroku</li>
-            <li><b>📅 Kalendář</b> — barevný přehled splněných dní</li>
-            <li><b>📝 TreeWidget</b> — seznam záznamů s možností editace</li>
-        </ul>
-        
-        <h2 style='color: #32c766;'>Krok 4: Vytvoření nového roku (volitelné)</h2>
-        <p>
-        Pokud chceš vytvořit nový rok (např. 2026):
-        </p>
-        <ol>
-            <li>Jdi do <b>⚙️ Nastavení</b></li>
-            <li>Sekce <b>"Správa roků"</b> → klikni <b>"➕ Přidat rok"</b></li>
-            <li>Vyber mód: <b>Smart Wizard</b> / Zkopírovat / Výchozí</li>
-            <li>Projdi 5-krokovým průvodcem</li>
-            <li>Rok je vytvořen s optimálními cíli!</li>
-        </ol>
-        
-        <div style='background-color: #1e1e1e; border: 2px solid #32c766; border-radius: 5px; padding: 15px; margin: 10px 0;'>
-        <b>🎉 Gratulujeme!</b> Nyní máš aplikaci připravenou k používání. Pokračuj do <b>Uživatelského manuálu</b> pro pokročilé funkce.
-        </div>
+          <h1 style='color: #14919b;'>🚀 Rychlý start</h1>
+    
+          <h2 style='color: #32c766;'>1) Nastavení roku</h2>
+          <p>V <b>⚙️ Nastavení</b> vyber <b>rok</b> a pro každé cvičení nastav <b>datum zahájení</b> (volitelné).</p>
+    
+          <h2 style='color: #32c766;'>2) Přidávání výkonu</h2>
+          <p>V záložce cvičení použij tlačítko <b>„Přidat výkon“</b>. Záznam se ihned projeví v přehledech i grafu.</p>
+    
+          <h2 style='color: #32c766;'>3) Přehled & graf</h2>
+          <ul>
+            <li>Přepínej módy grafu: <b>🕒 Den</b> / <b>📅 Týden</b> / <b>📆 Měsíc</b> / <b>📊 Rok</b>.</li>
+            <li>Legenda je <b>vpravo vedle grafu</b> a nezasahuje do dat.</li>
+            <li>Titulek grafu se <b>dynamicky</b> přizpůsobí zvolenému módu.</li>
+          </ul>
+    
+          <h2 style='color: #32c766;'>4) Export/Import</h2>
+          <p>V <b>⚙️ Nastavení</b> najdeš <b>Export/Import</b> pro zálohu a přenos dat (JSON). Před migrací se vytváří záloha.</p>
         </div>
         """
-        
         quickstart_content.setHtml(quickstart_html)
         quickstart_scroll.setWidget(quickstart_content)
         quickstart_layout.addWidget(quickstart_scroll)
-        
+    
         help_tabs.addTab(quickstart_widget, "🚀 Rychlý start")
-        
+    
         # ==================== TAB 3: UŽIVATELSKÝ MANUÁL ====================
         manual_widget = QWidget()
         manual_layout = QVBoxLayout(manual_widget)
-        
+    
         manual_scroll = QScrollArea()
         manual_scroll.setWidgetResizable(True)
         manual_scroll.setStyleSheet("QScrollArea { border: none; }")
-        
+    
         manual_content = QTextBrowser()
         manual_content.setReadOnly(True)
         manual_content.setStyleSheet("background-color: #2d2d2d; border: none; padding: 15px;")
-        
+    
         manual_html = """
         <div style='font-size: 13px; line-height: 1.6;'>
-        <h1 style='color: #14919b;'>📖 Uživatelský manuál</h1>
-        
-        <h2 style='color: #32c766;'>1️⃣ Záložka "Přidat výkon"</h2>
-        <h3>Základní přidání</h3>
-        <ul>
-            <li><b>Datum:</b> Vyber datum pro záznam (defaultně dnes)</li>
-            <li><b>Cíle:</b> Vidíš přehled dnešních cílů a jejich splnění</li>
-            <li><b>Zadání:</b> Zapiš počet opakování a klikni "Přidat"</li>
-            <li><b>Rychlá tlačítka:</b> Okamžitě přidej přednastavené hodnoty</li>
-        </ul>
-        
-        <h3>Přidání všech najednou</h3>
-        <p>
-        Použij tlačítko <b>"➕ Přidat všechny výkony najednou"</b> pro zadání více cvičení současně.
-        </p>
-        
-        <div style='background-color: #1e1e1e; border-left: 4px solid #FFD700; padding: 10px; margin: 10px 0;'>
-        <b>⚠️ Poznámka:</b> Záznamy můžeš kdykoli upravit nebo smazat v záložce konkrétního cvičení (TreeWidget).
-        </div>
-        
-        <hr style='border: 1px solid #3d3d3d; margin: 20px 0;'>
-        
-        <h2 style='color: #32c766;'>2️⃣ Záložky cvičení (Kliky/Dřepy/Skrčky/...)</h2>
-        
-        <h3>Výběr roku</h3>
-        <p>
-        Nahoře najdeš <b>📅 Zobrazit rok</b> selector. Přepínej mezi roky pro zobrazení historie.
-        </p>
-        
-        <h3>Sekce přehledů</h3>
-        <ul>
-            <li><b>DNES:</b> Dnešní výkon vs cíl (zelený = splněno, červený = nesplněno)</li>
-            <li><b>TÝDEN:</b> Týdenní souhrn (aktuální týden)</li>
-            <li><b>MĚSÍC:</b> Měsíční souhrn (aktuální měsíc)</li>
-            <li><b>ZBYTEK ROKU:</b> Zbývající cíl do konce roku (jen pro aktuální rok)</li>
-        </ul>
-        
-        <div style='background-color: #1e1e1e; border-left: 4px solid #32c766; padding: 10px; margin: 10px 0;'>
-        <b>💡 Tip:</b> Pro <b>jiné roky</b> se zobrazuje <b>roční souhrn</b> místo denních/týdenních přehledů.
-        </div>
-        
-        <h3>Progress bar</h3>
-        <p>
-        Progress bar ukazuje splnění cíle <b>k dnešnímu dni</b>:
-        </p>
-        <ul>
-            <li>🟢 <b>Zelený:</b> Náskok (máš více než cíl) → např. 120/100 (+20%)</li>
-            <li>🟡 <b>Žlutý:</b> Přesně splněno</li>
-            <li>🔴 <b>Červený:</b> Skluz (máš méně než cíl)</li>
-        </ul>
-        
-        <h3>Graf výkonu</h3>
-        <p>
-        Přepínej mezi třemi módy:
-        </p>
-        <ul>
-            <li><b>📅 Týden:</b> Posledních 7 dní</li>
-            <li><b>📅 Měsíc:</b> Posledních 30 dní</li>
-            <li><b>📅 Rok:</b> Celý rok s vertikální čárou začátku</li>
-        </ul>
-        
-        <h3>Barevný kalendář</h3>
-        <p>
-        Kalendář zobrazuje <b>splnění cílů</b> pro každý den:
-        </p>
-        <ul>
-            <li><b style='color: #32c766;'>Zelený:</b> Cíl splněn</li>
-            <li><b style='color: #FFD700;'>Žlutý:</b> Částečně splněno (50-99%)</li>
-            <li><b style='color: #ff6b6b;'>Červený:</b> Nesplněno</li>
-            <li><b style='color: #3d3d3d;'>Šedý:</b> Žádný trénink</li>
-        </ul>
-        
-        <h3>TreeWidget - záznamy</h3>
-        <p>
-        Seznam všech záznamů s možnostmi:
-        </p>
-        <ul>
-            <li><b>Editace:</b> Dvojklik na hodnotu → uprav počet opakování</li>
-            <li><b>Smazání:</b> Pravý klik → "Smazat záznam"</li>
-            <li><b>Filtrování:</b> Automaticky podle vybraného roku</li>
-        </ul>
-        
-        <hr style='border: 1px solid #3d3d3d; margin: 20px 0;'>
-        
-        <h2 style='color: #32c766;'>3️⃣ Záložka "Nastavení"</h2>
-        
-        <h3>Správa cvičení</h3>
-        <p>
-        Přidávej, upravuj nebo mazej typy cvičení:
-        </p>
-        <ul>
-            <li><b>➕ Přidat cvičení:</b> Vytvoř vlastní typ (shyby, běh, plank...)</li>
-            <li><b>✏️ Upravit cvičení:</b> Změň název, ikonu nebo rychlá tlačítka</li>
-            <li><b>🗑️ Smazat cvičení:</b> Odstraň včetně všech dat (nevratné!)</li>
-        </ul>
-        
-        <div style='background-color: #1e1e1e; border-left: 4px solid #ff6b6b; padding: 10px; margin: 10px 0;'>
-        <b>⚠️ Varování:</b> Smazání cvičení je <b>nevratné</b>! Všechna data pro toto cvičení budou smazána.
-        </div>
-        
-        <h3>Správa roků</h3>
-        <ul>
-            <li><b>➕ Přidat rok:</b> Vytvoř nový rok pomocí Smart Wizardu</li>
-            <li><b>🗑️ Smazat rok:</b> Odstraň rok včetně nastavení (data zůstanou)</li>
-            <li><b>🔄 Vynulovat záznamy:</b> Smaž všechny výkony pro daný rok</li>
-        </ul>
-        
-        <h3>Nastavení vybraného roku</h3>
-        <p>
-        Klikni na rok v seznamu a uprav:
-        </p>
-        <ul>
-            <li><b>📅 Datum zahájení:</b> Od kdy počítat progresivní cíle</li>
-            <li><b>🎯 Základní cíle:</b> Počet opakování v 1. týdnu</li>
-            <li><b>📈 Týdenní přírůstky:</b> O kolik se zvyšuje každý týden</li>
-        </ul>
-        
-        <h3>Záloha dat</h3>
-        <ul>
-            <li><b>📤 Exportovat data:</b> Ulož JSON soubor jako zálohu</li>
-            <li><b>📥 Importovat data:</b> Načti zálohu nebo přenést mezi zařízeními</li>
-        </ul>
-        
-        <hr style='border: 1px solid #3d3d3d; margin: 20px 0;'>
-        
-        <h2 style='color: #32c766;'>4️⃣ Smart Year Wizard (🧙‍♂️)</h2>
-        
-        <p>
-        Inteligentní průvodce vytvořením roku s <b>5 kroky</b>:
-        </p>
-        
-        <h3>Krok 1: Uvítání</h3>
-        <p>Přehled procesu a informace o wizardu.</p>
-        
-        <h3>Krok 2: Analýza předchozího roku</h3>
-        <p>
-        Wizard analyzuje tvůj minulý rok a zobrazí:
-        </p>
-        <ul>
-            <li>Počet dní s tréninkem</li>
-            <li>Průměrný denní výkon</li>
-            <li>Průměr posledních 3 měsíců (důležité!)</li>
-            <li>Finální cíl minulého roku</li>
-            <li>Status: Celý rok / Částečný / Málo dat</li>
-        </ul>
-        
-        <h3>Krok 3: Fitness level</h3>
-        <p>Vyber svou úroveň:</p>
-        <ul>
-            <li>🟢 <b>Začátečník:</b> Pro ty, kdo začínají (multiplier 0.5×)</li>
-            <li>🟡 <b>Intermediate:</b> Pravidelný trénink (multiplier 1.0×)</li>
-            <li>🔴 <b>Pokročilý:</b> Pokročilá kondice (multiplier 1.5×)</li>
-        </ul>
-        
-        <h3>Krok 4: Preference</h3>
-        <p><b>Dostupný čas:</b></p>
-        <ul>
-            <li>3× týdně (multiplier 0.7×)</li>
-            <li>5× týdně (multiplier 1.0×)</li>
-            <li>Každý den (multiplier 1.2×)</li>
-        </ul>
-        
-        <p><b>Hlavní cíl:</b></p>
-        <ul>
-            <li>🔥 Hubnutí (multiplier 1.0×)</li>
-            <li>💪 Kondice (multiplier 1.1×)</li>
-            <li>🏋️ Svalová hmota (multiplier 1.2×)</li>
-        </ul>
-        
-        <h3>Krok 5: Chytré doporučení</h3>
-        <p>
-        Wizard vypočítá optimální cíle pomocí <b>AI-powered algoritmu</b>:
-        </p>
-        
-        <div style='background-color: #1e1e1e; border: 2px solid #14919b; border-radius: 5px; padding: 15px; margin: 10px 0;'>
-        <h4 style='color: #32c766; margin: 0;'>Historie-based metoda (vysoká spolehlivost)</h4>
-        <p>Pokud existují data z minulého roku (min. 30 dní):</p>
-        <code style='display: block; background-color: #0d1117; padding: 10px; border-radius: 5px; margin: 5px 0;'>
-        base = avg_last_3_months × fitness × time × goal × 0.9<br>
-        increment = base × 0.10
-        </code>
-        </div>
-        
-        <div style='background-color: #1e1e1e; border: 2px solid #FFD700; border-radius: 5px; padding: 15px; margin: 10px 0;'>
-        <h4 style='color: #FFD700; margin: 0;'>Level-based metoda (střední spolehlivost)</h4>
-        <p>Pokud neexistují data z minulého roku:</p>
-        <code style='display: block; background-color: #0d1117; padding: 10px; border-radius: 5px; margin: 5px 0;'>
-        base = default × fitness × time × goal<br>
-        increment = base × 0.10
-        </code>
-        </div>
-        
-        <p>
-        Finální souhrn zobrazí doporučené cíle pro všechna cvičení s projekcí finálního cíle (52. týden).
-        </p>
-        
-        <hr style='border: 1px solid #3d3d3d; margin: 20px 0;'>
-        
-        <h2 style='color: #32c766;'>5️⃣ Klávesové zkratky</h2>
-        <ul>
-            <li><b>Tab:</b> Přepíná mezi záložkami</li>
-            <li><b>Enter:</b> Potvrzuje dialogy</li>
-            <li><b>Esc:</b> Zavírá dialogy</li>
-        </ul>
-        
+          <h1 style='color: #14919b;'>📖 Uživatelský manuál</h1>
+    
+          <h2>Grafy</h2>
+          <ul>
+            <li><b>🕒 Den</b> — kumulativní křivka během dne, čára <i>Denní cíl</i>, časová osa HH:MM.</li>
+            <li><b>📅 Týden</b> — posledních 7 dní včetně dneška.</li>
+            <li><b>📆 Měsíc</b> — aktuální měsíc; respektuje <i>start cvičení</i>.</li>
+            <li><b>📊 Rok</b> — celý rok; svislá čára <i>Start</i> dle data zahájení daného cvičení.</li>
+            <li><b>Legenda</b> — vpravo mimo graf; je rezervován pravý okraj.</li>
+            <li><b>Titulek</b> — dynamický (den/č. týdne/název měsíce/rok).</li>
+          </ul>
+    
+          <h2>Přehled záznamů</h2>
+          <ul>
+            <li>Seskupení po dnech (nadpis dne).</li>
+            <li><b>Multi-select</b> pro smazání více záznamů najednou.</li>
+            <li>Kliknutím rozbalíš/sbalíš detail dne.</li>
+          </ul>
+    
+          <h2>Nastavení</h2>
+          <ul>
+            <li>Volba roku a <b>individuálních startů</b> pro cvičení.</li>
+            <li>Export/Import dat (JSON) s automatickou zálohou při migraci.</li>
+          </ul>
         </div>
         """
-        
         manual_content.setHtml(manual_html)
         manual_scroll.setWidget(manual_content)
         manual_layout.addWidget(manual_scroll)
-        
+    
         help_tabs.addTab(manual_widget, "📖 Manuál")
-        
+    
         # ==================== TAB 4: FAQ ====================
         faq_widget = QWidget()
         faq_layout = QVBoxLayout(faq_widget)
-        
+    
         faq_scroll = QScrollArea()
         faq_scroll.setWidgetResizable(True)
         faq_scroll.setStyleSheet("QScrollArea { border: none; }")
-        
+    
         faq_content = QTextBrowser()
         faq_content.setReadOnly(True)
         faq_content.setStyleSheet("background-color: #2d2d2d; border: none; padding: 15px;")
-        
+    
         faq_html = """
         <div style='font-size: 13px; line-height: 1.6;'>
-        <h1 style='color: #14919b;'>❓ Často kladené otázky (FAQ)</h1>
-        
-        <div style='background-color: #1e1e1e; border-left: 4px solid #14919b; padding: 15px; margin: 10px 0;'>
-        <h3 style='color: #14919b; margin-top: 0;'>Q: Jak přidat vlastní typ cvičení?</h3>
-        <p>
-        <b>A:</b> Jdi do <b>⚙️ Nastavení</b> → <b>Správa cvičení</b> → <b>"➕ Přidat cvičení"</b>. 
-        Zadej název (např. Shyby), ikonu (🤸), základní cíl (10) a týdenní přírůstek (5). 
-        Po restartu aplikace se objeví nová záložka.
-        </p>
-        </div>
-        
-        <div style='background-color: #1e1e1e; border-left: 4px solid #14919b; padding: 15px; margin: 10px 0;'>
-        <h3 style='color: #14919b; margin-top: 0;'>Q: Můžu upravit cíle pro aktuální rok?</h3>
-        <p>
-        <b>A:</b> Ano! V <b>Nastavení</b> vyber rok ze seznamu, uprav <b>základní cíle</b> nebo 
-        <b>týdenní přírůstky</b> a klikni <b>"💾 Uložit nastavení"</b>. Změny se projeví okamžitě.
-        </p>
-        </div>
-        
-        <div style='background-color: #1e1e1e; border-left: 4px solid #14919b; padding: 15px; margin: 10px 0;'>
-        <h3 style='color: #14919b; margin-top: 0;'>Q: Jak funguje progress bar nad 100%?</h3>
-        <p>
-        <b>A:</b> Pokud máš <b>náskok</b> oproti cíli, progress bar se zobrazí <b>zeleně</b> 
-        a ukazuje, o kolik jsi před cílem. Např. 120/100 (+20%) znamená, že máš 20% náskok!
-        </p>
-        </div>
-        
-        <div style='background-color: #1e1e1e; border-left: 4px solid #14919b; padding: 15px; margin: 10px 0;'>
-        <h3 style='color: #14919b; margin-top: 0;'>Q: Co dělat, když jsem přeskočil několik dní?</h3>
-        <p>
-        <b>A:</b> Žádný problém! Můžeš zpětně přidat výkony pro jakýkoliv minulý den. 
-        V záložce <b>"Přidat výkon"</b> vyber datum a zaznamenuj výkon. 
-        Všechny přehledy a grafy se automaticky aktualizují.
-        </p>
-        </div>
-        
-        <div style='background-color: #1e1e1e; border-left: 4px solid #14919b; padding: 15px; margin: 10px 0;'>
-        <h3 style='color: #14919b; margin-top: 0;'>Q: Kde se ukládají data?</h3>
-        <p>
-        <b>A:</b> Všechna data se ukládají lokálně do souboru <b>fitness_data.json</b> 
-        ve stejné složce jako aplikace. Můžeš tento soubor zálohovat nebo přenést mezi zařízeními.
-        </p>
-        </div>
-        
-        <div style='background-color: #1e1e1e; border-left: 4px solid #14919b; padding: 15px; margin: 10px 0;'>
-        <h3 style='color: #14919b; margin-top: 0;'>Q: Můžu smazat cvičení?</h3>
-        <p>
-        <b>A:</b> Ano, ale <b>POZOR!</b> Smazání cvičení je <b>nevratné</b> a smaže 
-        <b>všechna data</b> (záznamy, cíle) pro toto cvičení. Nejprve exportuj data jako zálohu!
-        </p>
-        </div>
-        
-        <div style='background-color: #1e1e1e; border-left: 4px solid #14919b; padding: 15px; margin: 10px 0;'>
-        <h3 style='color: #14919b; margin-top: 0;'>Q: Jak funguje Smart Year Wizard?</h3>
-        <p>
-        <b>A:</b> Wizard analyzuje tvůj minulý rok (pokud existuje) a na základě 
-        <b>průměru posledních 3 měsíců</b>, <b>fitness levelu</b>, <b>dostupného času</b> 
-        a <b>hlavního cíle</b> vypočítá optimální cíle pro nový rok. Používá 
-        <b>progressive overload princip</b> (10% růst/týden) pro bezpečnou progresi.
-        </p>
-        </div>
-        
-        <div style='background-color: #1e1e1e; border-left: 4px solid #14919b; padding: 15px; margin: 10px 0;'>
-        <h3 style='color: #14919b; margin-top: 0;'>Q: Co znamenají barvy v kalendáři?</h3>
-        <p>
-        <b>A:</b><br>
-        🟢 <b style='color: #32c766;'>Zelený</b> — Cíl splněn (100%+)<br>
-        🟡 <b style='color: #FFD700;'>Žlutý</b> — Částečně splněno (50-99%)<br>
-        🔴 <b style='color: #ff6b6b;'>Červený</b> — Nesplněno (1-49%)<br>
-        ⚫ <b style='color: #3d3d3d;'>Šedý</b> — Žádný trénink (0%)
-        </p>
-        </div>
-        
-        <div style='background-color: #1e1e1e; border-left: 4px solid #14919b; padding: 15px; margin: 10px 0;'>
-        <h3 style='color: #14919b; margin-top: 0;'>Q: Aplikace nespouští / graf se nezobrazuje</h3>
-        <p>
-        <b>A:</b> Zkontroluj, že máš nainstalované závislosti:<br>
-        <code style='background-color: #0d1117; padding: 5px; border-radius: 3px;'>
-        pip install PySide6 matplotlib
-        </code><br>
-        Pokud problém přetrvává, reinstaluj závislosti:<br>
-        <code style='background-color: #0d1117; padding: 5px; border-radius: 3px;'>
-        pip install --upgrade --force-reinstall PySide6 matplotlib
-        </code>
-        </p>
-        </div>
-        
+          <h1 style='color: #14919b;'>❓ Často kladené otázky (FAQ)</h1>
+    
+          <div style='background-color: #1e1e1e; border-left: 4px solid #14919b; padding: 15px; margin: 10px 0;'>
+            <h3 style='color: #14919b; margin-top: 0;'>Jak přepnu na denní graf?</h3>
+            <p>V liště nad grafem klikni na <b>🕒 Den</b>. Zobrazí se kumulativní průběh dne a čára <i>Denní cíl</i>.</p>
+          </div>
+    
+          <div style='background-color: #1e1e1e; border-left: 4px solid #14919b; padding: 15px; margin: 10px 0;'>
+            <h3 style='color: #14919b; margin-top: 0;'>K čemu je „Start“ v grafu?</h3>
+            <p>Svislá čára označuje <b>datum zahájení</b> konkrétního cvičení (nastavíš v ⚙️ Nastavení). Pomáhá sledovat reálný začátek.</p>
+          </div>
+    
+          <div style='background-color: #1e1e1e; border-left: 4px solid #14919b; padding: 15px; margin: 10px 0;'>
+            <h3 style='color: #14919b; margin-top: 0;'>Proč je legenda vpravo?</h3>
+            <p>Aby <b>nezakrývala data</b>. Je umístěna vpravo vedle grafu a je tomu přizpůsoben pravý okraj.</p>
+          </div>
+    
+          <div style='background-color: #1e1e1e; border-left: 4px solid #14919b; padding: 15px; margin: 10px 0;'>
+            <h3 style='color: #14919b; margin-top: 0;'>Kde se ukládají data?</h3>
+            <p>Do souboru <b>fitness_data.json</b> ve stejné složce jako aplikace. Doporučujeme pravidelný export (záloha).</p>
+          </div>
         </div>
         """
-        
         faq_content.setHtml(faq_html)
         faq_scroll.setWidget(faq_content)
         faq_layout.addWidget(faq_scroll)
-        
+    
         help_tabs.addTab(faq_widget, "❓ FAQ")
-        
+    
         # Přidání sub-tabs do hlavního layoutu
         layout.addWidget(help_tabs)
-        
+    
         return widget
 
     def create_settings_tab(self):
