@@ -3412,25 +3412,61 @@ class FitnessTrackerApp(QMainWindow):
         self.bmi_plan_summary_label.setStyleSheet("font-size: 12px; color: #dddddd;")
         plan_layout.addWidget(self.bmi_plan_summary_label)
 
+        # Hlavní tabulka plánu (po cvicích)
         self.bmi_plan_tree = QTreeWidget()
         self.bmi_plan_tree.setColumnCount(4)
         self.bmi_plan_tree.setHeaderLabels(["Cvik", "Doporučeno týdně", "Celkem v období", "Poznámka"])
         self.bmi_plan_tree.setRootIsDecorated(False)
         self.bmi_plan_tree.setAlternatingRowColors(True)
         header = self.bmi_plan_tree.header()
-        header.setStretchLastSection(True)
-        header.setSectionResizeMode(QHeaderView.ResizeToContents)
+        header.setStretchLastSection(False)
+        header.setSectionResizeMode(0, QHeaderView.Stretch)
+        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
         plan_layout.addWidget(self.bmi_plan_tree)
+
+        # Týdenní rozpis a plnění plánu
+        weekly_group = QGroupBox("📅 Týdenní rozpis a plnění plánu")
+        weekly_layout = QVBoxLayout()
+
+        self.bmi_plan_weeks_tree = QTreeWidget()
+        self.bmi_plan_weeks_tree.setColumnCount(5)
+        self.bmi_plan_weeks_tree.setHeaderLabels(
+            ["Týden", "Cvik", "Plán (k týdnu)", "Skutečnost (k týdnu)", "Plnění"]
+        )
+        self.bmi_plan_weeks_tree.setRootIsDecorated(True)
+        self.bmi_plan_weeks_tree.setAlternatingRowColors(True)
+        w_header = self.bmi_plan_weeks_tree.header()
+        w_header.setStretchLastSection(False)
+        w_header.setSectionResizeMode(0, QHeaderView.Stretch)
+        w_header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        w_header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        w_header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        w_header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        weekly_layout.addWidget(self.bmi_plan_weeks_tree)
+
+        # Graf plnění plánu po týdnech
+        self.bmi_plan_fig = Figure(figsize=(6, 2.5), facecolor="#121212")
+        self.bmi_plan_canvas = FigureCanvas(self.bmi_plan_fig)
+        self.bmi_plan_canvas.setStyleSheet("background-color: #121212;")
+        weekly_layout.addWidget(self.bmi_plan_canvas)
+
+        weekly_group.setLayout(weekly_layout)
+        plan_layout.addWidget(weekly_group)
 
         plan_group.setLayout(plan_layout)
         layout.addWidget(plan_group)
 
         # Signály pro plán
         self.bmi_plan_recompute_button.clicked.connect(self.recompute_bmi_plan)
+        self.bmi_plan_target_spin.valueChanged.connect(self.recompute_bmi_plan)
+        self.bmi_plan_horizon_combo.currentIndexChanged.connect(self.recompute_bmi_plan)
+        self.bmi_plan_mode_combo.currentIndexChanged.connect(self.recompute_bmi_plan)
 
         layout.addStretch()
 
-        # Inicializace plánu
+        # Inicializace plánu (při otevření záložky / aplikace)
         self.recompute_bmi_plan()
 
         return widget
@@ -3538,6 +3574,10 @@ class FitnessTrackerApp(QMainWindow):
 
         # Vyčisti předchozí řádky
         self.bmi_plan_tree.clear()
+        if hasattr(self, "bmi_plan_weeks_tree"):
+            self.bmi_plan_weeks_tree.clear()
+        if hasattr(self, "bmi_plan_fig"):
+            self.bmi_plan_fig.clear()
 
         weight_now, height_cm, bmi_now = self.get_current_weight_and_bmi()
         if height_cm is None or weight_now is None or bmi_now is None:
@@ -3545,6 +3585,8 @@ class FitnessTrackerApp(QMainWindow):
                 "Pro výpočet plánu je potřeba mít nastavenou výšku "
                 "a alespoň jedno měření váhy v záložce „BMI & váha“."
             )
+            if hasattr(self, "bmi_plan_canvas"):
+                self.bmi_plan_canvas.draw()
             return
 
         target_bmi = float(self.bmi_plan_target_spin.value())
@@ -3604,12 +3646,14 @@ class FitnessTrackerApp(QMainWindow):
         active_exercises = self.get_active_exercises()
 
         if not baseline and delta_weight > 0:
-            # Nemáme historii – nabídneme jemný start
             self.bmi_plan_summary_label.setText(
                 summary
                 + "\n\n"
                 + "Nebyla nalezena historie výkonů, plán proto používá konzervativní výchozí hodnoty."
             )
+
+        # Plánované týdenní hodnoty pro jednotlivé cviky
+        planned_weekly: dict[str, float] = {}
 
         for exercise_id in active_exercises:
             config = self.get_exercise_config(exercise_id)
@@ -3623,6 +3667,7 @@ class FitnessTrackerApp(QMainWindow):
                 weekly_value = base_weekly * (1.0 + volume_factor)
                 note = f"Průměrně {base_weekly:.1f}/týden → +{int(volume_factor * 100)} % navýšení."
 
+            planned_weekly[exercise_id] = weekly_value
             total_value = weekly_value * horizon_weeks
 
             item = QTreeWidgetItem([
@@ -3631,11 +3676,141 @@ class FitnessTrackerApp(QMainWindow):
                 f"{total_value:.1f}",
                 note,
             ])
-            # zarovnání čísel na střed
             item.setTextAlignment(1, Qt.AlignCenter)
             item.setTextAlignment(2, Qt.AlignCenter)
 
             self.bmi_plan_tree.addTopLevelItem(item)
+
+        # Vygenerovat týdenní rozpis a graf plnění plánu
+        self.recompute_bmi_weekly_breakdown(active_exercises, planned_weekly, horizon_weeks)
+
+    def recompute_bmi_weekly_breakdown(
+        self,
+        active_exercises: list[str],
+        planned_weekly: dict[str, float],
+        horizon_weeks: int,
+    ):
+        """Vytvoří týdenní rozpis plánu a graf plnění (kumulativně do jednotlivých týdnů)."""
+        if not hasattr(self, "bmi_plan_weeks_tree"):
+            return
+
+        from datetime import datetime, timedelta
+        import matplotlib.dates as mdates
+
+        self.bmi_plan_weeks_tree.clear()
+
+        workouts = self.data.get("workouts", {})
+
+        today = datetime.now().date()
+        # pondělí aktuálního týdne
+        monday0 = today - timedelta(days=today.weekday())
+
+        # kumulativní součty plánu a skutečnosti pro každý cvik
+        cumulative_plan: dict[str, float] = {ex_id: 0.0 for ex_id in active_exercises}
+        cumulative_actual: dict[str, float] = {ex_id: 0.0 for ex_id in active_exercises}
+
+        weekly_compliance: list[tuple[datetime.date, float]] = []
+
+        for week_idx in range(horizon_weeks):
+            week_start = monday0 + timedelta(days=7 * week_idx)
+            week_end = week_start + timedelta(days=6)
+
+            week_label = f"{week_start.strftime('%d.%m.%Y')} – {week_end.strftime('%d.%m.%Y')}"
+            week_item = QTreeWidgetItem([week_label, "", "", "", ""])
+            self.bmi_plan_weeks_tree.addTopLevelItem(week_item)
+
+            week_percent_sum = 0.0
+            week_percent_count = 0
+
+            for exercise_id in active_exercises:
+                plan_week = planned_weekly.get(exercise_id, 0.0)
+
+                # Kumulativní plán – přidáme plán pro tento týden
+                cumulative_plan[exercise_id] += plan_week
+
+                # Skutečná hodnota v tomto týdnu
+                actual_week = 0.0
+                day = week_start
+                while day <= week_end:
+                    key = day.strftime("%Y-%m-%d")
+                    day_data = workouts.get(key)
+                    if day_data and exercise_id in day_data:
+                        records = day_data[exercise_id]
+                        if isinstance(records, list):
+                            actual_week += sum(float(r.get("value", 0.0)) for r in records)
+                        elif isinstance(records, dict):
+                            actual_week += float(records.get("value", 0.0))
+                    day += timedelta(days=1)
+
+                # Kumulativní skutečnost – přidáme hodnotu za tento týden
+                cumulative_actual[exercise_id] += actual_week
+
+                plan_cum = cumulative_plan[exercise_id]
+                actual_cum = cumulative_actual[exercise_id]
+
+                if plan_cum > 0:
+                    percent = (actual_cum / plan_cum) * 100.0
+                    week_percent_sum += percent
+                    week_percent_count += 1
+                else:
+                    percent = 0.0
+
+                config = self.get_exercise_config(exercise_id)
+
+                child = QTreeWidgetItem([
+                    "",
+                    f"{config['icon']} {config['name']}",
+                    f"{plan_cum:.1f}",
+                    f"{actual_cum:.1f}",
+                    f"{percent:.0f} %",
+                ])
+                child.setTextAlignment(2, Qt.AlignCenter)
+                child.setTextAlignment(3, Qt.AlignCenter)
+                child.setTextAlignment(4, Qt.AlignCenter)
+                week_item.addChild(child)
+
+            if week_percent_count > 0:
+                avg_percent = week_percent_sum / week_percent_count
+            else:
+                avg_percent = 0.0
+
+            weekly_compliance.append((week_start, avg_percent))
+
+        # Graf plnění plánu (kumulativně)
+        if not hasattr(self, "bmi_plan_fig") or not hasattr(self, "bmi_plan_canvas"):
+            return
+
+        fig = self.bmi_plan_fig
+        fig.clear()
+        ax = fig.add_subplot(111)
+        ax.set_facecolor("#121212")
+        ax.tick_params(colors="#e0e0e0")
+        ax.xaxis.label.set_color("#e0e0e0")
+        ax.yaxis.label.set_color("#e0e0e0")
+        ax.title.set_color("#e0e0e0")
+        for spine in ax.spines.values():
+            spine.set_color("#e0e0e0")
+
+        if weekly_compliance:
+            xs = [ws for (ws, _) in weekly_compliance]
+            ys = [max(0.0, y) for (_, y) in weekly_compliance]
+
+            ax.plot(xs, ys, marker="o", linestyle="-")
+            ax.set_xlabel("Týden (od)")
+            ax.set_ylabel("Plnění plánu [% – kumulativně]")
+            ax.set_title("Plnění plánu po týdnech (kumulativně)")
+
+            ax.xaxis.set_major_formatter(mdates.DateFormatter("%d.%m."))
+            fig.autofmt_xdate(rotation=30)
+
+            ymax = max(ys + [100.0])
+            ax.set_ylim(0, max(120.0, ymax * 1.1))
+        else:
+            ax.set_title("Plán zatím nemá období k zobrazení.")
+            ax.set_xlabel("Týden")
+            ax.set_ylabel("Plnění plánu [%]")
+
+        self.bmi_plan_canvas.draw()
 
     def refresh_add_tab_goals(self):
         """Aktualizuje přehled cílů při změně data"""
