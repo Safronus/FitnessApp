@@ -3441,8 +3441,22 @@ class FitnessTrackerApp(QMainWindow):
         self.bmi_plan_start_date_edit.setCalendarPopup(True)
         self.bmi_plan_start_date_edit.setDate(QDate.currentDate())
         
-        # >>> NOVĚ: automaticky přepočítat plán při změně data
-        self.bmi_plan_start_date_edit.dateChanged.connect(self.recompute_bmi_plan)
+        # Načti uložené datum z app_state (pokud existuje)
+        try:
+            ds = (self.data.get('app_state', {}) or {}).get('plan_start_date')
+            if isinstance(ds, str) and len(ds) >= 10:
+                qd = QDate.fromString(ds[:10], "yyyy-MM-dd")
+                if qd.isValid():
+                    self.bmi_plan_start_date_edit.setDate(qd)
+        except Exception:
+            pass
+        
+        # Signály: auto přepočet + uložení do JSON
+        try:
+            self.bmi_plan_start_date_edit.dateChanged.connect(self.recompute_bmi_plan)
+            self.bmi_plan_start_date_edit.dateChanged.connect(self._persist_plan_start_date)
+        except Exception:
+            pass
         
         params_row.addWidget(self.bmi_plan_start_date_edit)
         
@@ -3554,6 +3568,22 @@ class FitnessTrackerApp(QMainWindow):
         self.recompute_bmi_plan()
 
         return widget
+
+    def _persist_plan_start_date(self, qdate) -> None:
+        """
+        Uloží vybrané datum 'Začátek plánu' do self.data['app_state']['plan_start_date']
+        ve formátu YYYY-MM-DD a okamžitě zapíše do JSON.
+        """
+        try:
+            self.ensure_app_state()
+            ds = qdate.toString("yyyy-MM-dd")
+            if 'app_state' not in self.data or not isinstance(self.data['app_state'], dict):
+                self.data['app_state'] = {}
+            self.data['app_state']['plan_start_date'] = ds
+            self.save_data()
+        except Exception as e:
+            # Nechceme brzdit UI kvůli perzistenci
+            print(f"_persist_plan_start_date: {e}")
     
     def get_current_weight_and_bmi(self) -> tuple[float | None, float | None, float | None]:
         """Vrátí aktuální váhu, výšku a BMI z posledního měření, nebo (None, None, None).
