@@ -4014,16 +4014,83 @@ class FitnessTrackerApp(QMainWindow):
         for spine in ax.spines.values():
             spine.set_color("#e0e0e0")
 
-        if weekly_compliance:
-            xs = [ws for (ws, _) in weekly_compliance]               # seznam datetime.date/datetime
-            ys = [max(0.0, y) for (_, y) in weekly_compliance]       # 0..200 %
+        if True:
+            # === Denní průběh plnění v rámci týdnů (markery pro každý den) ===
+            # Potřebujeme: week0/monday0 (začátek plánu), horizon_weeks, planned_weekly, active_exercises, workouts
+            from collections import defaultdict
+            import numpy as _np
         
-            # --- stejné vyhlazení jako denní křivka: monotónní kubická Hermitova interpolace (Fritsch–Carlson)
+            # 1) Připrav denní součty skutečnosti pro každý cvik (rychlý přístup)
+            daily_totals_by_ex: dict[str, dict[str, float]] = {}
+            for exercise_id in active_exercises:
+                m: dict[str, float] = defaultdict(float)
+                for ds, perday in (workouts or {}).items():
+                    recs = perday.get(exercise_id)
+                    if isinstance(recs, list):
+                        for r in recs:
+                            try:
+                                m[ds] += float(r.get("value", 0) or 0.0)
+                            except Exception:
+                                pass
+                    elif isinstance(recs, dict):
+                        try:
+                            m[ds] += float(recs.get("value", 0) or 0.0)
+                        except Exception:
+                            pass
+                daily_totals_by_ex[exercise_id] = m
+        
+            # 2) Poskládej denní body (kumulativně v rámci týdne)
+            horizon_days = max(1, int(horizon_weeks) * 7)
+            xs_days: list[datetime.date] = []
+            ys_days: list[float] = []
+        
+            # POZOR: v kódu výše máme 'monday0 = week0' (začátek plánu dle zvoleného data)
+            start_d = monday0
+            end_d = monday0 + timedelta(days=horizon_days - 1)
+        
+            # Pro každý týden zvlášť držíme průběžné součty
+            current_week_start = start_d
+            while current_week_start <= end_d:
+                current_week_end = min(current_week_start + timedelta(days=6), end_d)
+                # průběžné součty skutečnosti v rámci právě iterovaného týdne
+                running_by_ex = {ex: 0.0 for ex in active_exercises}
+        
+                d = current_week_start
+                while d <= current_week_end:
+                    ds = d.strftime("%Y-%m-%d")
+                    # aktualizace běžného součtu za týden pro každý cvik
+                    for ex in active_exercises:
+                        running_by_ex[ex] += daily_totals_by_ex.get(ex, {}).get(ds, 0.0)
+        
+                    # průměrné procento plnění za den (v rámci týdne), omezené na 0–200 %
+                    day_percent_sum = 0.0
+                    day_percent_count = 0
+                    for ex in active_exercises:
+                        plan_week = float(planned_weekly.get(ex, 0.0) or 0.0)
+                        if plan_week <= 0.0:
+                            percent = 0.0
+                        else:
+                            percent = (running_by_ex[ex] / plan_week) * 100.0
+                        # clamp a nasčítání
+                        percent = max(0.0, min(200.0, percent))
+                        day_percent_sum += percent
+                        day_percent_count += 1
+        
+                    avg_percent = (day_percent_sum / day_percent_count) if day_percent_count else 0.0
+                    xs_days.append(d)
+                    ys_days.append(avg_percent)
+        
+                    d += timedelta(days=1)
+        
+                current_week_start = current_week_start + timedelta(days=7)
+        
+            # 3) Stejné vyhlazení jako u denního grafu – monotónní Hermite (Fritsch–Carlson)
             def _smooth_monotone_curve_x(xs_dt, ys_vals, points_per_segment: int = 30):
-                import numpy as _np
                 # převod dat na numerické hodnoty osy X
                 xs_num_raw = _np.array([mdates.date2num(x) for x in xs_dt], dtype=float)
                 ys_raw = _np.array(ys_vals, dtype=float)
+                if xs_num_raw.size < 3:
+                    return xs_dt, ys_raw
         
                 # deduplikace shodných X – ponecháme poslední Y
                 xx = [xs_num_raw[0]]
@@ -4094,38 +4161,32 @@ class FitnessTrackerApp(QMainWindow):
                         xs_out.append(xi + t * hi)
                         ys_out.append(h00 * yi + h10 * hi * mi + h01 * yi1 + h11 * hi * mi1)
         
-                # zpět na datetime pro matplotlib
                 return [mdates.num2date(v) for v in xs_out], _np.array(ys_out, dtype=float)
         
-            if len(xs) >= 2:
-                xs_smooth, ys_smooth = _smooth_monotone_curve_x(xs, ys, points_per_segment=30)
+            if xs_days:
+                xs_smooth, ys_smooth = _smooth_monotone_curve_x(xs_days, ys_days, points_per_segment=20)
                 ax.plot(xs_smooth, ys_smooth, linewidth=2.0, color="#0d7377")
+                # tečky pro KAŽDÝ DEN
+                ax.scatter(xs_days, ys_days, s=20, color="#0d7377", zorder=5)
+        
+                ax.set_xlabel("Týden (od) / dny")
+                ax.set_ylabel("Plnění plánu [% – kumulativně]")
+                ax.set_title("Plnění plánu po týdnech (kumulativně)")
+        
+                # hlavní tick po týdnech, vedlejší po dnech
+                ax.xaxis.set_major_locator(mdates.DayLocator(interval=7))
+                ax.xaxis.set_major_formatter(mdates.DateFormatter("%d.%m.%Y"))
+                ax.xaxis.set_minor_locator(mdates.DayLocator(interval=1))
+                fig.autofmt_xdate(rotation=30)
+        
+                ax.grid(which="major", axis="x", linestyle="--", alpha=0.25)
+        
+                ymax = max(ys_days + [100.0])
+                ax.set_ylim(0, max(120.0, ymax * 1.1))
             else:
-                ax.plot(xs, ys, linewidth=2.0, color="#0d7377")
-        
-            # tečky v původních uzlech – stejně jako u denní křivky
-            ax.scatter(xs, ys, s=30, color="#0d7377", zorder=5)
-        
-            ax.set_xlabel("Týden (od)")
-            ax.set_ylabel("Plnění plánu [% – kumulativně]")
-            ax.set_title("Plnění plánu po týdnech (kumulativně)")
-        
-            # >>> podrobnější osa X: týdenní tick každých 7 dní + detailnější formát
-            ax.xaxis.set_major_locator(mdates.DayLocator(interval=7))
-            ax.xaxis.set_major_formatter(mdates.DateFormatter("%d.%m.%Y"))
-            ax.xaxis.set_minor_locator(mdates.DayLocator(interval=1))
-            fig.autofmt_xdate(rotation=30)
-        
-            # jemná síť na hlavní X ticku (ladí s dark theme)
-            ax.grid(which="major", axis="x", linestyle="--", alpha=0.25)
-        
-            ymax = max(ys + [100.0])
-            ax.set_ylim(0, max(120.0, ymax * 1.1))
-        else:
-            ax.set_title("Plán zatím nemá období k zobrazení.")
-            ax.set_xlabel("Týden")
-            ax.set_ylabel("Plnění plánu [%]")
-
+                ax.set_title("Plán zatím nemá období k zobrazení.")
+                ax.set_xlabel("Týden")
+                ax.set_ylabel("Plnění plánu [%]")
         self.bmi_plan_canvas.draw()
 
     def refresh_add_tab_goals(self):
@@ -4521,6 +4582,60 @@ class FitnessTrackerApp(QMainWindow):
         faq_layout.addWidget(faq_scroll)
     
         help_tabs.addTab(faq_widget, "❓ FAQ")
+        
+        # ==================== TAB: BMI ====================
+        bmi_widget = QWidget()
+        bmi_layout = QVBoxLayout(bmi_widget)
+        
+        bmi_scroll = QScrollArea()
+        bmi_scroll.setWidgetResizable(True)
+        bmi_scroll.setStyleSheet("QScrollArea { border: none; }")
+        
+        bmi_content = QTextBrowser()
+        bmi_content.setOpenExternalLinks(True)
+        bmi_content.setStyleSheet("background: #121212; color: #e0e0e0; font-size: 13px;")
+        bmi_html = """
+        <h2 style='color:#14919b;'>🧮 BMI</h2>
+        <p>V této záložce zadáváte <b>měření váhy</b> (datum, hmotnost). Aplikace spočítá <b>BMI</b> podle zadané <b>výšky</b>.</p>
+        <ul>
+          <li><b>Výška (cm)</b> – nastavte pro korektní BMI.</li>
+          <li><b>Nové měření</b> – datum + váha; přidá se do historie.</li>
+          <li><b>Graf</b> – přepínač <i>Váha/BMI/Obojí</i>, období <i>Týden/Měsíc/Rok</i>.</li>
+          <li><b>Kategorie BMI</b> – informativní, zobrazená vedle hodnot.</li>
+        </ul>
+        """
+        bmi_content.setHtml(bmi_html)
+        bmi_scroll.setWidget(bmi_content)
+        bmi_layout.addWidget(bmi_scroll)
+        
+        help_tabs.addTab(bmi_widget, "🧮 BMI")
+        
+        # ============== TAB: Plán k dosažení cílového BMI ==============
+        plan2_widget = QWidget()
+        plan2_layout = QVBoxLayout(plan2_widget)
+        
+        plan2_scroll = QScrollArea()
+        plan2_scroll.setWidgetResizable(True)
+        plan2_scroll.setStyleSheet("QScrollArea { border: none; }")
+        
+        plan2_content = QTextBrowser()
+        plan2_content.setOpenExternalLinks(True)
+        plan2_content.setStyleSheet("background: #121212; color: #e0e0e0; font-size: 13px;")
+        plan2_html = """
+        <h2 style='color:#14919b;'>🎯 Plán k dosažení cílového BMI</h2>
+        <p>Plán sestaví doporučené <b>týdenní objemy</b> pro aktivní cviky.</p>
+        <ul>
+          <li><b>Začátek plánu</b> – vybírá <b>počáteční den</b>; plán od něj <i>spojitě</i> běží. Hodnota je <b>perzistentní</b>.</li>
+          <li><b>Cílové BMI</b>, <b>Horizont</b>, <b>Režim</b> – perzistentní nastavení, změna vyvolá přepočet.</li>
+          <li><b>Týdenní rozpis</b> – tabulka po týdnech a cvicích (plán/skutečnost/%).</li>
+          <li><b>Graf plnění</b> – <b>denní body</b> v průběhu týdnů + <i>monotónní</i> hladká křivka (stejně jako denní graf výkonu).</li>
+        </ul>
+        """
+        plan2_content.setHtml(plan2_html)
+        plan2_scroll.setWidget(plan2_content)
+        plan2_layout.addWidget(plan2_scroll)
+        
+        help_tabs.addTab(plan2_widget, "🎯 Plán k BMI")
     
         # Přidání sub-tabs do hlavního layoutu
         layout.addWidget(help_tabs)
