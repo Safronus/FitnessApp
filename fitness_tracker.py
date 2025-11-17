@@ -5769,8 +5769,26 @@ class FitnessTrackerApp(QMainWindow):
         
         # ==================== GRAF POD KALENDÁŘEM ====================
         self.create_performance_chart(exercise_type, calendar_layout)
-        
-        calendar_layout.addStretch()
+    
+        # >>> NOVĚ: nechte graf vyplnit zbylý prostor
+        try:
+            from PySide6.QtWidgets import QSizePolicy
+            canvas = None
+            if hasattr(self, "chart_canvases"):
+                canvas = self.chart_canvases.get(exercise_type)
+            if canvas is not None:
+                sp = canvas.sizePolicy()
+                sp.setVerticalPolicy(QSizePolicy.Expanding)
+                sp.setHorizontalPolicy(QSizePolicy.Expanding)
+                canvas.setSizePolicy(sp)
+                idx = calendar_layout.indexOf(canvas)
+                if idx != -1:
+                    calendar_layout.setStretch(idx, 1)
+        except Exception as e:
+            print(f"chart expand policy error ({exercise_type}): {e}")
+    
+        # POZOR: dřívější addStretch vytvářel "prázdné" místo pod grafem – proto jej odstraňujeme.
+        # calendar_layout.addStretch()
         
         scroll.setWidget(scroll_content)
         right_layout.addWidget(scroll)
@@ -5783,6 +5801,61 @@ class FitnessTrackerApp(QMainWindow):
         
         return widget
 
+    def ensure_exercise_chart_expands(self, exercise_type: str) -> None:
+        """
+        Zajistí, aby 'Graf výkonu' (FigureCanvas) pro dané cvičení vertikálně vyplnil zbývající prostor.
+        Nemění architekturu ani vzhled; pouze nastaví SizePolicy a stretch v existujících layoutech.
+        Bezpečně (try/except) – pokud něco nenajde, UI to nerozbije.
+        """
+        try:
+            from PySide6.QtWidgets import QWidget, QSizePolicy, QBoxLayout, QGridLayout
+    
+            canvas = None
+            try:
+                canvas = self.chart_canvases.get(exercise_type) if hasattr(self, "chart_canvases") else None
+            except Exception:
+                canvas = None
+            if canvas is None or not isinstance(canvas, QWidget):
+                return
+    
+            # 1) Canvas a jeho rodiče musí být Expanding (V i H)
+            def set_expanding(w: QWidget) -> None:
+                try:
+                    sp = w.sizePolicy()
+                    sp.setVerticalPolicy(QSizePolicy.Expanding)
+                    sp.setHorizontalPolicy(QSizePolicy.Expanding)
+                    w.setSizePolicy(sp)
+                except Exception:
+                    pass
+    
+            set_expanding(canvas)
+            parent = canvas.parentWidget()
+            if parent:
+                set_expanding(parent)
+                gparent = parent.parentWidget()
+                if gparent:
+                    set_expanding(gparent)
+    
+            # 2) Zvýšit stretch řádku/polohy, kde canvas leží, v nejbližším rodičovském layoutu
+            lay = parent.layout() if (parent and parent.layout()) else None
+            if lay is not None:
+                try:
+                    idx = lay.indexOf(canvas)
+                    if idx != -1:
+                        if isinstance(lay, QBoxLayout):
+                            lay.setStretch(idx, 1)  # graf = “elastic”
+                        elif isinstance(lay, QGridLayout):
+                            r, c, rs, cs = lay.getItemPosition(idx)
+                            lay.setRowStretch(r, 1)
+                except Exception:
+                    pass
+    
+            # 3) (Volitelné) Snížit stretch u kalendářové části, pokud sdílí stejný layout
+            #    Tohle nechávám vypnuté – bez znalosti konkrétní hierarchie by to bylo moc odvážné.
+            #    Pokud mi pošlete přesně funkci s layoutem, nastavím i okolní streče “na míru”.
+    
+        except Exception as e:
+            print(f"ensure_exercise_chart_expands error: {e}")
 
     def show_tree_context_menu(self, position, exercise_type):
         """Zobrazí kontextové menu pro tree položky"""
