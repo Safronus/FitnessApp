@@ -5072,69 +5072,75 @@ class FitnessTrackerApp(QMainWindow):
         # Iniciální vykreslení
         self.update_performance_chart(exercisetype, "weekly")
 
-    def update_performance_chart(self, exercise_type, mode):
-        """Aktualizuje graf výkonu podle zvoleného módu (daily/weekly/monthly/yearly).
-        ZMĚNA: legenda je vpravo vedle grafu; přidána rezerva místa na pravém okraji.
-        Ostatní chování ponecháno beze změn (titulek dle módu, data, styly).
-        """
+    def update_performance_chart(self, exercise_type: str, mode: str) -> None:
+        """Aktualizuje graf výkonu pro daný typ cvičení a režim (daily/weekly/monthly/yearly)."""
+        from datetime import datetime, timedelta
+        import matplotlib.dates as mdates
+
         # Ověření figure/canvas struktur
-        if not hasattr(self, 'chart_figures') or exercise_type not in self.chart_figures:
+        if not hasattr(self, "chart_figures") or exercise_type not in self.chart_figures:
             return
-        if not hasattr(self, 'chart_modes'):
+        if not hasattr(self, "chart_canvases") or exercise_type not in self.chart_canvases:
+            return
+
+        if not hasattr(self, "chart_modes"):
             self.chart_modes = {}
         self.chart_modes[exercise_type] = mode
-    
+
         # Přepnout stav tlačítek (pokud existují)
-        if hasattr(self, 'chart_mode_buttons') and exercise_type in self.chart_mode_buttons:
+        if hasattr(self, "chart_mode_buttons") and exercise_type in self.chart_mode_buttons:
             for btn_mode, btn in self.chart_mode_buttons[exercise_type].items():
                 try:
                     btn.setChecked(btn_mode == mode)
                 except Exception:
                     pass
-    
+
         fig = self.chart_figures[exercise_type]
+        canvas = self.chart_canvases[exercise_type]
         fig.clear()
         ax = fig.add_subplot(111)
-    
-        # Tmavé pozadí a osy
-        ax.set_facecolor('#1e1e1e')
-        ax.tick_params(axis='x', colors='#e0e0e0')
-        ax.tick_params(axis='y', colors='#e0e0e0')
-    
+        fig.patch.set_facecolor("#121212")
+        ax.set_facecolor("#1e1e1e")
+
+        # Tmavé osy
+        ax.tick_params(axis="x", colors="#e0e0e0")
+        ax.tick_params(axis="y", colors="#e0e0e0")
+        ax.xaxis.label.set_color("#e0e0e0")
+        ax.yaxis.label.set_color("#e0e0e0")
+        ax.title.set_color("#e0e0e0")
+        for spine in ax.spines.values():
+            spine.set_color("#e0e0e0")
+
         today = datetime.now().date()
-    
-        # Zvolený rok z per-exercise comboboxu
-        if hasattr(self, 'exercise_year_selectors') and exercise_type in self.exercise_year_selectors \
-           and self.exercise_year_selectors[exercise_type].currentText():
-            selected_year = int(self.exercise_year_selectors[exercise_type].currentText())
+
+        # Rok pro dané cvičení (per-exercise combobox)
+        if hasattr(self, "exercise_year_selectors") and exercise_type in self.exercise_year_selectors \
+                and self.exercise_year_selectors[exercise_type].currentText():
+            try:
+                selected_year = int(self.exercise_year_selectors[exercise_type].currentText())
+            except Exception:
+                selected_year = today.year
         else:
             selected_year = today.year
-    
-        # Pomocné CZ mapy (lokální, aby se nic globálně neměnilo)
-        _CZ_WEEKDAY = {0: "Pondělí", 1: "Úterý", 2: "Středa", 3: "Čtvrtek", 4: "Pátek", 5: "Sobota", 6: "Neděle"}
+
+        # CZ popisky
+        _CZ_WEEKDAY = {
+            0: "Pondělí", 1: "Úterý", 2: "Středa",
+            3: "Čtvrtek", 4: "Pátek", 5: "Sobota", 6: "Neděle",
+        }
         _CZ_MONTH = {
             1: "Leden", 2: "Únor", 3: "Březen", 4: "Duben", 5: "Květen", 6: "Červen",
-            7: "Červenec", 8: "Srpen", 9: "Září", 10: "Říjen", 11: "Prosinec"
+            7: "Červenec", 8: "Srpen", 9: "Září", 10: "Říjen", 11: "Listopad", 12: "Prosinec",
         }
-    
-        # ---- Získání startu cvičení pro značku (pro non-daily módy) ----
-        ys = self.get_year_settings(selected_year) if hasattr(self, 'get_year_settings') else {}
+
+        # Začátek cvičení pro „start“ značku
+        ys = self.get_year_settings(selected_year) if hasattr(self, "get_year_settings") else {}
         ex_starts = (ys.get("exercise_start_dates") or {}) if isinstance(ys, dict) else {}
         ex_start_str = ex_starts.get(exercise_type)
-    
         start_date = None
         if ex_start_str:
             try:
                 start_date = datetime.strptime(ex_start_str, "%Y-%m-%d").date()
-            except Exception:
-                start_date = None
-        if start_date is None:
-            try:
-                ex_def = (self.data.get("exercises", {}) or {}).get(exercise_type, {})
-                per_year = (ex_def.get("start_dates") or {})
-                ex2_str = per_year.get(str(selected_year))
-                if ex2_str:
-                    start_date = datetime.strptime(ex2_str, "%Y-%m-%d").date()
             except Exception:
                 start_date = None
         if start_date is None:
@@ -5146,38 +5152,40 @@ class FitnessTrackerApp(QMainWindow):
                 start_date = None
         if start_date is None:
             start_date = datetime(selected_year, 1, 1).date()
-    
+
         # =================================================================
         #                          DAILY MODE
         # =================================================================
         if mode == "daily":
-            # 1) Zkusit zjistit vybraný den z přehledového stromu (top-level výběr dne)
+            from PySide6.QtWidgets import QTreeWidget
+            from PySide6.QtCore import Qt
+            import numpy as np
+
+            # 1) Zkusit vybraný den ze stromu
             day_date = None
             try:
                 tree = self.findChild(QTreeWidget, f"tree_{exercise_type}")
                 if tree:
                     for it in tree.selectedItems():
                         payload = it.data(3, Qt.UserRole)
-                        # top-level den nemá payload s 'record_id'
-                        if not (isinstance(payload, dict) and 'record_id' in payload):
-                            txt = it.text(0) if it is not None else ""
-                            ds = txt.split(' ', 1)[1] if ' ' in txt else txt
-                            # očekáváme formát YYYY-MM-DD
-                            if len(ds) == 10 and ds[4] == '-' and ds[7] == '-':
-                                day_date = datetime.strptime(ds, "%Y-%m-%d").date()
-                                break
+                        if isinstance(payload, dict) and "record_id" in payload:
+                            continue  # tohle je řádek výkonu, ne den
+                        txt = it.text(0) if it is not None else ""
+                        ds = txt.split(" ", 1)[1] if " " in txt else txt
+                        if len(ds) == 10 and ds[4] == "-" and ds[7] == "-":
+                            day_date = datetime.strptime(ds, "%Y-%m-%d").date()
+                            break
             except Exception:
                 day_date = None
-    
-            # 2) Fallback: dnešek (pokud ve zvoleném roce), případně poslední den v roce s daty pro dané cvičení
+
+            # 2) Fallback – dnešek nebo poslední den s daty v daném roce
             if day_date is None:
                 if selected_year == today.year:
                     day_date = today
                 else:
-                    # poslední den v roce s nějakým záznamem
-                    days_with_data = []
-                    for ds, perday in (self.data.get('workouts', {}) or {}).items():
-                        if not isinstance(ds, str) or len(ds) < 10: 
+                    days_with_data: list[str] = []
+                    for ds, perday in (self.data.get("workouts", {}) or {}).items():
+                        if not isinstance(ds, str) or len(ds) < 10:
                             continue
                         try:
                             y = int(ds[:4])
@@ -5188,181 +5196,352 @@ class FitnessTrackerApp(QMainWindow):
                         if exercise_type in perday:
                             days_with_data.append(ds)
                     if days_with_data:
-                        ds = sorted(days_with_data)[-1]
+                        last_ds = sorted(days_with_data)[-1]
                         try:
-                            day_date = datetime.strptime(ds, "%Y-%m-%d").date()
+                            day_date = datetime.strptime(last_ds, "%Y-%m-%d").date()
                         except Exception:
                             day_date = datetime(selected_year, 1, 1).date()
                     else:
                         day_date = datetime(selected_year, 1, 1).date()
-    
-            # Vytažení všech záznamů daného dne
+
             day_str = day_date.strftime("%Y-%m-%d")
-            recs = []
-            if day_str in self.data.get('workouts', {}) and exercise_type in self.data['workouts'][day_str]:
-                raw = self.data['workouts'][day_str][exercise_type]
+
+            # Vytahni záznamy pro daný den
+            recs: list[dict] = []
+            workouts = self.data.get("workouts", {})
+            if day_str in workouts and exercise_type in workouts[day_str]:
+                raw = workouts[day_str][exercise_type]
                 if isinstance(raw, list):
                     recs = raw[:]
                 elif isinstance(raw, dict):
                     recs = [raw]
-    
-            # Setřídění podle času
+
             def _ts_to_dt(ts: str) -> datetime:
-                # očekávaný formát "YYYY-MM-DD HH:MM[:SS]"
                 try:
                     if len(ts) >= 19:
                         return datetime.strptime(ts[:19], "%Y-%m-%d %H:%M:%S")
-                    elif len(ts) >= 16:
+                    if len(ts) >= 16:
                         return datetime.strptime(ts[:16], "%Y-%m-%d %H:%M")
-                    else:
-                        # bez času → 12:00
-                        return datetime.strptime(day_str + " 12:00", "%Y-%m-%d %H:%M")
                 except Exception:
-                    return datetime.strptime(day_str + " 12:00", "%Y-%m-%d %H:%M")
-    
+                    pass
+                return datetime.strptime(day_str + " 12:00", "%Y-%m-%d %H:%M")
+
             recs_sorted = sorted(recs, key=lambda r: _ts_to_dt(r.get("timestamp", f"{day_str} 12:00")))
-    
-            # Kumulativní výkon během dne
-            times = []
-            cumul = []
-            running = 0
+
+            # Kumulativní průběh
+            times: list[datetime] = []
+            cumul: list[float] = []
+            running = 0.0
             for r in recs_sorted:
                 dt = _ts_to_dt(r.get("timestamp", f"{day_str} 12:00"))
-                running += int(r.get("value", 0))
+                running += float(r.get("value", 0) or 0)
                 times.append(dt)
                 cumul.append(running)
-    
+
             # Denní cíl
             daily_goal = self.calculate_goal(exercise_type, day_str)
-            if not isinstance(daily_goal, int):
-                daily_goal = int(daily_goal) if daily_goal else 0
-    
-            # vykreslení
-            import matplotlib.dates as mdates
+            if not isinstance(daily_goal, (int, float)):
+                daily_goal = float(daily_goal) if daily_goal else 0.0
+
+            # Stejné vyhlazení jako v BMI grafech (Catmull-Rom spline na (x,y))
+            def smooth_curve(xs_num: list[float], ys_vals: list[float], points_per_segment: int = 20):
+                n = len(xs_num)
+                if n < 3:
+                    xs_arr = np.array(xs_num, dtype=float)
+                    ys_arr = np.array(ys_vals, dtype=float)
+                    return xs_arr, ys_arr
+
+                xs_arr = np.array(xs_num, dtype=float)
+                ys_arr = np.array(ys_vals, dtype=float)
+                P = np.stack([xs_arr, ys_arr], axis=1)
+
+                result_points = []
+
+                for i in range(n - 1):
+                    P1 = P[i]
+                    P2 = P[i + 1]
+                    P0 = P[i - 1] if i - 1 >= 0 else P1
+                    P3 = P[i + 2] if i + 2 < n else P2
+
+                    if i < n - 2:
+                        ts = np.linspace(0.0, 1.0, points_per_segment, endpoint=False)
+                    else:
+                        ts = np.linspace(0.0, 1.0, points_per_segment, endpoint=True)
+
+                    for t in ts:
+                        t2 = t * t
+                        t3 = t2 * t
+                        term1 = 2.0 * P1
+                        term2 = (-P0 + P2) * t
+                        term3 = (2.0 * P0 - 5.0 * P1 + 4.0 * P2 - P3) * t2
+                        term4 = (-P0 + 3.0 * P1 - 3.0 * P2 + P3) * t3
+                        point = 0.5 * (term1 + term2 + term3 + term4)
+                        result_points.append(point)
+
+                result_points = np.array(result_points)
+                xs_s = result_points[:, 0]
+                ys_s = result_points[:, 1]
+                return xs_s, ys_s
+
             if not times:
-                ax.text(0.5, 0.5, 'Žádné záznamy v tomto dni', ha='center', va='center',
-                        transform=ax.transAxes, fontsize=14, color='#a0a0a0')
+                ax.text(
+                    0.5,
+                    0.5,
+                    "Žádné záznamy v tomto dni",
+                    ha="center",
+                    va="center",
+                    transform=ax.transAxes,
+                    fontsize=14,
+                    color="#a0a0a0",
+                )
             else:
-                # čára kumulativního výkonu + body v časech
-                ax.plot(times, cumul, label='Kumulativně (den)', linewidth=2, marker='o', markersize=4, color='#0d7377')
-                # denní cíl jako horizontála
+                # Catmull-Rom vyhlazení nad (mdates date2num, cumul)
+                xs_raw = [mdates.date2num(dt) for dt in times]
+                xs_smooth, cumul_smooth = smooth_curve(xs_raw, cumul, points_per_segment=30)
+                times_smooth = [mdates.num2date(x) for x in xs_smooth]
+
+                ax.plot(
+                    times_smooth,
+                    cumul_smooth,
+                    label="Kumulativně (den)",
+                    linewidth=2.0,
+                    color="#0d7377",
+                )
+                ax.scatter(times, cumul, color="#0d7377", s=30, zorder=5)
+
                 if daily_goal > 0:
-                    ax.axhline(daily_goal, linestyle='--', linewidth=1.8, color='#FFD700', label='Denní cíl')
-    
-                # časová osa v HH:MM
-                ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
-                ax.set_xlim(datetime(day_date.year, day_date.month, day_date.day, 0, 0),
-                            datetime(day_date.year, day_date.month, day_date.day, 23, 59, 59))
-    
-            # Titulek pro DEN
+                    ax.axhline(
+                        daily_goal,
+                        linestyle="--",
+                        linewidth=1.8,
+                        color="#FFD700",
+                        label="Denní cíl",
+                    )
+
+                ax.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
+                ax.set_xlim(
+                    datetime(day_date.year, day_date.month, day_date.day, 0, 0),
+                    datetime(day_date.year, day_date.month, day_date.day, 23, 59, 59),
+                )
+
             dw = _CZ_WEEKDAY[day_date.weekday()]
-            ax.set_title(f"{dw} {day_date.strftime('%d.%m.%Y')}", color='#e0e0e0', fontsize=14)
-    
-            # Rezerva na pravé straně a legenda vpravo vedle grafu
+            ax.set_title(f"Denní vývoj - {exercise_type.capitalize()} ({dw} {day_date.strftime('%Y-%m-%d')})")
+            ax.set_xlabel("Čas")
+            ax.set_ylabel("Hodnota")
+
+            # Legenda vpravo
             fig.subplots_adjust(right=0.78)
-            legend = ax.legend(loc='upper left', bbox_to_anchor=(1.02, 1), borderaxespad=0.,
-                               fontsize=9, facecolor='#2d2d2d', edgecolor='#3d3d3d')
-            for t in legend.get_texts():
-                t.set_color('#e0e0e0')
-    
-            if hasattr(self, 'chart_canvases') and exercise_type in self.chart_canvases:
-                self.chart_canvases[exercise_type].draw()
-            return  # daily zpracován; dál nepokračujeme
-    
+            handles, labels = ax.get_legend_handles_labels()
+            if handles:
+                leg = ax.legend(
+                    handles,
+                    labels,
+                    loc="upper left",
+                    bbox_to_anchor=(1.02, 1.0),
+                    borderaxespad=0.0,
+                    fontsize=9,
+                    facecolor="#2d2d2d",
+                    edgecolor="#3d3d3d",
+                )
+                for t in leg.get_texts():
+                    t.set_color("#e0e0e0")
+
+            canvas.draw()
+            return
+
         # =================================================================
-        #                WEEKLY / MONTHLY / YEARLY  (beze změn)
+        #                 WEEKLY / MONTHLY / YEARLY (BEZE ZMĚNY)
         # =================================================================
-        # Vypočet rozsahu dle módu + vykreslení jako dříve
+        workouts = self.data.get("workouts", {})
+        if not workouts:
+            ax.text(
+                0.5,
+                0.5,
+                "Žádná data",
+                ha="center",
+                va="center",
+                transform=ax.transAxes,
+                fontsize=14,
+                color="#a0a0a0",
+            )
+            fig.subplots_adjust(right=0.78)
+            canvas.draw()
+            return
+
+        # Akumulace denních hodnot pro daný rok + cvičení
+        daily_values: dict[datetime.date, float] = {}
+        for date_str, perday in workouts.items():
+            if not isinstance(date_str, str) or len(date_str) < 10:
+                continue
+            try:
+                dt = datetime.strptime(date_str[:10], "%Y-%m-%d").date()
+            except Exception:
+                continue
+            if dt.year != selected_year:
+                continue
+            if exercise_type not in perday:
+                continue
+            records = perday[exercise_type]
+            if isinstance(records, list):
+                total = sum(float(r.get("value", 0) or 0) for r in records)
+            elif isinstance(records, dict):
+                total = float(records.get("value", 0) or 0)
+            else:
+                continue
+            daily_values[dt] = daily_values.get(dt, 0.0) + total
+
+        if not daily_values:
+            ax.text(
+                0.5,
+                0.5,
+                "Žádná data pro zvolený rok",
+                ha="center",
+                va="center",
+                transform=ax.transAxes,
+                fontsize=14,
+                color="#a0a0a0",
+            )
+            fig.subplots_adjust(right=0.78)
+            canvas.draw()
+            return
+
+        dates_sorted = sorted(daily_values.keys())
+        min_date = dates_sorted[0]
+        max_date = dates_sorted[-1]
+
+        # Rozsah podle režimu
         if mode == "weekly":
-            end_date = today if selected_year == today.year else min(datetime(selected_year, 12, 31).date(), today)
+            end_date = today if selected_year == today.year else min(
+                datetime(selected_year, 12, 31).date(),
+                today,
+            )
             start_r = max(end_date - timedelta(days=6), datetime(selected_year, 1, 1).date(), start_date)
             range_start, range_end = start_r, end_date
             xlabel_format = "%d.%m"
-    
         elif mode == "monthly":
             month = today.month if selected_year == today.year else 12
             month_start = datetime(selected_year, month, 1).date()
-            next_month = datetime(selected_year + (1 if month == 12 else 0), 1 if month == 12 else month + 1, 1).date()
+            next_month = datetime(
+                selected_year + (1 if month == 12 else 0),
+                1 if month == 12 else month + 1,
+                1,
+            ).date()
             month_end = next_month - timedelta(days=1)
             month_start = max(month_start, start_date)
             month_end = min(month_end, today)
             range_start, range_end = month_start, month_end
             xlabel_format = "%d.%m"
-    
-        else:  # "yearly"
+        else:  # yearly
             year_start = max(datetime(selected_year, 1, 1).date(), start_date)
             year_end = min(datetime(selected_year, 12, 31).date(), today)
             range_start, range_end = year_start, year_end
             xlabel_format = "%d.%m."
-    
+
         if range_end < range_start:
-            ax.text(0.5, 0.5, 'Žádná data k zobrazení', ha='center', va='center',
-                    transform=ax.transAxes, fontsize=14, color='#a0a0a0')
-            # Rezerva + vykreslení
+            ax.text(
+                0.5,
+                0.5,
+                "Žádná data k zobrazení",
+                ha="center",
+                va="center",
+                transform=ax.transAxes,
+                fontsize=14,
+                color="#a0a0a0",
+            )
             fig.subplots_adjust(right=0.78)
-            if hasattr(self, 'chart_canvases') and exercise_type in self.chart_canvases:
-                self.chart_canvases[exercise_type].draw()
+            canvas.draw()
             return
-    
+
         dates = [range_start + timedelta(days=i) for i in range((range_end - range_start).days + 1)]
-        performed, goals = [], []
+        performed: list[float] = []
+        goals: list[float] = []
         for d in dates:
             ds = d.strftime("%Y-%m-%d")
-            v = 0
-            if ds in self.data.get('workouts', {}) and exercise_type in self.data['workouts'][ds]:
-                recs = self.data['workouts'][ds][exercise_type]
+            v = 0.0
+            if ds in workouts and exercise_type in workouts[ds]:
+                recs = workouts[ds][exercise_type]
                 if isinstance(recs, list):
-                    v = sum(r.get("value", 0) for r in recs)
+                    v = sum(float(r.get("value", 0) or 0) for r in recs)
                 elif isinstance(recs, dict):
-                    v = recs.get("value", 0)
+                    v = float(recs.get("value", 0) or 0)
             g = self.calculate_goal(exercise_type, ds)
-            if not isinstance(g, int):
-                g = int(g) if g else 0
+            if not isinstance(g, (int, float)):
+                g = float(g) if g else 0.0
             performed.append(v)
             goals.append(g)
-    
+
         bar_w = 0.8 if mode == "weekly" else 0.6
-        ax.bar(dates, performed, width=bar_w, label='Výkon', color='#0d7377', alpha=0.8)
-        ax.plot(dates, goals, label='Cíl', color='#FFD700', linewidth=2, marker='o', markersize=3)
-    
-        # Svislá čára dne zahájení (pokud spadá do rozsahu)
+        ax.bar(dates, performed, width=bar_w, label="Výkon", color="#0d7377", alpha=0.8)
+        ax.plot(dates, goals, label="Cíl", color="#FFD700", linewidth=2, marker="o", markersize=3)
+
+        # Svislá čára začátku cvičení
         if start_date >= dates[0] and start_date <= dates[-1]:
-            ax.axvline(x=start_date, color='#32c766', linestyle='--', linewidth=2, alpha=0.7, label='Začátek cvičení')
-            y_max = max(max(performed) if performed else 0, max(goals) if goals else 0)
+            ax.axvline(
+                x=start_date,
+                color="#32c766",
+                linestyle="--",
+                linewidth=2,
+                alpha=0.7,
+                label="Začátek cvičení",
+            )
+            y_max = max(max(performed) if performed else 0.0, max(goals) if goals else 0.0)
             if y_max > 0:
-                ax.text(start_date, y_max * 1.05, f"Start {start_date.strftime('%d.%m.')}",
-                        rotation=90, va='bottom', ha='right', fontsize=9, color='#32c766', weight='bold')
-    
-        # Popisky X osy zachovány
+                ax.text(
+                    start_date,
+                    y_max * 1.05,
+                    f"Start {start_date.strftime('%d.%m.')}",
+                    rotation=90,
+                    va="bottom",
+                    ha="right",
+                    fontsize=9,
+                    color="#32c766",
+                    weight="bold",
+                )
+
+        # X osa
         if mode == "yearly":
             num_dates = len(dates)
             step = max(1, num_dates // 12)
             ax.set_xticks([dates[i] for i in range(0, num_dates, step)])
-            ax.set_xticklabels([dates[i].strftime(xlabel_format) for i in range(0, num_dates, step)], rotation=0)
+            ax.set_xticklabels(
+                [dates[i].strftime(xlabel_format) for i in range(0, num_dates, step)],
+                rotation=0,
+            )
         else:
             ax.set_xticks(dates)
-            ax.set_xticklabels([d.strftime(xlabel_format) for d in dates],
-                               rotation=45 if mode == "monthly" else 0)
-    
-        # Titulek podle módu (týden/měsíc/rok)
+            ax.set_xticklabels(
+                [d.strftime(xlabel_format) for d in dates],
+                rotation=45 if mode == "monthly" else 0,
+            )
+
+        # Titulek
         if mode == "weekly":
             week_no = range_end.isocalendar().week
-            ax.set_title(f"Týden {week_no}", color='#e0e0e0', fontsize=14)
+            ax.set_title(f"Týden {week_no}", fontsize=14)
         elif mode == "monthly":
             month_name = _CZ_MONTH[range_start.month]
-            ax.set_title(f"{month_name} {range_start.year}", color='#e0e0e0', fontsize=14)
-        else:  # yearly
-            ax.set_title(f"Rok {selected_year}", color='#e0e0e0', fontsize=14)
-    
-        # Rezerva na pravé straně a legenda vpravo vedle grafu
+            ax.set_title(f"{month_name} {range_start.year}", fontsize=14)
+        else:
+            ax.set_title(f"Rok {selected_year}", fontsize=14)
+
+        # Legenda vpravo
         fig.subplots_adjust(right=0.78)
-        legend = ax.legend(loc='upper left', bbox_to_anchor=(1.02, 1), borderaxespad=0.,
-                           fontsize=9, facecolor='#2d2d2d', edgecolor='#3d3d3d')
-        for t in legend.get_texts():
-            t.set_color('#e0e0e0')
-    
-        if hasattr(self, 'chart_canvases') and exercise_type in self.chart_canvases:
-            self.chart_canvases[exercise_type].draw()
+        handles, labels = ax.get_legend_handles_labels()
+        if handles:
+            leg = ax.legend(
+                handles,
+                labels,
+                loc="upper left",
+                bbox_to_anchor=(1.02, 1.0),
+                borderaxespad=0.0,
+                fontsize=9,
+                facecolor="#2d2d2d",
+                edgecolor="#3d3d3d",
+            )
+            for t in leg.get_texts():
+                t.set_color("#e0e0e0")
+
+        canvas.draw()
         
     def create_exercise_tab(self, exercise_type, icon):
         """Vytvoří záložku pro konkrétní cvičení - BEZ přidávání"""
