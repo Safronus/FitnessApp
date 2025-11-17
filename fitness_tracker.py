@@ -7007,13 +7007,19 @@ class FitnessTrackerApp(QMainWindow):
             while cur <= year_end:
                 g = self.calculate_goal(exercise_type, cur.strftime("%Y-%m-%d"))
                 if isinstance(g, int):
-                    rest_goal += g
+                    rest_goal -= g
                 cur += timedelta(days=1)
+            rest_goal += day_performed
     
             lbl_rest = self.findChild(QLabel, f"year_rest_section_{exercise_type}")
             if lbl_rest:
                 lbl_rest.setText(f"🎯 ZBYTEK ROKU ({max(today, ex_start).strftime('%d.%m.')} – {year_end.strftime('%d.%m.%Y')}): {rest_goal}")
-                lbl_rest.setStyleSheet("font-size: 12px; color: #32c766; padding: 5px;")
+                if rest_goal < 0:
+                    lbl_rest.setStyleSheet("font-size: 12px; color: #c50c0c; padding: 5px;")
+                elif rest_goal == 0:
+                    lbl_rest.setStyleSheet("font-size: 12px; color: #eede5b; padding: 5px;")
+                else:
+                    lbl_rest.setStyleSheet("font-size: 12px; color: #5bee63; padding: 5px;")
     
             # ===== PROGRESS BAR (aktuální rok do dneška) =====
             total_performed, total_goal, goal_to_date = self.calculate_yearly_progress(exercise_type, selected_year)
