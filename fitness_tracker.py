@@ -5194,10 +5194,10 @@ class FitnessTrackerApp(QMainWindow):
             from PySide6.QtCore import Qt
             import numpy as np
     
-            # 1) Zkusit vybraný den ze stromu
+            # 1) Zkusit vybraný den ze stromu / kalendáře
             day_date = None
     
-            # >>> PŘIDÁNO: preferuj den vybraný klikem v kalendáři (pokud existuje)
+            # Preferuj den vybraný klikem v kalendáři (pokud existuje)
             try:
                 if not hasattr(self, "chart_selected_days"):
                     self.chart_selected_days = {}
@@ -5287,45 +5287,96 @@ class FitnessTrackerApp(QMainWindow):
             if not isinstance(daily_goal, (int, float)):
                 daily_goal = float(daily_goal) if daily_goal else 0.0
     
-            # Stejné vyhlazení jako v BMI grafech (Catmull-Rom spline na (x,y))
-            def smooth_curve(xs_num: list[float], ys_vals: list[float], points_per_segment: int = 20):
+            # --- NOVÉ: monotónní kubická Hermitova interpolace (Fritsch-Carlson) ---
+            def smooth_monotone_curve_x(xs_num: list[float], ys_vals: list[float], points_per_segment: int = 30):
+                """
+                Vygeneruje hladkou křivku Y(X), která je monotónní v X
+                (bez „smyček“). Implementace Fritsch-Carlsonova tvarového
+                omezovače nad kubickou Hermitovou interpolací.
+                Žádné externí závislosti mimo NumPy.
+                """
+                import numpy as _np
+    
                 n = len(xs_num)
                 if n < 3:
-                    xs_arr = np.array(xs_num, dtype=float)
-                    ys_arr = np.array(ys_vals, dtype=float)
-                    return xs_arr, ys_arr
+                    return _np.array(xs_num, dtype=float), _np.array(ys_vals, dtype=float)
     
-                xs_arr = np.array(xs_num, dtype=float)
-                ys_arr = np.array(ys_vals, dtype=float)
-                P = np.stack([xs_arr, ys_arr], axis=1)
+                x = _np.asarray(xs_num, dtype=float)
+                y = _np.asarray(ys_vals, dtype=float)
     
-                result_points = []
-    
-                for i in range(n - 1):
-                    P1 = P[i]
-                    P2 = P[i + 1]
-                    P0 = P[i - 1] if i - 1 >= 0 else P1
-                    P3 = P[i + 2] if i + 2 < n else P2
-    
-                    if i < n - 2:
-                        ts = np.linspace(0.0, 1.0, points_per_segment, endpoint=False)
+                # Deduplikace shodných X (může vzniknout více záznamů se stejným časem)
+                xx = [x[0]]
+                yy = [y[0]]
+                for i in range(1, len(x)):
+                    if x[i] == xx[-1]:
+                        yy[-1] = y[i]  # poslední hodnota (kumulativně roste)
                     else:
-                        ts = np.linspace(0.0, 1.0, points_per_segment, endpoint=True)
+                        xx.append(x[i])
+                        yy.append(y[i])
+                x = _np.asarray(xx, dtype=float)
+                y = _np.asarray(yy, dtype=float)
+                n = len(x)
+                if n < 3:
+                    return x, y
     
+                h = _np.diff(x)                     # šířky intervalů
+                d = _np.diff(y) / h                 # směrnice na intervalech
+    
+                m = _np.empty(n, dtype=float)       # derivace v uzlech
+                m[0] = d[0]
+                m[-1] = d[-1]
+    
+                for i in range(1, n - 1):
+                    if d[i - 1] == 0.0 or d[i] == 0.0 or (d[i - 1] > 0 and d[i] < 0) or (d[i - 1] < 0 and d[i] > 0):
+                        m[i] = 0.0
+                    else:
+                        w1 = 2.0 * h[i] + h[i - 1]
+                        w2 = h[i] + 2.0 * h[i - 1]
+                        m[i] = (w1 + w2) / (w1 / d[i - 1] + w2 / d[i])  # vážený harmonický průměr
+    
+                # Fritsch-Carlson limiter – zamezí překmitům (a tedy dvojím Y pro jedno X)
+                for i in range(n - 1):
+                    if d[i] == 0.0:
+                        m[i] = 0.0
+                        m[i + 1] = 0.0
+                    else:
+                        a = m[i] / d[i]
+                        b = m[i + 1] / d[i]
+                        # záporné sklony by porušily monotónnost
+                        if a < 0.0:
+                            m[i] = 0.0
+                            a = 0.0
+                        if b < 0.0:
+                            m[i + 1] = 0.0
+                            b = 0.0
+                        s = a * a + b * b
+                        if s > 9.0:
+                            t = 3.0 / _np.sqrt(s)
+                            m[i] = t * a * d[i]
+                            m[i + 1] = t * b * d[i]
+    
+                # Rekonstrukce křivky – kubická Hermitova interpolace v každém intervalu
+                xs_out = []
+                ys_out = []
+                for i in range(n - 1):
+                    xi, xi1 = x[i], x[i + 1]
+                    hi = xi1 - xi
+                    yi, yi1 = y[i], y[i + 1]
+                    mi, mi1 = m[i], m[i + 1]
+    
+                    # vzorkování; endpoint přidáme jen v posledním intervalu
+                    ts = _np.linspace(0.0, 1.0, points_per_segment, endpoint=(i == n - 2))
                     for t in ts:
                         t2 = t * t
                         t3 = t2 * t
-                        term1 = 2.0 * P1
-                        term2 = (-P0 + P2) * t
-                        term3 = (2.0 * P0 - 5.0 * P1 + 4.0 * P2 - P3) * t2
-                        term4 = (-P0 + 3.0 * P1 - 3.0 * P2 + P3) * t3
-                        point = 0.5 * (term1 + term2 + term3 + term4)
-                        result_points.append(point)
+                        h00 = 2 * t3 - 3 * t2 + 1
+                        h10 = t3 - 2 * t2 + t
+                        h01 = -2 * t3 + 3 * t2
+                        h11 = t3 - t2
+                        xs_out.append(xi + t * hi)
+                        ys_out.append(h00 * yi + h10 * hi * mi + h01 * yi1 + h11 * hi * mi1)
     
-                result_points = np.array(result_points)
-                xs_s = result_points[:, 0]
-                ys_s = result_points[:, 1]
-                return xs_s, ys_s
+                return _np.array(xs_out, dtype=float), _np.array(ys_out, dtype=float)
     
             if not times:
                 ax.text(
@@ -5339,9 +5390,10 @@ class FitnessTrackerApp(QMainWindow):
                     color="#a0a0a0",
                 )
             else:
-                # Catmull-Rom vyhlazení nad (mdates date2num, cumul)
+                # Monotónní vyhlazení nad (mdates date2num, cumul)
                 xs_raw = [mdates.date2num(dt) for dt in times]
-                xs_smooth, cumul_smooth = smooth_curve(xs_raw, cumul, points_per_segment=30)
+    
+                xs_smooth, cumul_smooth = smooth_monotone_curve_x(xs_raw, cumul, points_per_segment=30)
                 times_smooth = [mdates.num2date(x) for x in xs_smooth]
     
                 ax.plot(
