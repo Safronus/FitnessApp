@@ -1,0 +1,559 @@
+{
+  "workouts": {
+    "2025-11-12": {
+      "kliky": [
+        {
+          "value": 10,
+          "timestamp": "2025-11-12 17:01:49",
+          "id": "f45cd71c-b7eb-4134-86d9-4f8c56ca1c9e"
+        },
+        {
+          "value": 10,
+          "timestamp": "2025-11-12 23:29:51",
+          "id": "404daf46-27b2-42e2-aa16-7a72276bf30c"
+        },
+        {
+          "value": 15,
+          "timestamp": "2025-11-12 23:40:44",
+          "id": "07afb313-f3d6-4dcd-8c2a-10431c7cfc1f"
+        },
+        {
+          "value": 10,
+          "timestamp": "2025-11-12 23:59:08",
+          "id": "de058284-3cc3-41dd-88b3-37ceece87060"
+        }
+      ],
+      "drepy": [
+        {
+          "value": 10,
+          "timestamp": "2025-11-12 17:01:49",
+          "id": "2ede3959-71d3-4ecb-b9d0-04600841305e"
+        },
+        {
+          "value": 10,
+          "timestamp": "2025-11-12 23:07:24",
+          "id": "fa279657-6714-4fa1-832b-34b9c0965f53"
+        }
+      ],
+      "skrcky": [
+        {
+          "value": 15,
+          "timestamp": "2025-11-12 17:01:49",
+          "id": "4c247421-042c-4c56-b713-1031475456a8"
+        },
+        {
+          "value": 20,
+          "timestamp": "2025-11-12 23:07:24",
+          "id": "8436c4cd-8ada-4606-ad54-a23931287f43"
+        },
+        {
+          "value": 10,
+          "timestamp": "2025-11-12 23:29:51",
+          "id": "e2641d66-6406-451f-a724-53619aefcbb3"
+        }
+      ]
+    },
+    "2025-11-13": {
+      "kliky": [
+        {
+          "value": 10,
+          "timestamp": "2025-11-13 22:11:58",
+          "id": "6e19bac9-ae96-462c-9ca9-b9582a18b994"
+        },
+        {
+          "value": 20,
+          "timestamp": "2025-11-13 22:45:16",
+          "id": "02634f1a-7ca5-4878-bae2-8d8669bec50f"
+        },
+        {
+          "value": 5,
+          "timestamp": "2025-11-13 23:17:16",
+          "id": "51239743-d0fe-41fa-ab02-3d6e7b1338ec"
+        }
+      ],
+      "drepy": [
+        {
+          "value": 13,
+          "timestamp": "2025-11-13 22:10:17",
+          "id": "72672dfb-a8a7-406d-bc0b-619283a20e6b"
+        },
+        {
+          "value": 7,
+          "timestamp": "2025-11-13 22:11:58",
+          "id": "a7fa1ee2-f025-4e91-93e4-5d4d692e4603"
+        },
+        {
+          "value": 10,
+          "timestamp": "2025-11-13 22:57:41",
+          "id": "8443138b-cf62-4efe-ab35-c2c38d06dad8"
+        }
+      ],
+      "skrcky": [
+        {
+          "value": 25,
+          "timestamp": "2025-11-13 22:10:17",
+          "id": "1af77152-cb8d-41bb-a1de-1e0e4b448844"
+        },
+        {
+          "value": 15,
+          "timestamp": "2025-11-13 22:11:58",
+          "id": "d65829ad-2337-475f-aa13-e8a49c759b25"
+        },
+        {
+          "value": 20,
+          "timestamp": "2025-11-13 22:45:16",
+          "id": "4f12540b-a91b-453d-8111-5b71d1349d60"
+        },
+        {
+          "value": 15,
+          "timestamp": "2025-11-13 22:57:41",
+          "id": "2e4ba944-e35d-4aed-915a-dae5ad528cca"
+        },
+        {
+          "value": 20,
+          "timestamp": "2025-11-13 23:44:30",
+          "id": "d40a7e12-b3c5-423f-8d61-4af0ac72c631"
+        }
+      ]
+    },
+    "2025-11-14": {
+      "kliky": [
+        {
+          "value": 10,
+          "timestamp": "2025-11-14 21:16:15",
+          "id": "595ee6b2-8e43-4bd4-9529-8b1c9942be96"
+        },
+        {
+          "value": 15,
+          "timestamp": "2025-11-14 21:52:25",
+          "id": "463898d0-44da-4b12-8537-f714ea372f46"
+        }
+      ],
+      "drepy": [
+        {
+          "value": 10,
+          "timestamp": "2025-11-14 21:52:25",
+          "id": "ec405a0f-7552-4293-9b44-36e3cbf11995"
+        }
+      ],
+      "skrcky": [
+        {
+          "value": 20,
+          "timestamp": "2025-11-14 21:16:15",
+          "id": "8827fe9d-f733-42b7-9924-26fb4241f4c5"
+        },
+        {
+          "value": 20,
+          "timestamp": "2025-11-14 21:52:25",
+          "id": "c80196b9-2437-489c-8c98-99bbf3f5f3cb"
+        }
+      ]
+    },
+    "2025-11-15": {
+      "kliky": [
+        {
+          "value": 15,
+          "timestamp": "2025-11-15 19:06:43",
+          "id": "df6d7111-7491-4bf5-b00a-eb609e9b474a"
+        },
+        {
+          "value": 20,
+          "timestamp": "2025-11-15 19:16:44",
+          "id": "c96e53ad-e64e-4222-a673-175eb050a48e"
+        },
+        {
+          "value": 10,
+          "timestamp": "2025-11-15 21:05:11",
+          "id": "7a82b538-685e-419a-9029-4d19b7a2e430"
+        },
+        {
+          "value": 20,
+          "timestamp": "2025-11-15 23:35:21",
+          "id": "a1580e51-d77e-4647-98ae-2ec7842cd46a"
+        },
+        {
+          "value": 10,
+          "timestamp": "2025-11-15 23:35:24",
+          "id": "5f581cee-2ac7-42d0-afb1-e2cde8d20e12"
+        },
+        {
+          "value": 10,
+          "timestamp": "2025-11-15 23:35:27",
+          "id": "88fb4949-e420-45ef-9464-4d470d1041b0"
+        }
+      ],
+      "skrcky": [
+        {
+          "value": 15,
+          "timestamp": "2025-11-15 19:06:46",
+          "id": "3c70c3b6-c4ad-453a-98db-219e92a131ad"
+        },
+        {
+          "value": 20,
+          "timestamp": "2025-11-15 19:16:50",
+          "id": "c067232b-f863-4456-a1af-52d040c5ef01"
+        },
+        {
+          "value": 20,
+          "timestamp": "2025-11-15 23:35:36",
+          "id": "a75c66cf-652f-412f-8f8f-5c26c253fc70"
+        },
+        {
+          "value": 20,
+          "timestamp": "2025-11-15 23:35:39",
+          "id": "31d3511c-a343-42fc-af92-835aead86a35"
+        },
+        {
+          "value": 25,
+          "timestamp": "2025-11-15 23:35:44",
+          "id": "fc9503d7-f847-4418-a828-0d87806af1ba"
+        }
+      ],
+      "drepy": [
+        {
+          "value": 10,
+          "timestamp": "2025-11-15 19:16:47",
+          "id": "8314120b-7d54-4faa-a99d-988657512078"
+        },
+        {
+          "value": 10,
+          "timestamp": "2025-11-15 21:05:13",
+          "id": "673c6fe0-2325-4bb2-b16e-a2779f6de5ba"
+        },
+        {
+          "value": 10,
+          "timestamp": "2025-11-15 23:35:31",
+          "id": "e627b6b1-4a18-4e14-bbdd-18d55206b033"
+        }
+      ]
+    },
+    "2025-11-16": {
+      "skrcky": [
+        {
+          "value": 20,
+          "timestamp": "2025-11-16 00:12:34",
+          "id": "f3ed6ec5-239a-4dad-bd6c-93856a74da59"
+        },
+        {
+          "value": 10,
+          "timestamp": "2025-11-16 01:07:09",
+          "id": "c428d809-233d-4e14-a831-8c441aa08b7e"
+        },
+        {
+          "value": 20,
+          "timestamp": "2025-11-16 01:55:11",
+          "id": "60e5e277-0df5-41ca-a333-6303495e2974"
+        },
+        {
+          "value": 20,
+          "timestamp": "2025-11-16 21:23:58",
+          "id": "caf40eba-c9e6-43e3-b2a1-eeed6162ac42"
+        },
+        {
+          "value": 15,
+          "timestamp": "2025-11-16 21:39:02",
+          "id": "e66f2f41-8b3a-4672-a38e-8f41b84eea8f"
+        },
+        {
+          "value": 10,
+          "timestamp": "2025-11-16 22:23:02",
+          "id": "e41f4cf3-f355-4963-a7ce-595fdc6a1e64"
+        },
+        {
+          "value": 20,
+          "timestamp": "2025-11-16 22:50:50",
+          "id": "9e6699c7-2e84-433f-a091-5a618dce56b2"
+        },
+        {
+          "value": 20,
+          "timestamp": "2025-11-16 23:36:38",
+          "id": "ca16a698-122f-45db-9e0c-5c66f2f2e95d"
+        }
+      ],
+      "kliky": [
+        {
+          "value": 10,
+          "timestamp": "2025-11-16 00:12:37",
+          "id": "29c6caa6-6496-4387-ace2-9d27d76d8fd9"
+        },
+        {
+          "value": 10,
+          "timestamp": "2025-11-16 01:26:17",
+          "id": "5802a073-7a13-4874-b7b0-430f625bda5a"
+        },
+        {
+          "value": 15,
+          "timestamp": "2025-11-16 01:55:05",
+          "id": "c0b5f414-f0f4-4403-ad5a-deab0f2ce099"
+        },
+        {
+          "value": 15,
+          "timestamp": "2025-11-16 21:16:26",
+          "id": "fe5c1c57-de1f-4854-8dbf-80dd9b839ca9"
+        },
+        {
+          "value": 15,
+          "timestamp": "2025-11-16 21:23:55",
+          "id": "b167f428-9756-4ceb-a8d5-8a77506f7650"
+        },
+        {
+          "value": 10,
+          "timestamp": "2025-11-16 22:22:59",
+          "id": "19a7bffd-ebfc-4fad-bf71-5fd09331626b"
+        },
+        {
+          "value": 10,
+          "timestamp": "2025-11-16 23:36:28",
+          "id": "c3b70d8d-dbee-4c22-8ea0-3a2183eedc40"
+        }
+      ],
+      "drepy": [
+        {
+          "value": 10,
+          "timestamp": "2025-11-16 01:07:05",
+          "id": "81ebf3ed-e980-40b9-80cf-f00629042168"
+        },
+        {
+          "value": 10,
+          "timestamp": "2025-11-16 01:55:08",
+          "id": "96d09ee2-2a98-4fde-a578-cbd70692f759"
+        },
+        {
+          "value": 15,
+          "timestamp": "2025-11-16 21:16:23",
+          "id": "b373dd45-aeb4-4862-b17a-9b27cb9bcca0"
+        },
+        {
+          "value": 10,
+          "timestamp": "2025-11-16 21:38:59",
+          "id": "b6590e7d-1ac9-40d9-8c75-b964586058a2"
+        },
+        {
+          "value": 10,
+          "timestamp": "2025-11-16 22:50:47",
+          "id": "a4dfd078-456d-4a56-a4e5-83c62b09ad04"
+        },
+        {
+          "value": 10,
+          "timestamp": "2025-11-16 23:36:35",
+          "id": "fc2f6dd6-08ad-44b6-9682-702132aa34c6"
+        }
+      ],
+      "shyby": [
+        {
+          "value": 2,
+          "timestamp": "2025-11-16 21:16:49",
+          "id": "b49dad56-2155-4e3f-a58c-a8ee4936b588"
+        }
+      ]
+    },
+    "2025-11-17": {
+      "kliky": [
+        {
+          "value": 10,
+          "timestamp": "2025-11-17 11:11:25",
+          "id": "ae0745d5-11c9-4dc9-a0f8-29c46fd34040"
+        },
+        {
+          "value": 15,
+          "timestamp": "2025-11-17 11:59:22",
+          "id": "b8c5b7bd-85de-4cfa-af00-f86c8ad2570c"
+        },
+        {
+          "value": 10,
+          "timestamp": "2025-11-17 12:35:44",
+          "id": "295c596e-587c-4892-bdb6-a36b73d24d98"
+        },
+        {
+          "value": 15,
+          "timestamp": "2025-11-17 13:32:36",
+          "id": "314f185c-5e1c-4ac0-ae2c-1308acbf814a"
+        },
+        {
+          "value": 10,
+          "timestamp": "2025-11-17 13:47:23",
+          "id": "0dd21cbe-fc22-4956-9475-05f27376a235"
+        },
+        {
+          "value": 10,
+          "timestamp": "2025-11-17 15:59:28",
+          "id": "f3e6e2b3-cf72-4957-80fc-577f623dbc29"
+        }
+      ],
+      "drepy": [
+        {
+          "value": 15,
+          "timestamp": "2025-11-17 11:11:29",
+          "id": "2a0f7a96-29ba-4569-9920-fa8ccc6a875e"
+        },
+        {
+          "value": 15,
+          "timestamp": "2025-11-17 11:59:25",
+          "id": "49cb3d10-f19e-4f93-8858-b47d377c91af"
+        },
+        {
+          "value": 15,
+          "timestamp": "2025-11-17 13:32:39",
+          "id": "8148428d-f144-465c-a1ac-cb89d2160721"
+        },
+        {
+          "value": 10,
+          "timestamp": "2025-11-17 15:59:31",
+          "id": "006cfb07-d03e-4872-98e0-df40f61863b9"
+        }
+      ],
+      "skrcky": [
+        {
+          "value": 20,
+          "timestamp": "2025-11-17 11:59:29",
+          "id": "54259b96-8119-4e6e-8ed0-f0c1e2ee58d0"
+        },
+        {
+          "value": 20,
+          "timestamp": "2025-11-17 12:35:48",
+          "id": "2ff54a8a-9975-45ec-a8ea-d169f2a46483"
+        },
+        {
+          "value": 15,
+          "timestamp": "2025-11-17 13:32:43",
+          "id": "970fcbf1-ed39-4d97-83d6-59e01d72044e"
+        },
+        {
+          "value": 20,
+          "timestamp": "2025-11-17 13:47:31",
+          "id": "1b78d288-8902-44b6-b55c-8e75ca090d8b"
+        },
+        {
+          "value": 20,
+          "timestamp": "2025-11-17 15:59:33",
+          "id": "a2a2b141-aca0-492d-bcd6-586aa57c6785"
+        }
+      ]
+    }
+  },
+  "version": "3.6.2",
+  "app_state": {
+    "last_tab": 0,
+    "window_geometry": {
+      "x": -3840,
+      "y": 31,
+      "width": 2537,
+      "height": 2101
+    },
+    "exercise_years": {
+      "kliky": 2025,
+      "drepy": 2025,
+      "skrcky": 2025,
+      "shyby": 2025,
+      "test": 2025
+    },
+    "plan_start_date": "2025-11-12",
+    "bmi_plan": {
+      "target_bmi": 24.8,
+      "horizon": "3 měsíce",
+      "mode": "Agresivnější"
+    }
+  },
+  "year_settings": {
+    "2025": {
+      "start_date": "2025-11-12",
+      "base_goals": {
+        "kliky": 30,
+        "drepy": 10,
+        "skrcky": 40,
+        "shyby": 2
+      },
+      "weekly_increment": {
+        "kliky": 5,
+        "drepy": 5,
+        "skrcky": 10,
+        "shyby": 1
+      },
+      "exercise_start_dates": {
+        "kliky": "2025-11-12",
+        "drepy": "2025-11-12",
+        "skrcky": "2025-11-12",
+        "shyby": "2025-11-15"
+      }
+    }
+  },
+  "exercises": {
+    "kliky": {
+      "name": "Kliky",
+      "icon": "💪",
+      "order": 0,
+      "active": true,
+      "quick_buttons": [
+        10,
+        15,
+        20,
+        25
+      ],
+      "start_dates": {
+        "2025": "2025-11-12"
+      }
+    },
+    "drepy": {
+      "name": "Dřepy",
+      "icon": "🦵",
+      "order": 1,
+      "active": true,
+      "quick_buttons": [
+        5,
+        10,
+        15,
+        20
+      ],
+      "start_dates": {
+        "2025": "2025-11-12"
+      }
+    },
+    "skrcky": {
+      "name": "Skrčky",
+      "icon": "🧘",
+      "order": 2,
+      "active": true,
+      "quick_buttons": [
+        10,
+        15,
+        20,
+        30,
+        40
+      ],
+      "start_dates": {
+        "2025": "2025-11-12"
+      }
+    },
+    "shyby": {
+      "name": "Shyby",
+      "icon": "🏋",
+      "order": 999,
+      "active": true,
+      "quick_buttons": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "start_dates": {
+        "2025": "2025-11-12"
+      }
+    }
+  },
+  "body_metrics": {
+    "height_cm": 172,
+    "weight_history": [
+      {
+        "id": "58785216-4da8-4c34-8bbb-79e354f8fe71",
+        "timestamp": "2025-11-16 20:39:00",
+        "date": "2025-11-16",
+        "value": 87.6
+      }
+    ]
+  }
+}

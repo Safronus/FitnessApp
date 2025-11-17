@@ -1,0 +1,316 @@
+{
+  "workouts": {
+    "2025-11-12": {
+      "kliky": [
+        {
+          "value": 10,
+          "timestamp": "2025-11-12 17:01:49",
+          "id": "f45cd71c-b7eb-4134-86d9-4f8c56ca1c9e"
+        },
+        {
+          "value": 10,
+          "timestamp": "2025-11-12 23:29:51",
+          "id": "404daf46-27b2-42e2-aa16-7a72276bf30c"
+        },
+        {
+          "value": 15,
+          "timestamp": "2025-11-12 23:40:44",
+          "id": "07afb313-f3d6-4dcd-8c2a-10431c7cfc1f"
+        },
+        {
+          "value": 10,
+          "timestamp": "2025-11-12 23:59:08",
+          "id": "de058284-3cc3-41dd-88b3-37ceece87060"
+        }
+      ],
+      "drepy": [
+        {
+          "value": 10,
+          "timestamp": "2025-11-12 17:01:49",
+          "id": "2ede3959-71d3-4ecb-b9d0-04600841305e"
+        },
+        {
+          "value": 10,
+          "timestamp": "2025-11-12 23:07:24",
+          "id": "fa279657-6714-4fa1-832b-34b9c0965f53"
+        }
+      ],
+      "skrcky": [
+        {
+          "value": 15,
+          "timestamp": "2025-11-12 17:01:49",
+          "id": "4c247421-042c-4c56-b713-1031475456a8"
+        },
+        {
+          "value": 20,
+          "timestamp": "2025-11-12 23:07:24",
+          "id": "8436c4cd-8ada-4606-ad54-a23931287f43"
+        },
+        {
+          "value": 10,
+          "timestamp": "2025-11-12 23:29:51",
+          "id": "e2641d66-6406-451f-a724-53619aefcbb3"
+        }
+      ]
+    },
+    "2025-11-13": {
+      "kliky": [
+        {
+          "value": 10,
+          "timestamp": "2025-11-13 22:11:58",
+          "id": "6e19bac9-ae96-462c-9ca9-b9582a18b994"
+        },
+        {
+          "value": 20,
+          "timestamp": "2025-11-13 22:45:16",
+          "id": "02634f1a-7ca5-4878-bae2-8d8669bec50f"
+        },
+        {
+          "value": 5,
+          "timestamp": "2025-11-13 23:17:16",
+          "id": "51239743-d0fe-41fa-ab02-3d6e7b1338ec"
+        }
+      ],
+      "drepy": [
+        {
+          "value": 13,
+          "timestamp": "2025-11-13 22:10:17",
+          "id": "72672dfb-a8a7-406d-bc0b-619283a20e6b"
+        },
+        {
+          "value": 7,
+          "timestamp": "2025-11-13 22:11:58",
+          "id": "a7fa1ee2-f025-4e91-93e4-5d4d692e4603"
+        },
+        {
+          "value": 10,
+          "timestamp": "2025-11-13 22:57:41",
+          "id": "8443138b-cf62-4efe-ab35-c2c38d06dad8"
+        }
+      ],
+      "skrcky": [
+        {
+          "value": 25,
+          "timestamp": "2025-11-13 22:10:17",
+          "id": "1af77152-cb8d-41bb-a1de-1e0e4b448844"
+        },
+        {
+          "value": 15,
+          "timestamp": "2025-11-13 22:11:58",
+          "id": "d65829ad-2337-475f-aa13-e8a49c759b25"
+        },
+        {
+          "value": 20,
+          "timestamp": "2025-11-13 22:45:16",
+          "id": "4f12540b-a91b-453d-8111-5b71d1349d60"
+        },
+        {
+          "value": 15,
+          "timestamp": "2025-11-13 22:57:41",
+          "id": "2e4ba944-e35d-4aed-915a-dae5ad528cca"
+        },
+        {
+          "value": 20,
+          "timestamp": "2025-11-13 23:44:30",
+          "id": "d40a7e12-b3c5-423f-8d61-4af0ac72c631"
+        }
+      ]
+    },
+    "2025-11-14": {
+      "kliky": [
+        {
+          "value": 10,
+          "timestamp": "2025-11-14 21:16:15",
+          "id": "595ee6b2-8e43-4bd4-9529-8b1c9942be96"
+        },
+        {
+          "value": 15,
+          "timestamp": "2025-11-14 21:52:25",
+          "id": "463898d0-44da-4b12-8537-f714ea372f46"
+        }
+      ],
+      "drepy": [
+        {
+          "value": 10,
+          "timestamp": "2025-11-14 21:52:25",
+          "id": "ec405a0f-7552-4293-9b44-36e3cbf11995"
+        }
+      ],
+      "skrcky": [
+        {
+          "value": 20,
+          "timestamp": "2025-11-14 21:16:15",
+          "id": "8827fe9d-f733-42b7-9924-26fb4241f4c5"
+        },
+        {
+          "value": 20,
+          "timestamp": "2025-11-14 21:52:25",
+          "id": "c80196b9-2437-489c-8c98-99bbf3f5f3cb"
+        }
+      ]
+    },
+    "2025-11-15": {
+      "kliky": [
+        {
+          "value": 15,
+          "timestamp": "2025-11-15 19:06:43",
+          "id": "df6d7111-7491-4bf5-b00a-eb609e9b474a"
+        },
+        {
+          "value": 20,
+          "timestamp": "2025-11-15 19:16:44",
+          "id": "c96e53ad-e64e-4222-a673-175eb050a48e"
+        },
+        {
+          "value": 10,
+          "timestamp": "2025-11-15 21:05:11",
+          "id": "7a82b538-685e-419a-9029-4d19b7a2e430"
+        }
+      ],
+      "skrcky": [
+        {
+          "value": 15,
+          "timestamp": "2025-11-15 19:06:46",
+          "id": "3c70c3b6-c4ad-453a-98db-219e92a131ad"
+        },
+        {
+          "value": 20,
+          "timestamp": "2025-11-15 19:16:50",
+          "id": "c067232b-f863-4456-a1af-52d040c5ef01"
+        }
+      ],
+      "drepy": [
+        {
+          "value": 10,
+          "timestamp": "2025-11-15 19:16:47",
+          "id": "8314120b-7d54-4faa-a99d-988657512078"
+        },
+        {
+          "value": 10,
+          "timestamp": "2025-11-15 21:05:13",
+          "id": "673c6fe0-2325-4bb2-b16e-a2779f6de5ba"
+        }
+      ]
+    }
+  },
+  "version": "3.0.5",
+  "app_state": {
+    "last_tab": 4,
+    "window_geometry": {
+      "x": -3840,
+      "y": 31,
+      "width": 3259,
+      "height": 1776
+    },
+    "exercise_years": {
+      "kliky": 2025,
+      "drepy": 2025,
+      "skrcky": 2025,
+      "shyby": 2025
+    }
+  },
+  "year_settings": {
+    "2025": {
+      "start_date": "2025-11-12",
+      "base_goals": {
+        "kliky": 30,
+        "drepy": 10,
+        "skrcky": 40,
+        "shyby": 5
+      },
+      "weekly_increment": {
+        "kliky": 5,
+        "drepy": 5,
+        "skrcky": 10,
+        "shyby": 1
+      },
+      "exercise_start_dates": {
+        "kliky": "2025-11-12",
+        "drepy": "2025-11-12",
+        "skrcky": "2025-11-12",
+        "shyby": "2025-11-12"
+      }
+    },
+    "2026": {
+      "start_date": "2026-01-01",
+      "base_goals": {
+        "kliky": 50,
+        "drepy": 20,
+        "skrcky": 20
+      },
+      "weekly_increment": {
+        "kliky": 10,
+        "drepy": 5,
+        "skrcky": 10
+      }
+    }
+  },
+  "exercises": {
+    "kliky": {
+      "name": "Kliky",
+      "icon": "💪",
+      "order": 0,
+      "active": true,
+      "quick_buttons": [
+        10,
+        15,
+        20,
+        25
+      ],
+      "start_dates": {
+        "2025": "2025-11-12"
+      }
+    },
+    "drepy": {
+      "name": "Dřepy",
+      "icon": "🦵",
+      "order": 1,
+      "active": true,
+      "quick_buttons": [
+        5,
+        10,
+        15,
+        20
+      ],
+      "start_dates": {
+        "2025": "2025-11-12"
+      }
+    },
+    "skrcky": {
+      "name": "Skrčky",
+      "icon": "🧘",
+      "order": 2,
+      "active": true,
+      "quick_buttons": [
+        10,
+        15,
+        20,
+        30,
+        40
+      ],
+      "start_dates": {
+        "2025": "2025-11-12"
+      }
+    },
+    "shyby": {
+      "name": "Shyby",
+      "icon": "🏋",
+      "order": 999,
+      "active": true,
+      "quick_buttons": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "start_dates": {
+        "2025": "2025-11-12"
+      }
+    }
+  }
+}
