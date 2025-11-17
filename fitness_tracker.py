@@ -5755,6 +5755,7 @@ class FitnessTrackerApp(QMainWindow):
             ax.set_xlabel("Čas")
             ax.set_ylabel("Hodnota")
     
+            # ... (po ax.set_ylabel)
             # Legenda vpravo
             fig.subplots_adjust(right=0.78)
             handles, labels = ax.get_legend_handles_labels()
@@ -5951,6 +5952,7 @@ class FitnessTrackerApp(QMainWindow):
         else:
             ax.set_title(f"Rok {selected_year}", fontsize=14)
     
+        # ... (po ax.set_ylabel)
         # Legenda vpravo
         fig.subplots_adjust(right=0.78)
         handles, labels = ax.get_legend_handles_labels()
@@ -5986,46 +5988,50 @@ class FitnessTrackerApp(QMainWindow):
         year_selector = QComboBox()
         year_selector.setMinimumWidth(80)  # **NOVĚ: Minimální šířka pro viditelnost roků**
         
-        available_years = self.get_available_years()
-        if available_years:
-            for year in available_years:
-                year_selector.addItem(str(year))
-            year_selector.setCurrentText(str(datetime.now().year))
-        
-        year_selector.currentTextChanged.connect(lambda: self.update_exercise_tab_and_calendar(exercise_type))
+        # Naplnění roků (od min(year,data) do max(year,today))
+        years = set()
+        today = datetime.now().date()
+        for k in self.data.get("workouts", {}).keys():
+            try:
+                d = datetime.strptime(k[:10], "%Y-%m-%d").date()
+                years.add(d.year)
+            except Exception:
+                pass
+        if not years:
+            years = {today.year}
+        years = sorted(years)
+        for y in years:
+            year_selector.addItem(str(y))
+        # Ulož selector pro dané cvičení
+        if not hasattr(self, "exercise_year_selectors"):
+            self.exercise_year_selectors = {}
         self.exercise_year_selectors[exercise_type] = year_selector
+        
         year_selector_layout.addWidget(year_selector)
         year_selector_layout.addStretch()
         left_layout.addLayout(year_selector_layout)
-        # Cíle frame (den, týden, měsíc, zbytek roku)
+        
+        # Přehledové sekce (DNES / TÝDEN / MĚSÍC / ZBYTEK ROKU)
         goals_frame = QFrame()
-        goals_frame.setStyleSheet("""
-            QFrame {
-                background-color: #2d2d2d;
-                border: 2px solid #0d7377;
-                border-radius: 5px;
-            }
-        """)
+        goals_frame.setObjectName(f"goals_frame_{exercise_type}")
+        goals_frame.setStyleSheet("QFrame { background-color: #1e1e1e; border: 1px solid #0d7377; border-radius: 5px; }")
         goals_layout = QVBoxLayout(goals_frame)
         
-        # Dnešní sekce
         today_section = QLabel()
         today_section.setObjectName(f"today_section_{exercise_type}")
-        today_section.setStyleSheet("font-size: 14px; font-weight: bold; color: #14919b; padding: 5px;")
+        today_section.setStyleSheet("font-size: 12px; color: #87CEEB; padding: 5px;")
         today_section.setWordWrap(True)
         goals_layout.addWidget(today_section)
         
-        # Týdenní sekce
         week_section = QLabel()
         week_section.setObjectName(f"week_section_{exercise_type}")
-        week_section.setStyleSheet("font-size: 12px; color: #FFD700; padding: 5px;")
+        week_section.setStyleSheet("font-size: 12px; color: #87CEEB; padding: 5px;")
         week_section.setWordWrap(True)
         goals_layout.addWidget(week_section)
         
-        # Měsíční sekce
         month_section = QLabel()
         month_section.setObjectName(f"month_section_{exercise_type}")
-        month_section.setStyleSheet("font-size: 12px; color: #90EE90; padding: 5px;")
+        month_section.setStyleSheet("font-size: 12px; color: #87CEEB; padding: 5px;")
         month_section.setWordWrap(True)
         goals_layout.addWidget(month_section)
         
@@ -6044,13 +6050,16 @@ class FitnessTrackerApp(QMainWindow):
         
         left_layout.addWidget(goals_frame)
         
-        # Bulk actions
+        # Bulk akce: smazat vybrané
         bulk_actions_layout = QHBoxLayout()
         delete_selected_btn = QPushButton("🗑️ Smazat vybrané")
-        delete_selected_btn.setObjectName(f"delete_selected_{exercise_type}")
         delete_selected_btn.setStyleSheet("""
             QPushButton {
                 background-color: #dc3545;
+                border: none;
+                padding: 8px 12px;
+                border-radius: 6px;
+                font-size: 12px;
                 color: white;
             }
             QPushButton:hover {
@@ -6065,30 +6074,30 @@ class FitnessTrackerApp(QMainWindow):
         # TreeWidget pro záznamy
         tree = QTreeWidget()
         tree.setObjectName(f"tree_{exercise_type}")
-        tree.setColumnCount(4)  # Datum, Čas, Výkon, Data (hidden)
-        tree.setHeaderLabels(["Datum / Záznam", "Čas / Výkon", "% cíle", "Data"])
-        tree.setColumnHidden(3, True)
-        
-        header = tree.header()
-        header.setSectionResizeMode(0, QHeaderView.Stretch)
-        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        
-        tree.setIndentation(20)
-        tree.setContextMenuPolicy(Qt.CustomContextMenu)
-        tree.customContextMenuRequested.connect(lambda pos: self.show_tree_context_menu(pos, exercise_type))
+        tree.setColumnCount(4)
+        tree.setHeaderLabels(["📅 Den", "⏱️ Čas", "💪 Hodnota", "Poznámka"])
         tree.setStyleSheet("""
             QTreeWidget {
                 background-color: #1e1e1e;
-                border: 1px solid #3d3d3d;
-            }
-            QTreeWidget::item {
-                padding: 5px;
+                color: #e0e0e0;
+                border: 1px solid #0d7377;
+                border-radius: 5px;
             }
             QTreeWidget::item:selected {
                 background-color: #0d7377;
+                color: #ffffff;
+            }
+            QHeaderView::section {
+                background-color: #2d2d2d;
+                color: #e0e0e0;
+                padding: 4px;
+                border: 1px solid #0d7377;
             }
         """)
+        tree.setSelectionMode(QTreeWidget.ExtendedSelection)
+        tree.setSortingEnabled(True)
+        tree.sortItems(0, Qt.AscendingOrder)
+        # (Pozn.: přiřazení do self.exercise_trees se v této verzi nepoužívá)
         
         left_layout.addWidget(tree)
         
@@ -6136,63 +6145,48 @@ class FitnessTrackerApp(QMainWindow):
         calendar_layout = QVBoxLayout(scroll_content)
         calendar_layout.setContentsMargins(0, 0, 0, 0)
     
-        # >>> NOVĚ: šířka i výška obsahu se má roztahovat s viewportem
+        # >>> šířka i výška obsahu se má roztahovat s viewportem
         try:
             from PySide6.QtWidgets import QSizePolicy
             scroll_content.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         except Exception:
             pass
         
-        # Kalendář widget
+        # Kalendář – beze změn (jen obal a vnitřní layout)
         calendar_widget = QWidget()
         calendar_widget.setStyleSheet("background-color: #1e1e1e;")
         calendar_inner_layout = QVBoxLayout(calendar_widget)
         calendar_inner_layout.setContentsMargins(0, 0, 0, 0)
+        # Mapování layoutu pro refresh
+        if not hasattr(self, "exercise_calendar_widgets"):
+            self.exercise_calendar_widgets = {}
         self.exercise_calendar_widgets[exercise_type] = calendar_inner_layout
-    
-        # >>> NOVĚ: aby v horizontu držel šířku viewportu
         try:
             from PySide6.QtWidgets import QSizePolicy
             calendar_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         except Exception:
             pass
-    
         calendar_layout.addWidget(calendar_widget)
         
         # Statistiky pod kalendářem
         stats_year_label = QLabel()
         stats_year_label.setObjectName(f"stats_year_label_{exercise_type}")
-        stats_year_label.setStyleSheet("font-size: 11px; padding: 5px; background-color: #2d2d2d; color: #e0e0e0; border-radius: 5px;")
+        stats_year_label.setStyleSheet("font-size: 11px; padding: 6px; background-color: #2d2d2d; color: #e0e0e0; border-radius: 5px;")
         calendar_layout.addWidget(stats_year_label)
         
         # ==================== GRAF POD KALENDÁŘEM ====================
         self.create_performance_chart(exercise_type, calendar_layout)
     
-        # >>> NOVĚ: graf (FigureCanvas) – vyplnit šířku i výšku
-        try:
-            from PySide6.QtWidgets import QSizePolicy
-            canvas = None
-            if hasattr(self, "chart_canvases"):
-                canvas = self.chart_canvases.get(exercise_type)
-            if canvas is not None:
-                sp = canvas.sizePolicy()
-                sp.setVerticalPolicy(QSizePolicy.Expanding)
-                sp.setHorizontalPolicy(QSizePolicy.Expanding)
-                canvas.setSizePolicy(sp)
-                canvas.setMinimumWidth(0)
-                idx = calendar_layout.indexOf(canvas)
-                if idx != -1:
-                    calendar_layout.setStretch(idx, 1)
-        except Exception as e:
-            print(f"chart expand policy error ({exercise_type}): {e}")
-    
-        # Dřívější addStretch vytvářel prázdné místo – odstraňujeme
+        # (necháváme bez addStretch – ať graf využije šířku)
         # calendar_layout.addStretch()
         
         scroll.setWidget(scroll_content)
-        right_layout.addWidget(scroll, 1)  # <<< NOVĚ: scroll vyplní zbylý prostor panelu
+        right_layout.addWidget(scroll, 1)
         
         main_layout.addWidget(right_panel, 1)
+        # Rozšíření pravého panelu (graf) proti levému panelu (záznamy)
+        main_layout.setStretch(0, 1)
+        main_layout.setStretch(1, 3)
         
         # Refresh kalendáře a detailního přehledu
         self.update_exercise_tab(exercise_type)
