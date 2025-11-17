@@ -5971,7 +5971,8 @@ class FitnessTrackerApp(QMainWindow):
         canvas.draw()
         
     def create_exercise_tab(self, exercise_type, icon):
-        """Vytvoří záložku pro konkrétní cvičení - BEZ přidávání"""
+        """Vytvoří záložku pro konkrétní cvičení - BEZ přidávání (jen layout a tabulka záznamů)."""
+        from PySide6.QtWidgets import QHeaderView, QSizePolicy  # lokální import, ať neměníme globály
         widget = QWidget()
         main_layout = QHBoxLayout(widget)
         
@@ -5982,9 +5983,9 @@ class FitnessTrackerApp(QMainWindow):
         
         # Year selector layout
         year_selector_layout = QHBoxLayout()
-        year_selector_layout.addWidget(QLabel(f"📅 Zobrazit rok:"))
+        year_selector_layout.addWidget(QLabel("📅 Zobrazit rok:"))
         year_selector = QComboBox()
-        year_selector.setMinimumWidth(80)  # **NOVĚ: Minimální šířka pro viditelnost roků**
+        year_selector.setMinimumWidth(80)
         
         # Naplnění roků (od min(year,data) do max(year,today))
         years = set()
@@ -6069,10 +6070,10 @@ class FitnessTrackerApp(QMainWindow):
         bulk_actions_layout.addStretch()
         left_layout.addLayout(bulk_actions_layout)
         
-        # TreeWidget pro záznamy
+        # ==================== TABULKA ZÁZNAMŮ ====================
         tree = QTreeWidget()
         tree.setObjectName(f"tree_{exercise_type}")
-        tree.setColumnCount(4)
+        tree.setColumnCount(4)  # ponecháme 4, ale 4. sloupec (Poznámka) hned skryjeme – minimální zásah pro zbytek kódu
         tree.setHeaderLabels(["📅 Den", "⏱️ Čas", "💪 Hodnota", "Poznámka"])
         tree.setStyleSheet("""
             QTreeWidget {
@@ -6095,10 +6096,21 @@ class FitnessTrackerApp(QMainWindow):
         tree.setSelectionMode(QTreeWidget.ExtendedSelection)
         tree.setSortingEnabled(True)
         tree.sortItems(0, Qt.AscendingOrder)
-        # (Pozn.: přiřazení do self.exercise_trees se v této verzi nepoužívá)
+        
+        # === Úpravy dle požadavků ===
+        header = tree.header()
+        header.setStretchLastSection(True)  # poslední viditelný (💪 Hodnota) vyplní zbytek
+        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)  # 📅 Den podle obsahu
+        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)  # ⏱️ Čas podle obsahu
+        header.setSectionResizeMode(2, QHeaderView.Stretch)           # 💪 Hodnota zabere zbytek šířky
+        header.setSectionResizeMode(3, QHeaderView.Fixed)             # Poznámka (skrytá)
+        tree.setColumnHidden(3, True)                                 # „Oddělej sloupec Poznámka“ = neviditelný
+        
+        # (volitelně: menší min. šířky, aby fit skutečně fungoval i u dlouhých názvů dnů)
+        tree.setColumnWidth(0, max(80, tree.columnWidth(0)))
+        tree.setColumnWidth(1, max(70, tree.columnWidth(1)))
         
         left_layout.addWidget(tree)
-        
         main_layout.addWidget(left_panel, 1)
         
         # ==================== PRAVÁ STRANA (SCROLLOVACÍ OBLAST) ====================
@@ -6111,11 +6123,10 @@ class FitnessTrackerApp(QMainWindow):
         overview_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #14919b; padding: 5px;")
         right_layout.addWidget(overview_label)
         
-        # JEDNODUCHÁ LEGENDA - jeden řádek
+        # Jednoduchá legenda (ponecháno)
         legend_layout = QHBoxLayout()
         legend_layout.setSpacing(15)
         legend_layout.setContentsMargins(10, 5, 10, 5)
-        
         def add_legend_item(color, text):
             color_box = QLabel()
             color_box.setFixedSize(18, 18)
@@ -6124,7 +6135,6 @@ class FitnessTrackerApp(QMainWindow):
             text_label.setStyleSheet("font-size: 10px; color: #e0e0e0;")
             legend_layout.addWidget(color_box)
             legend_layout.addWidget(text_label)
-        
         add_legend_item("#000000", "Před začátkem")
         add_legend_item("#006400", "Velký náskok")
         add_legend_item("#90EE90", "Mírný náskok")
@@ -6142,28 +6152,17 @@ class FitnessTrackerApp(QMainWindow):
         scroll_content = QWidget()
         calendar_layout = QVBoxLayout(scroll_content)
         calendar_layout.setContentsMargins(0, 0, 0, 0)
-    
-        # >>> šířka i výška obsahu se má roztahovat s viewportem
-        try:
-            from PySide6.QtWidgets import QSizePolicy
-            scroll_content.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        except Exception:
-            pass
+        scroll_content.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         
-        # Kalendář – beze změn (jen obal a vnitřní layout)
+        # Kalendář – beze změn
         calendar_widget = QWidget()
         calendar_widget.setStyleSheet("background-color: #1e1e1e;")
         calendar_inner_layout = QVBoxLayout(calendar_widget)
         calendar_inner_layout.setContentsMargins(0, 0, 0, 0)
-        # Mapování layoutu pro refresh
         if not hasattr(self, "exercise_calendar_widgets"):
             self.exercise_calendar_widgets = {}
         self.exercise_calendar_widgets[exercise_type] = calendar_inner_layout
-        try:
-            from PySide6.QtWidgets import QSizePolicy
-            calendar_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        except Exception:
-            pass
+        calendar_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         calendar_layout.addWidget(calendar_widget)
         
         # Statistiky pod kalendářem
@@ -6174,21 +6173,28 @@ class FitnessTrackerApp(QMainWindow):
         
         # ==================== GRAF POD KALENDÁŘEM ====================
         self.create_performance_chart(exercise_type, calendar_layout)
-    
-        # (necháváme bez addStretch – ať graf využije šířku)
-        # calendar_layout.addStretch()
         
         scroll.setWidget(scroll_content)
         right_layout.addWidget(scroll, 1)
         
         main_layout.addWidget(right_panel, 1)
-        # Rozšíření pravého panelu (graf) proti levému panelu (záznamy)
+        # Rozšíření pravého panelu (kalendář + graf) vůči levému panelu (záznamy)
         main_layout.setStretch(0, 1)
         main_layout.setStretch(1, 3)
         
-        # Refresh kalendáře a detailního přehledu
+        # Refresh záložky a kalendáře (beze změn)
         self.update_exercise_tab(exercise_type)
         self.refresh_exercise_calendar(exercise_type)
+        
+        # === Seřaď záznamy v rámci dnů podle ČASU vzestupně (po naplnění stromu) ===
+        # top-level = dny, children = jednotlivé výkony daného dne
+        try:
+            for i in range(tree.topLevelItemCount()):
+                day_item = tree.topLevelItem(i)
+                # sloupec 1 = "⏱️ Čas"
+                day_item.sortChildren(1, Qt.SortOrder.AscendingOrder)
+        except Exception:
+            pass
         
         return widget
 
