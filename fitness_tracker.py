@@ -2161,30 +2161,41 @@ class FitnessTrackerApp(QMainWindow):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         layout = QVBoxLayout(central_widget)
-
+    
         self.tabs = QTabWidget()
         self.tabs.currentChanged.connect(self.on_tab_changed)
         layout.addWidget(self.tabs)
-
+        # -- TabBar chování: nepoužívej expanzi, povol rolování, neschovávej, bez elips --
+        try:
+            from PySide6.QtCore import Qt
+            tb = self.tabs.tabBar()
+            tb.setExpanding(False)           # každý tab má šířku podle obsahu (už žádné „na sílu stejně široké“)
+            tb.setElideMode(Qt.ElideNone)    # nevypisuj „…“, ponech celý text
+            self.tabs.setUsesScrollButtons(True)   # pokud je tabů moc, povol šipky
+            self.tabs.setTabBarAutoHide(False)     # neschovávej tabbar
+        except Exception:
+            pass
+    
         # Záložka "Přidat výkon" - vždy první
         self.tabs.addTab(self.create_add_workout_tab(), "➕ Přidat výkon")
-        # Záložka "BMI & váha"
-        self.tabs.addTab(self.create_bmi_tab(), "⚖️ BMI & váha")
-
-        # DYNAMICKÉ ZÁLOŽKY PRO CVIČENÍ
+    
+        # DYNAMICKÉ ZÁLOŽKY PRO CVIČENÍ (pořadí nechávám dle vašeho get_active_exercises)
         active_exercises = self.get_active_exercises()
         for exercise_id in active_exercises:
             config = self.get_exercise_config(exercise_id)
             tab_label = f"{config['icon']} {config['name']}"
             self.tabs.addTab(self.create_exercise_tab(exercise_id, config['icon']), tab_label)
-
+        
+        # Záložka "BMI & váha" - požadováno před "O aplikaci"
+        self.tabs.addTab(self.create_bmi_tab(), "⚖️ BMI + váha")
+    
         # Záložka "Nastavení"
         self.tabs.addTab(self.create_settings_tab(), "⚙️ Nastavení")
-
-        # Záložka "O aplikaci"
+    
+        # Záložka "O aplikaci" - zůstává poslední
         self.tabs.addTab(self.create_about_tab(), "ℹ️ O aplikaci")
-
-        # >>> Přidej nenarušující „Novinky“ do About (nová podzáložka)
+    
+        # Volitelný hook, který už v projektu máte – ponechávám
         self.inject_about_updates()
         
     def create_bmi_tab(self):
