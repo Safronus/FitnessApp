@@ -3481,6 +3481,42 @@ class FitnessTrackerApp(QMainWindow):
         self.bmi_plan_mode_combo.addItems(["Opatrný", "Střední", "Agresivnější"])
         self.bmi_plan_mode_combo.setCurrentText("Střední")
         params_row.addWidget(self.bmi_plan_mode_combo)
+        
+        # === OBNOVENÍ uložených hodnot plánu ===
+        try:
+            plan_state = (self.data.get('app_state', {}) or {}).get('bmi_plan', {})
+        
+            # Cílové BMI
+            tb = plan_state.get('target_bmi')
+            if isinstance(tb, (int, float)):
+                tb = float(tb)
+                tb = max(self.bmi_plan_target_spin.minimum(),
+                         min(self.bmi_plan_target_spin.maximum(), tb))
+                self.bmi_plan_target_spin.setValue(tb)
+        
+            # Horizont (podle textu položky)
+            hz = plan_state.get('horizon')
+            if isinstance(hz, str):
+                idx = self.bmi_plan_horizon_combo.findText(hz)
+                if idx >= 0:
+                    self.bmi_plan_horizon_combo.setCurrentIndex(idx)
+        
+            # Režim (podle textu položky)
+            md = plan_state.get('mode')
+            if isinstance(md, str):
+                idx = self.bmi_plan_mode_combo.findText(md)
+                if idx >= 0:
+                    self.bmi_plan_mode_combo.setCurrentIndex(idx)
+        except Exception:
+            pass
+        
+        # === PERZISTENCE při změně hodnot ===
+        try:
+            self.bmi_plan_target_spin.valueChanged.connect(self._persist_bmi_plan_settings)
+            self.bmi_plan_horizon_combo.currentIndexChanged.connect(self._persist_bmi_plan_settings)
+            self.bmi_plan_mode_combo.currentIndexChanged.connect(self._persist_bmi_plan_settings)
+        except Exception:
+            pass
 
         params_row.addStretch()
 
@@ -3568,6 +3604,36 @@ class FitnessTrackerApp(QMainWindow):
         self.recompute_bmi_plan()
 
         return widget
+
+    def _persist_bmi_plan_settings(self, *_) -> None:
+        """
+        Uloží hodnoty Cílové BMI, Horizont a Režim do self.data['app_state']['bmi_plan']
+        a hned zapíše na disk přes save_data().
+        """
+        try:
+            self.ensure_app_state()
+            plan = dict(self.data.get('app_state', {}).get('bmi_plan', {}))
+    
+            # Bezpečný odběr hodnot z UI
+            target_bmi = float(self.bmi_plan_target_spin.value()) if hasattr(self, 'bmi_plan_target_spin') else None
+            horizon = self.bmi_plan_horizon_combo.currentText() if hasattr(self, 'bmi_plan_horizon_combo') else None
+            mode = self.bmi_plan_mode_combo.currentText() if hasattr(self, 'bmi_plan_mode_combo') else None
+    
+            if target_bmi is not None:
+                plan['target_bmi'] = target_bmi
+            if isinstance(horizon, str) and horizon:
+                plan['horizon'] = horizon
+            if isinstance(mode, str) and mode:
+                plan['mode'] = mode
+    
+            if 'app_state' not in self.data or not isinstance(self.data['app_state'], dict):
+                self.data['app_state'] = {}
+            self.data['app_state']['bmi_plan'] = plan
+    
+            self.save_data()
+        except Exception as e:
+            # Nechceme blokovat UI kvůli perzistenci
+            print(f"_persist_bmi_plan_settings: {e}")
 
     def _persist_plan_start_date(self, qdate) -> None:
         """
