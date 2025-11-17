@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
     QDialog, QListWidget, QListWidgetItem, QInputDialog, QCheckBox, QFileDialog,
     QTreeWidget, QTreeWidgetItem, QLineEdit, QTextBrowser, QAbstractItemView, QRadioButton, QTimeEdit
 )
-from PySide6.QtCore import Qt, QDate, QTime, QTimer
+from PySide6.QtCore import Qt, QDate, QTime, QTimer, QSize
 from PySide6.QtGui import QColor, QAction, QBrush
 
 # Matplotlib imports
@@ -31,8 +31,8 @@ from matplotlib.collections import LineCollection
 import matplotlib.pyplot as plt
 
 TITLE = "Fitness Tracker"
-VERSION = "3.6.2"
-VERSION_DATE = "16.11.2025"
+VERSION = "4.0.0"
+VERSION_DATE = "17.11.2025"
 
 # Dark Theme Stylesheet
 DARK_THEME = """
@@ -2311,7 +2311,6 @@ class FitnessTrackerApp(QMainWindow):
         week_btn = QPushButton("📅 Týden")
         week_btn.setCheckable(True)
         week_btn.setFixedWidth(100)
-        week_btn.setStyleSheet("padding: 8px; font-size: 12px;")
         week_btn.clicked.connect(lambda: self.set_bmi_period_mode("week"))
         mode_row.addWidget(week_btn)
         self.bmi_period_buttons["week"] = week_btn
@@ -2319,7 +2318,6 @@ class FitnessTrackerApp(QMainWindow):
         month_btn = QPushButton("📆 Měsíc")
         month_btn.setCheckable(True)
         month_btn.setFixedWidth(100)
-        month_btn.setStyleSheet("padding: 8px; font-size: 12px;")
         month_btn.clicked.connect(lambda: self.set_bmi_period_mode("month"))
         mode_row.addWidget(month_btn)
         self.bmi_period_buttons["month"] = month_btn
@@ -2327,7 +2325,6 @@ class FitnessTrackerApp(QMainWindow):
         year_btn = QPushButton("📊 Rok")
         year_btn.setCheckable(True)
         year_btn.setFixedWidth(100)
-        year_btn.setStyleSheet("padding: 8px; font-size: 12px;")
         year_btn.clicked.connect(lambda: self.set_bmi_period_mode("year"))
         mode_row.addWidget(year_btn)
         self.bmi_period_buttons["year"] = year_btn
@@ -2352,7 +2349,6 @@ class FitnessTrackerApp(QMainWindow):
         custom_row.addWidget(self.bmi_custom_to_edit)
 
         self.bmi_custom_apply_button = QPushButton("Použít")
-        self.bmi_custom_apply_button.setStyleSheet("padding: 6px; font-size: 11px;")
         self.bmi_custom_apply_button.clicked.connect(self.apply_bmi_custom_range)
         custom_row.addWidget(self.bmi_custom_apply_button)
 
@@ -3312,7 +3308,6 @@ class FitnessTrackerApp(QMainWindow):
 
         # Titulek
         title_label = QLabel("📝 Přidání výkonů")
-        title_label.setStyleSheet("font-size: 18px; font-weight: bold; color: #14919b; padding: 10px;")
         layout.addWidget(title_label)
 
         # Výběr data
@@ -3375,11 +3370,11 @@ class FitnessTrackerApp(QMainWindow):
         add_layout = QVBoxLayout()
 
         # Společné styly
-        main_button_style = "font-size: 12px; padding: 8px; min-height: 35px; background-color: #0d7377;"
-        quick_button_style = (
-            "font-size: 11px; padding: 8px; min-height: 35px; "
-            "background-color: #2a4d50; color: #b0b0b0;"
-        )
+        #main_button_style = "font-size: 12px; padding: 8px; min-height: 35px; background-color: #0d7377;"
+        #quick_button_style = (
+        #    "font-size: 11px; padding: 8px; min-height: 35px; "
+        #    "background-color: #2a4d50; color: #b0b0b0;"
+        #)
 
         # Dynamicky vytvořit řádek pro každé cvičení
         self.exercise_spinboxes = {}
@@ -3404,7 +3399,6 @@ class FitnessTrackerApp(QMainWindow):
 
             # Hlavní tlačítko "Přidat"
             main_btn = QPushButton("Přidat")
-            main_btn.setStyleSheet(main_button_style)
             main_btn.setFixedWidth(80)
             main_btn.clicked.connect(
                 lambda checked, ex_id=exercise_id: self.add_single_workout(
@@ -3419,7 +3413,6 @@ class FitnessTrackerApp(QMainWindow):
             for quick_val in quick_buttons:
                 quick_btn = QPushButton(str(quick_val))
                 quick_btn.setFixedWidth(50)
-                quick_btn.setStyleSheet(quick_button_style)
                 quick_btn.clicked.connect(
                     lambda checked, ex_id=exercise_id, val=quick_val: self.add_single_workout(
                         ex_id,
@@ -3436,7 +3429,6 @@ class FitnessTrackerApp(QMainWindow):
 
         # Tlačítko pro přidání všeho najednou
         add_all_btn = QPushButton("➕ Přidat všechny výkony najednou")
-        add_all_btn.setStyleSheet("font-size: 14px; padding: 12px; background-color: #0d7377;")
         add_all_btn.clicked.connect(self.add_all_workouts)
         layout.addWidget(add_all_btn)
 
@@ -3532,7 +3524,6 @@ class FitnessTrackerApp(QMainWindow):
         params_row.addStretch()
 
         self.bmi_plan_recompute_button = QPushButton("Přepočítat plán")
-        self.bmi_plan_recompute_button.setStyleSheet("padding: 6px 12px;")
         params_row.addWidget(self.bmi_plan_recompute_button)
 
         plan_layout.addLayout(params_row)
@@ -4658,21 +4649,10 @@ class FitnessTrackerApp(QMainWindow):
     
         # Titulek
         title_label = QLabel("⚙️ Nastavení aplikace")
-        title_label.setStyleSheet("font-size: 18px; font-weight: bold; color: #14919b; padding: 10px;")
         layout.addWidget(title_label)
     
         # ==================== SPRÁVA CVIČENÍ ====================
         exercises_group = QGroupBox("🏋️ Správa cvičení")
-        exercises_group.setStyleSheet("""
-            QGroupBox {
-                font-size: 16px;
-                font-weight: bold;
-                background-color: #1e1e1e;
-                border: 2px solid #0d7377;
-                border-radius: 5px;
-                padding-top: 18px;
-            }
-        """)
         exercises_layout = QVBoxLayout()
         self.exercises_list = QListWidget()
         exercises_layout.addWidget(self.exercises_list)
@@ -4699,16 +4679,6 @@ class FitnessTrackerApp(QMainWindow):
     
         # ==================== SPRÁVA ROKŮ ====================
         years_group = QGroupBox("📆 Správa roků")
-        years_group.setStyleSheet("""
-            QGroupBox {
-                font-size: 16px;
-                font-weight: bold;
-                background-color: #1e1e1e;
-                border: 2px solid #0d7377;
-                border-radius: 5px;
-                padding-top: 18px;
-            }
-        """)
         years_layout = QVBoxLayout()
     
         self.years_list = QListWidget()
@@ -4735,16 +4705,6 @@ class FitnessTrackerApp(QMainWindow):
     
         # ==================== NASTAVENÍ VYBRANÉHO ROKU ====================
         settings_group = QGroupBox("⚙️ Nastavení vybraného roku")
-        settings_group.setStyleSheet("""
-            QGroupBox {
-                font-size: 16px;
-                font-weight: bold;
-                background-color: #1e1e1e;
-                border: 2px solid #0d7377;
-                border-radius: 5px;
-                padding-top: 18px;
-            }
-        """)
         settings_layout = QVBoxLayout()
     
         grid = QGridLayout()
@@ -4752,7 +4712,6 @@ class FitnessTrackerApp(QMainWindow):
     
         # Per-exercise startovní data
         lbl_dates = QLabel("📅 Datum zahájení (pro každé cvičení)")
-        lbl_dates.setStyleSheet("font-weight: bold; color: #14919b;")
         grid.addWidget(lbl_dates, 0, 0)
     
         self.exercise_start_date_edits = {}
@@ -4776,7 +4735,6 @@ class FitnessTrackerApp(QMainWindow):
     
         # Základní cíle
         lbl_base = QLabel("🎯 Základní cíle (1. týden)")
-        lbl_base.setStyleSheet("font-weight: bold; color: #14919b;")
         grid.addWidget(lbl_base, 0, 1)
     
         base_widget = QWidget()
@@ -4797,7 +4755,6 @@ class FitnessTrackerApp(QMainWindow):
     
         # Týdenní přírůstky
         lbl_inc = QLabel("📈 Týdenní přírůstky")
-        lbl_inc.setStyleSheet("font-weight: bold; color: #14919b;")
         grid.addWidget(lbl_inc, 0, 2)
     
         inc_widget = QWidget()
@@ -4831,16 +4788,6 @@ class FitnessTrackerApp(QMainWindow):
     
         # ==================== SPRÁVA DAT (Export/Import) – návrat ====================
         data_group = QGroupBox("💾 Správa dat")
-        data_group.setStyleSheet("""
-            QGroupBox {
-                font-size: 16px;
-                font-weight: bold;
-                background-color: #1e1e1e;
-                border: 2px solid #0d7377;
-                border-radius: 5px;
-                padding-top: 18px;
-            }
-        """)
         data_layout = QHBoxLayout()
         btn_export = QPushButton("📤 Export dat")
         btn_export.setObjectName("btn_export_data")
@@ -5314,22 +5261,6 @@ class FitnessTrackerApp(QMainWindow):
     def create_performance_chart(self, exercisetype, parent_layout):
         """Vytvoří sekci s grafem výkonu a přepínači zobrazení"""
         chart_group = QGroupBox(f"📊 Graf výkonu - {exercisetype.capitalize()}")
-        chart_group.setStyleSheet("""
-            QGroupBox {
-                font-size: 16px;
-                font-weight: bold;
-                background-color: #1e1e1e;
-                border: 2px solid #0d7377;
-                border-radius: 5px;
-                padding-top: 18px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                subcontrol-position: top center;
-                padding: 3px 8px;
-                color: #14919b;
-            }
-        """)
         chart_layout = QVBoxLayout()
     
         # Přepínače zobrazení
@@ -5340,7 +5271,6 @@ class FitnessTrackerApp(QMainWindow):
         weekly_btn.setCheckable(True)
         weekly_btn.setChecked(True)
         weekly_btn.setFixedWidth(100)
-        weekly_btn.setStyleSheet("padding: 8px; font-size: 12px;")
         weekly_btn.clicked.connect(lambda: self.update_performance_chart(exercisetype, "weekly"))
         mode_buttons_layout.addWidget(weekly_btn)
     
@@ -5348,21 +5278,18 @@ class FitnessTrackerApp(QMainWindow):
         daily_btn = QPushButton("🕒 Den")
         daily_btn.setCheckable(True)
         daily_btn.setFixedWidth(100)
-        daily_btn.setStyleSheet("padding: 8px; font-size: 12px;")
         daily_btn.clicked.connect(lambda: self.update_performance_chart(exercisetype, "daily"))
         mode_buttons_layout.insertWidget(mode_buttons_layout.indexOf(weekly_btn), daily_btn)
     
         monthly_btn = QPushButton("📆 Měsíc")
         monthly_btn.setCheckable(True)
         monthly_btn.setFixedWidth(100)
-        monthly_btn.setStyleSheet("padding: 8px; font-size: 12px;")
         monthly_btn.clicked.connect(lambda: self.update_performance_chart(exercisetype, "monthly"))
         mode_buttons_layout.addWidget(monthly_btn)
     
         yearly_btn = QPushButton("📊 Rok")
         yearly_btn.setCheckable(True)
         yearly_btn.setFixedWidth(100)
-        yearly_btn.setStyleSheet("padding: 8px; font-size: 12px;")
         yearly_btn.clicked.connect(lambda: self.update_performance_chart(exercisetype, "yearly"))
         mode_buttons_layout.addWidget(yearly_btn)
     
@@ -6054,21 +5981,6 @@ class FitnessTrackerApp(QMainWindow):
         # Bulk akce: smazat vybrané
         bulk_actions_layout = QHBoxLayout()
         delete_selected_btn = QPushButton("🗑️ Smazat vybrané")
-        delete_selected_btn.setStyleSheet(
-            """
-            QPushButton {
-                background-color: #dc3545;
-                border: none;
-                padding: 8px 12px;
-                border-radius: 6px;
-                font-size: 12px;
-                color: white;
-            }
-            QPushButton:hover {
-                background-color: #c82333;
-            }
-            """
-        )
         delete_selected_btn.clicked.connect(lambda: self.delete_selected_records(exercise_type))
         bulk_actions_layout.addWidget(delete_selected_btn)
         bulk_actions_layout.addStretch()
@@ -6079,26 +5991,6 @@ class FitnessTrackerApp(QMainWindow):
         tree.setObjectName(f"tree_{exercise_type}")
         tree.setColumnCount(4)  # 4. sloupec (Poznámka) hned skryjeme – minimální zásah pro zbytek kódu
         tree.setHeaderLabels(["📅 Den", "⏱️ Čas", "💪 Hodnota", "Poznámka"])
-        tree.setStyleSheet(
-            """
-            QTreeWidget {
-                background-color: #1e1e1e;
-                color: #e0e0e0;
-                border: 1px solid #0d7377;
-                border-radius: 5px;
-            }
-            QTreeWidget::item:selected {
-                background-color: #0d7377;
-                color: #ffffff;
-            }
-            QHeaderView::section {
-                background-color: #2d2d2d;
-                color: #e0e0e0;
-                padding: 4px;
-                border: 1px solid #0d7377;
-            }
-            """
-        )
         tree.setSelectionMode(QTreeWidget.ExtendedSelection)
     
         # DŮLEŽITÉ: nespoléhat na automatické sortItems; pořadí řeší update_exercise_tab
@@ -6268,16 +6160,6 @@ class FitnessTrackerApp(QMainWindow):
         from PySide6.QtGui import QAction
         
         menu = QMenu()
-        menu.setStyleSheet("""
-            QMenu {
-                background-color: #2d2d2d;
-                color: #e0e0e0;
-                border: 1px solid #3d3d3d;
-            }
-            QMenu::item:selected {
-                background-color: #0d7377;
-            }
-        """)
         
         # Zjisti, zda je to parent (den) nebo child (záznam)
         is_parent = item.parent() is None
@@ -7696,12 +7578,22 @@ class FitnessTrackerApp(QMainWindow):
                 import traceback
                 traceback.print_exc()
 
+from PySide6.QtGui import QIcon
+
 def main():
     app = QApplication(sys.argv)
-    app.setStyleSheet(DARK_THEME)
+
+    # Nastavení aplikační ikony (platí pro všechna okna)
+    app_icon = QIcon()
+    app_icon.addFile("resources/icons/app_icon_512.png", QSize(512, 512))
+    app.setWindowIcon(app_icon)
+
     window = FitnessTrackerApp()
+    # Pokud chceš, můžeš ještě explicitně:
+    # window.setWindowIcon(app_icon)
     window.show()
     sys.exit(app.exec())
+
 
 
 if __name__ == "__main__":
