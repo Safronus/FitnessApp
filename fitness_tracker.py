@@ -7589,8 +7589,6 @@ def main():
     app.setWindowIcon(app_icon)
 
     window = FitnessTrackerApp()
-    # Pokud chceš, můžeš ještě explicitně:
-    # window.setWindowIcon(app_icon)
     window.show()
     sys.exit(app.exec())
 
