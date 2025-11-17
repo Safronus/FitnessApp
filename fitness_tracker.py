@@ -5073,14 +5073,14 @@ class FitnessTrackerApp(QMainWindow):
         self.update_performance_chart(exercisetype, "weekly")
 
     def on_calendar_day_clicked(self, exercise_type: str, date_str: str) -> None:
-        """Klik na den v kalendáři: uloží vybraný den pro dané cvičení, synchronizuje rok a přepne graf do 'daily'."""
+        """Klik na den v kalendáři: uloží vybraný den, sesynchronizuje rok a zobrazí denní graf."""
         try:
-            # Lazy init úložiště vybraných dnů
+            # Pamatuj si vybraný den pro dané cvičení
             if not hasattr(self, "chart_selected_days"):
                 self.chart_selected_days = {}
             self.chart_selected_days[exercise_type] = date_str
     
-            # Přepnout roční combobox (pokud existuje) na rok zvoleného dne
+            # Přepni combobox roku (pokud existuje) na rok vybraného dne
             try:
                 sel_year = int(date_str[:4])
                 combo = None
@@ -5093,10 +5093,10 @@ class FitnessTrackerApp(QMainWindow):
             except Exception:
                 pass
     
-            # Zobrazit denní graf pro vybraný den
+            # Přepni graf do režimu 'daily'
             self.update_performance_chart(exercise_type, "daily")
     
-            # Volitelně znovu obnovit kalendář (např. zvýraznění)
+            # (volitelné) obnova kalendáře – pokud máte zvýraznění posledně kliknutého dne
             try:
                 if hasattr(self, "refresh_exercise_calendar"):
                     self.refresh_exercise_calendar(exercise_type)
@@ -5752,6 +5752,13 @@ class FitnessTrackerApp(QMainWindow):
         scroll_content = QWidget()
         calendar_layout = QVBoxLayout(scroll_content)
         calendar_layout.setContentsMargins(0, 0, 0, 0)
+    
+        # >>> NOVĚ: šířka i výška obsahu se má roztahovat s viewportem
+        try:
+            from PySide6.QtWidgets import QSizePolicy
+            scroll_content.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        except Exception:
+            pass
         
         # Kalendář widget
         calendar_widget = QWidget()
@@ -5759,6 +5766,14 @@ class FitnessTrackerApp(QMainWindow):
         calendar_inner_layout = QVBoxLayout(calendar_widget)
         calendar_inner_layout.setContentsMargins(0, 0, 0, 0)
         self.exercise_calendar_widgets[exercise_type] = calendar_inner_layout
+    
+        # >>> NOVĚ: aby v horizontu držel šířku viewportu
+        try:
+            from PySide6.QtWidgets import QSizePolicy
+            calendar_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        except Exception:
+            pass
+    
         calendar_layout.addWidget(calendar_widget)
         
         # Statistiky pod kalendářem
@@ -5770,7 +5785,7 @@ class FitnessTrackerApp(QMainWindow):
         # ==================== GRAF POD KALENDÁŘEM ====================
         self.create_performance_chart(exercise_type, calendar_layout)
     
-        # >>> NOVĚ: nechte graf vyplnit zbylý prostor
+        # >>> NOVĚ: graf (FigureCanvas) – vyplnit šířku i výšku
         try:
             from PySide6.QtWidgets import QSizePolicy
             canvas = None
@@ -5781,17 +5796,18 @@ class FitnessTrackerApp(QMainWindow):
                 sp.setVerticalPolicy(QSizePolicy.Expanding)
                 sp.setHorizontalPolicy(QSizePolicy.Expanding)
                 canvas.setSizePolicy(sp)
+                canvas.setMinimumWidth(0)
                 idx = calendar_layout.indexOf(canvas)
                 if idx != -1:
                     calendar_layout.setStretch(idx, 1)
         except Exception as e:
             print(f"chart expand policy error ({exercise_type}): {e}")
     
-        # POZOR: dřívější addStretch vytvářel "prázdné" místo pod grafem – proto jej odstraňujeme.
+        # Dřívější addStretch vytvářel prázdné místo – odstraňujeme
         # calendar_layout.addStretch()
         
         scroll.setWidget(scroll_content)
-        right_layout.addWidget(scroll)
+        right_layout.addWidget(scroll, 1)  # <<< NOVĚ: scroll vyplní zbylý prostor panelu
         
         main_layout.addWidget(right_panel, 1)
         
@@ -6899,7 +6915,7 @@ class FitnessTrackerApp(QMainWindow):
             day_label.setStyleSheet(f"background-color: {color}; font-weight: bold; {border_style} font-size: 16px;")
             day_label.setToolTip(self._calendar_tooltip_with_contrast(tooltip_text, color))
     
-            # >>> Minimální doplnění: udělat den kliknutelný (bez vlivu na renderování)
+            # <<< JEDINÉ DOPLNĚNÍ: klik na den -> přepni graf na 'Den' pro tento den
             try:
                 day_label.setCursor(Qt.PointingHandCursor)
                 day_label.mousePressEvent = (
