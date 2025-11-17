@@ -3440,6 +3440,10 @@ class FitnessTrackerApp(QMainWindow):
         self.bmi_plan_start_date_edit = QDateEdit()
         self.bmi_plan_start_date_edit.setCalendarPopup(True)
         self.bmi_plan_start_date_edit.setDate(QDate.currentDate())
+        
+        # >>> NOVĚ: automaticky přepočítat plán při změně data
+        self.bmi_plan_start_date_edit.dateChanged.connect(self.recompute_bmi_plan)
+        
         params_row.addWidget(self.bmi_plan_start_date_edit)
         
         params_row.addWidget(QLabel("Cílové BMI:"))
@@ -3915,17 +3919,110 @@ class FitnessTrackerApp(QMainWindow):
             spine.set_color("#e0e0e0")
 
         if weekly_compliance:
-            xs = [ws for (ws, _) in weekly_compliance]
-            ys = [max(0.0, y) for (_, y) in weekly_compliance]
-
-            ax.plot(xs, ys, marker="o", linestyle="-")
+            xs = [ws for (ws, _) in weekly_compliance]               # seznam datetime.date/datetime
+            ys = [max(0.0, y) for (_, y) in weekly_compliance]       # 0..200 %
+        
+            # --- stejné vyhlazení jako denní křivka: monotónní kubická Hermitova interpolace (Fritsch–Carlson)
+            def _smooth_monotone_curve_x(xs_dt, ys_vals, points_per_segment: int = 30):
+                import numpy as _np
+                # převod dat na numerické hodnoty osy X
+                xs_num_raw = _np.array([mdates.date2num(x) for x in xs_dt], dtype=float)
+                ys_raw = _np.array(ys_vals, dtype=float)
+        
+                # deduplikace shodných X – ponecháme poslední Y
+                xx = [xs_num_raw[0]]
+                yy = [ys_raw[0]]
+                for i in range(1, len(xs_num_raw)):
+                    if xs_num_raw[i] == xx[-1]:
+                        yy[-1] = ys_raw[i]
+                    else:
+                        xx.append(xs_num_raw[i])
+                        yy.append(ys_raw[i])
+        
+                x = _np.asarray(xx, dtype=float)
+                y = _np.asarray(yy, dtype=float)
+                n = len(x)
+                if n < 3:
+                    return [mdates.num2date(v) for v in x], y
+        
+                h = _np.diff(x)
+                d = _np.diff(y) / h
+        
+                m = _np.empty(n, dtype=float)
+                m[0] = d[0]
+                m[-1] = d[-1]
+                for i in range(1, n - 1):
+                    if d[i - 1] == 0.0 or d[i] == 0.0 or (d[i - 1] > 0 and d[i] < 0) or (d[i - 1] < 0 and d[i] > 0):
+                        m[i] = 0.0
+                    else:
+                        w1 = 2.0 * h[i] + h[i - 1]
+                        w2 = h[i] + 2.0 * h[i - 1]
+                        m[i] = (w1 + w2) / (w1 / d[i - 1] + w2 / d[i])  # vážený harmonický průměr
+        
+                # Fritsch–Carlson limiter
+                for i in range(n - 1):
+                    if d[i] == 0.0:
+                        m[i] = 0.0
+                        m[i + 1] = 0.0
+                    else:
+                        a = m[i] / d[i]
+                        b = m[i + 1] / d[i]
+                        if a < 0.0:
+                            m[i] = 0.0
+                            a = 0.0
+                        if b < 0.0:
+                            m[i + 1] = 0.0
+                            b = 0.0
+                        s = a * a + b * b
+                        if s > 9.0:
+                            t = 3.0 / _np.sqrt(s)
+                            m[i] = t * a * d[i]
+                            m[i + 1] = t * b * d[i]
+        
+                xs_out = []
+                ys_out = []
+                for i in range(n - 1):
+                    xi, xi1 = x[i], x[i + 1]
+                    hi = xi1 - xi
+                    yi, yi1 = y[i], y[i + 1]
+                    mi, mi1 = m[i], m[i + 1]
+        
+                    ts = _np.linspace(0.0, 1.0, points_per_segment, endpoint=(i == n - 2))
+                    for t in ts:
+                        t2 = t * t
+                        t3 = t2 * t
+                        h00 = 2 * t3 - 3 * t2 + 1
+                        h10 = t3 - 2 * t2 + t
+                        h01 = -2 * t3 + 3 * t2
+                        h11 = t3 - t2
+                        xs_out.append(xi + t * hi)
+                        ys_out.append(h00 * yi + h10 * hi * mi + h01 * yi1 + h11 * hi * mi1)
+        
+                # zpět na datetime pro matplotlib
+                return [mdates.num2date(v) for v in xs_out], _np.array(ys_out, dtype=float)
+        
+            if len(xs) >= 2:
+                xs_smooth, ys_smooth = _smooth_monotone_curve_x(xs, ys, points_per_segment=30)
+                ax.plot(xs_smooth, ys_smooth, linewidth=2.0, color="#0d7377")
+            else:
+                ax.plot(xs, ys, linewidth=2.0, color="#0d7377")
+        
+            # tečky v původních uzlech – stejně jako u denní křivky
+            ax.scatter(xs, ys, s=30, color="#0d7377", zorder=5)
+        
             ax.set_xlabel("Týden (od)")
             ax.set_ylabel("Plnění plánu [% – kumulativně]")
             ax.set_title("Plnění plánu po týdnech (kumulativně)")
-
-            ax.xaxis.set_major_formatter(mdates.DateFormatter("%d.%m."))
+        
+            # >>> podrobnější osa X: týdenní tick každých 7 dní + detailnější formát
+            ax.xaxis.set_major_locator(mdates.DayLocator(interval=7))
+            ax.xaxis.set_major_formatter(mdates.DateFormatter("%d.%m.%Y"))
+            ax.xaxis.set_minor_locator(mdates.DayLocator(interval=1))
             fig.autofmt_xdate(rotation=30)
-
+        
+            # jemná síť na hlavní X ticku (ladí s dark theme)
+            ax.grid(which="major", axis="x", linestyle="--", alpha=0.25)
+        
             ymax = max(ys + [100.0])
             ax.set_ylim(0, max(120.0, ymax * 1.1))
         else:
