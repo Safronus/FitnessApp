@@ -3434,6 +3434,14 @@ class FitnessTrackerApp(QMainWindow):
         plan_layout = QVBoxLayout()
 
         params_row = QHBoxLayout()
+        
+        # Začátek plánu – MUSÍ být před „Cílové BMI“
+        params_row.addWidget(QLabel("Začátek plánu:"))
+        self.bmi_plan_start_date_edit = QDateEdit()
+        self.bmi_plan_start_date_edit.setCalendarPopup(True)
+        self.bmi_plan_start_date_edit.setDate(QDate.currentDate())
+        params_row.addWidget(self.bmi_plan_start_date_edit)
+        
         params_row.addWidget(QLabel("Cílové BMI:"))
         self.bmi_plan_target_spin = QDoubleSpinBox()
         self.bmi_plan_target_spin.setRange(18.5, 25.0)
@@ -3812,7 +3820,13 @@ class FitnessTrackerApp(QMainWindow):
 
         today = datetime.now().date()
         # pondělí aktuálního týdne
-        monday0 = today - timedelta(days=today.weekday())
+        # Počátek plánu = zvolené datum v sekci „Plán k dosažení cílového BMI“
+        try:
+            ds = self.bmi_plan_start_date_edit.date().toString("yyyy-MM-dd")
+            week0 = datetime.strptime(ds, "%Y-%m-%d").date()
+        except Exception:
+            week0 = datetime.now().date()
+        monday0 = week0  # první 7denní interval začíná přesně vybraným dnem
 
         # kumulativní součty plánu a skutečnosti pro každý cvik
         cumulative_plan: dict[str, float] = {ex_id: 0.0 for ex_id in active_exercises}
@@ -5282,19 +5296,24 @@ class FitnessTrackerApp(QMainWindow):
                 times.append(dt)
                 cumul.append(running)
     
+            # === NOVÉ: kotva na začátek dne (00:00 -> 0) a plochý úsek do prvního záznamu ===
+            if times:
+                start_of_day = datetime(day_date.year, day_date.month, day_date.day, 0, 0, 0)
+                first_t = times[0]
+                if first_t > start_of_day:
+                    # vlož 00:00 s 0 a ještě bod těsně před první měřením, aby úsek byl vodorovný
+                    t_before = max(start_of_day, first_t - timedelta(seconds=1))
+                    times = [start_of_day, t_before] + times
+                    cumul = [0.0, 0.0] + cumul
+    
             # Denní cíl
             daily_goal = self.calculate_goal(exercise_type, day_str)
             if not isinstance(daily_goal, (int, float)):
                 daily_goal = float(daily_goal) if daily_goal else 0.0
     
-            # --- NOVÉ: monotónní kubická Hermitova interpolace (Fritsch-Carlson) ---
+            # --- Monotónní kubická Hermitova interpolace (Fritsch–Carlson) ---
             def smooth_monotone_curve_x(xs_num: list[float], ys_vals: list[float], points_per_segment: int = 30):
-                """
-                Vygeneruje hladkou křivku Y(X), která je monotónní v X
-                (bez „smyček“). Implementace Fritsch-Carlsonova tvarového
-                omezovače nad kubickou Hermitovou interpolací.
-                Žádné externí závislosti mimo NumPy.
-                """
+                """Hladká křivka Y(X) bez smyček; shape-preserving, monotónní v X."""
                 import numpy as _np
     
                 n = len(xs_num)
@@ -5304,12 +5323,12 @@ class FitnessTrackerApp(QMainWindow):
                 x = _np.asarray(xs_num, dtype=float)
                 y = _np.asarray(ys_vals, dtype=float)
     
-                # Deduplikace shodných X (může vzniknout více záznamů se stejným časem)
+                # Deduplikace shodných X (ponechá poslední Y)
                 xx = [x[0]]
                 yy = [y[0]]
                 for i in range(1, len(x)):
                     if x[i] == xx[-1]:
-                        yy[-1] = y[i]  # poslední hodnota (kumulativně roste)
+                        yy[-1] = y[i]
                     else:
                         xx.append(x[i])
                         yy.append(y[i])
@@ -5319,13 +5338,12 @@ class FitnessTrackerApp(QMainWindow):
                 if n < 3:
                     return x, y
     
-                h = _np.diff(x)                     # šířky intervalů
-                d = _np.diff(y) / h                 # směrnice na intervalech
+                h = _np.diff(x)
+                d = _np.diff(y) / h
     
-                m = _np.empty(n, dtype=float)       # derivace v uzlech
+                m = _np.empty(n, dtype=float)
                 m[0] = d[0]
                 m[-1] = d[-1]
-    
                 for i in range(1, n - 1):
                     if d[i - 1] == 0.0 or d[i] == 0.0 or (d[i - 1] > 0 and d[i] < 0) or (d[i - 1] < 0 and d[i] > 0):
                         m[i] = 0.0
@@ -5334,7 +5352,6 @@ class FitnessTrackerApp(QMainWindow):
                         w2 = h[i] + 2.0 * h[i - 1]
                         m[i] = (w1 + w2) / (w1 / d[i - 1] + w2 / d[i])  # vážený harmonický průměr
     
-                # Fritsch-Carlson limiter – zamezí překmitům (a tedy dvojím Y pro jedno X)
                 for i in range(n - 1):
                     if d[i] == 0.0:
                         m[i] = 0.0
@@ -5342,7 +5359,6 @@ class FitnessTrackerApp(QMainWindow):
                     else:
                         a = m[i] / d[i]
                         b = m[i + 1] / d[i]
-                        # záporné sklony by porušily monotónnost
                         if a < 0.0:
                             m[i] = 0.0
                             a = 0.0
@@ -5355,7 +5371,6 @@ class FitnessTrackerApp(QMainWindow):
                             m[i] = t * a * d[i]
                             m[i + 1] = t * b * d[i]
     
-                # Rekonstrukce křivky – kubická Hermitova interpolace v každém intervalu
                 xs_out = []
                 ys_out = []
                 for i in range(n - 1):
@@ -5363,8 +5378,6 @@ class FitnessTrackerApp(QMainWindow):
                     hi = xi1 - xi
                     yi, yi1 = y[i], y[i + 1]
                     mi, mi1 = m[i], m[i + 1]
-    
-                    # vzorkování; endpoint přidáme jen v posledním intervalu
                     ts = _np.linspace(0.0, 1.0, points_per_segment, endpoint=(i == n - 2))
                     for t in ts:
                         t2 = t * t
@@ -5390,9 +5403,7 @@ class FitnessTrackerApp(QMainWindow):
                     color="#a0a0a0",
                 )
             else:
-                # Monotónní vyhlazení nad (mdates date2num, cumul)
                 xs_raw = [mdates.date2num(dt) for dt in times]
-    
                 xs_smooth, cumul_smooth = smooth_monotone_curve_x(xs_raw, cumul, points_per_segment=30)
                 times_smooth = [mdates.num2date(x) for x in xs_smooth]
     
@@ -5465,7 +5476,8 @@ class FitnessTrackerApp(QMainWindow):
             return
     
         # Akumulace denních hodnot pro daný rok + cvičení
-        daily_values: dict[datetime.date, float] = {}
+        from datetime import date as _date  # typová nápověda
+        daily_values: dict[_date, float] = {}
         for date_str, perday in workouts.items():
             if not isinstance(date_str, str) or len(date_str) < 10:
                 continue
