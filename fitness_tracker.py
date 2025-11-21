@@ -2476,15 +2476,6 @@ class FitnessTrackerApp(QMainWindow):
         date = self.bmi_date_edit.date()
         time = self.bmi_time_edit.time()
 
-        # Pouze večerní měření (po 18:00)
-        if time.hour() < 18:
-            self.show_message(
-                "Čas měření",
-                "Měření váhy je povoleno pouze pro večer (po 18:00).",
-                QMessageBox.Warning,
-            )
-            return
-
         from datetime import datetime
 
         dt = datetime(date.year(), date.month(), date.day(), time.hour(), time.minute(), 0)
@@ -2534,7 +2525,7 @@ class FitnessTrackerApp(QMainWindow):
 
         # Setřídit podle timestampu
         try:
-            sorted_history = sorted(history, key=lambda e: e.get("timestamp", ""))
+            sorted_history = sorted(history, key=lambda e: e.get("timestamp", ""), reverse=True)
         except Exception:
             sorted_history = history
 
@@ -3086,7 +3077,26 @@ class FitnessTrackerApp(QMainWindow):
                 labelcolor="#e0e0e0",
             )
             legend.get_frame().set_alpha(0.9)
+        weight_min, weight_max = 60.0, 90.0
+        bmi_min, bmi_max = 20.0, 35.0
 
+        if mode in ("Váha", "Obojí"):
+            try:
+                ax_weight.set_ylim(weight_min, weight_max)
+            except Exception:
+                pass
+
+        # Režim "BMI" a "Obojí" – osa BMI 20–35
+        try:
+            ax_bmi  # jen ověření, že existuje
+        except NameError:
+            ax_bmi = None
+
+        if mode in ("BMI", "Obojí") and ax_bmi is not None:
+            try:
+                ax_bmi.set_ylim(bmi_min, bmi_max)
+            except Exception:
+                pass
         self.bmi_time_canvas.draw()
 
     def update_bmi_zones_chart(self):
@@ -6535,28 +6545,27 @@ class FitnessTrackerApp(QMainWindow):
             # V nouzi ponech světlý text (dark theme)
             return f"<div style='color:#f0f0f0; white-space:pre-line'>{tooltip_text}</div>"
 
-    def update_exercise_tab(self, exercisetype):
+    def update_exercise_tab(self, exercise_type):
         """
         Aktualizuje statistiky a strom záznamů daného cvičení.
     
-        Styl top-level dne: emoji + barevný % sloupec.
-        Child záznamy: kumulativní podíl vůči dennímu cíli, řazení nejnovější den první
-        a uvnitř dne nejnovější čas první.
+        - Dny: nejnovější den první (YYYY-MM-DD, reverse=True).
+        - Záznamy v rámci dne: nejnovější čas první, ale kumulativní procenta
+          jsou počítána v chronologickém pořádku, takže nahoře vidíš nejvyšší %.
         """
         try:
-            if exercisetype not in self.exercise_year_selectors:
+            if exercise_type not in self.exercise_year_selectors:
                 return
-    
-            selector = self.exercise_year_selectors[exercisetype]
+            selector = self.exercise_year_selectors[exercise_type]
             if not selector or not selector.currentText():
                 return
     
-            selectedyear = int(selector.currentText())
+            selected_year = int(selector.currentText())
     
             # Přehledové boxy / progress bar apod.
-            self.update_detailed_overview(exercisetype, selectedyear)
+            self.update_detailed_overview(exercise_type, selected_year)
     
-            tree = self.findChild(QTreeWidget, f"tree_{exercisetype}")
+            tree = self.findChild(QTreeWidget, f"tree_{exercise_type}")
             if not tree:
                 return
     
@@ -6567,23 +6576,23 @@ class FitnessTrackerApp(QMainWindow):
     
             for it in tree.selectedItems():
                 payload = it.data(3, Qt.UserRole)
-                if isinstance(payload, dict) and 'date' in payload and 'record_id' in payload:
-                    date_str = payload['date']
-                    rec_id = payload['record_id']
+                if isinstance(payload, dict) and "date" in payload and "record_id" in payload:
+                    date_str = payload["date"]
+                    rec_id = payload["record_id"]
                     preserved.add((date_str, rec_id))
                     preserved_children_by_day.setdefault(date_str, set()).add(rec_id)
                 else:
                     # Vybraný den (top-level) → ulož datum i děti
                     txt = it.text(0) if it is not None else ""
-                    date_str = txt.split(' ', 1)[1] if ' ' in txt else txt
+                    date_str = txt.split(" ", 1)[1] if " " in txt else txt
                     if date_str:
                         preserved_days.add(date_str)
                     for i in range(it.childCount()):
                         ch = it.child(i)
                         p2 = ch.data(3, Qt.UserRole)
-                        if isinstance(p2, dict) and 'date' in p2 and 'record_id' in p2:
-                            preserved.add((p2['date'], p2['record_id']))
-                            preserved_children_by_day.setdefault(p2['date'], set()).add(p2['record_id'])
+                        if isinstance(p2, dict) and "date" in p2 and "record_id" in p2:
+                            preserved.add((p2["date"], p2["record_id"]))
+                            preserved_children_by_day.setdefault(p2["date"], set()).add(p2["record_id"])
     
             # --- UCHOVÁNÍ ROZBALENÍ DNŮ ---
             expanded_dates = set()
@@ -6591,7 +6600,7 @@ class FitnessTrackerApp(QMainWindow):
                 item = tree.topLevelItem(i)
                 if item and item.isExpanded():
                     txt = item.text(0)
-                    date_str = txt.split(' ', 1)[1] if ' ' in txt else txt
+                    date_str = txt.split(" ", 1)[1] if " " in txt else txt
                     expanded_dates.add(date_str)
     
             first_population = (tree.property("_ever_populated") is not True)
@@ -6607,18 +6616,18 @@ class FitnessTrackerApp(QMainWindow):
     
             # --- Data po dnech (jen zvolený rok) ---
             days_data: dict[str, list[dict]] = {}
-            for ds, perday in self.data.get('workouts', {}).items():
-                year_here = int(ds.split('-')[0]) if '-' in ds else None
-                if year_here != selectedyear:
+            for ds, perday in self.data.get("workouts", {}).items():
+                year_here = int(ds.split("-")[0]) if "-" in ds else None
+                if year_here != selected_year:
                     continue
-                if exercisetype in perday:
-                    recs = perday[exercisetype]
+                if exercise_type in perday:
+                    recs = perday[exercise_type]
                     if isinstance(recs, list):
                         days_data.setdefault(ds, []).extend(recs)
                     elif isinstance(recs, dict):
                         days_data.setdefault(ds, []).append(recs)
     
-            # Řazení dnů – nejnovější datum (YYYY-MM-DD) nahoře
+            # Dny: nejnovější datum první
             sorted_dates = sorted(days_data.keys(), reverse=True)
     
             # Připrav fonty pro child řádky
@@ -6636,7 +6645,7 @@ class FitnessTrackerApp(QMainWindow):
                 child_time_font = None
     
             # Pomocná funkce pro barvu kumulativního % v 1. sloupci (dark-friendly)
-            def _pct_color(p: int) -> "QColor":
+            def _pct_color(p: int) -> QColor:
                 # <50 % šedá, 50–99 % zlatá, 100–149 % zelená, 150 %+ tyrkys
                 if p < 50:
                     return QColor(176, 176, 176)
@@ -6650,14 +6659,14 @@ class FitnessTrackerApp(QMainWindow):
                 records = days_data[date_str]
     
                 # Souhrn dne
-                total_day_value = sum(r.get('value', 0) for r in records)
+                total_day_value = sum(r.get("value", 0) for r in records)
                 record_count = len(records)
-                goal = self.calculate_goal(exercisetype, date_str)
+                goal = self.calculate_goal(exercise_type, date_str)
                 if not isinstance(goal, int):
                     goal = int(goal) if goal else 0
                 percent = (total_day_value / goal * 100) if goal > 0 else 0
     
-                # Top-level (den)
+                # Top-level (den) – emoji + barevný % sloupec
                 if percent >= 100:
                     status_icon = "✅"
                     color = QColor(0, 100, 0)
@@ -6683,22 +6692,31 @@ class FitnessTrackerApp(QMainWindow):
                 # Respektuj stav rozbalení / výchozí sbalení
                 day_item.setExpanded(date_str in expanded_dates if not first_population else False)
     
-                # --- Child záznamy: kumulativní podíl a řazení podle času (nejnovější první) ---
-                running_total = 0
+                # --- Child záznamy: kumulativní podíl + správné pořadí procent ---
     
+                # 1) Klíč pro čas (HH:MM:SS z timestampu)
                 def _time_key(rec: dict) -> str:
-                    ts = rec.get('timestamp', '')
-                    if ' ' in ts:
-                        return ts.split(' ', 1)[1]  # HH:MM:SS
+                    ts = rec.get("timestamp", "")
+                    if " " in ts:
+                        return ts.split(" ", 1)[1]
                     return ts
     
-                for idx, record in enumerate(sorted(records, key=_time_key, reverse=True)):
-                    value = record.get('value', 0)
-                    timestamp = record.get('timestamp', 'N/A')
-                    time_only = timestamp.split(' ')[1] if ' ' in timestamp else timestamp
-                    record_id = record.get('id', '')
+                # 2) Nejprve spočti kumulativní hodnoty VZESTUPNĚ (od nejstaršího času)
+                records_sorted_asc = sorted(records, key=_time_key)
+                cumulative_pairs: list[tuple[dict, int]] = []
+                running_total = 0
+                for rec in records_sorted_asc:
+                    running_total += rec.get("value", 0)
+                    cumulative_pairs.append((rec, running_total))
     
-                    running_total += value
+                # 3) Pak vykresli záznamy v opačném pořadí (nejnovější první),
+                #    ale použij už spočítaný running_total z kroku 2.
+                for idx, (record, running_total) in enumerate(reversed(cumulative_pairs)):
+                    value = record.get("value", 0)
+                    timestamp = record.get("timestamp", "N/A")
+                    time_only = timestamp.split(" ")[1] if " " in timestamp else timestamp
+                    record_id = record.get("id", "")
+    
                     if goal > 0:
                         rec_cum_pct = int(round((running_total / goal) * 100))
                         pct_text = f"{rec_cum_pct} %"
@@ -6714,34 +6732,39 @@ class FitnessTrackerApp(QMainWindow):
                     rec_item.setText(2, time_only)
                     rec_item.setText(3, record_id)
     
+                    # Zarovnání
                     rec_item.setTextAlignment(0, Qt.AlignCenter)
                     rec_item.setTextAlignment(1, Qt.AlignCenter)
                     rec_item.setTextAlignment(2, Qt.AlignCenter)
     
+                    # Barvy textu (dark-friendly)
                     if rec_cum_pct is None:
-                        rec_item.setForeground(0, QColor(200, 200, 200))
+                        rec_item.setForeground(0, QColor(200, 200, 200))  # goal = 0
                     else:
                         rec_item.setForeground(0, _pct_color(rec_cum_pct))
                     rec_item.setForeground(1, QColor(240, 240, 240))
                     rec_item.setForeground(2, QColor(180, 180, 180))
     
+                    # Fonty
                     if child_val_font:
                         rec_item.setFont(1, child_val_font)
                     if child_time_font:
                         rec_item.setFont(2, child_time_font)
     
+                    # Lehký „striping“ child řádků (jen uvnitř dne)
                     if idx % 2 == 1:
                         shade = QColor(255, 255, 255, 14)
                         rec_item.setBackground(0, shade)
                         rec_item.setBackground(1, shade)
                         rec_item.setBackground(2, shade)
     
+                    # Výška řádku
                     try:
-                        from PySide6.QtCore import QSize
                         rec_item.setData(0, Qt.SizeHintRole, QSize(0, 22))
                     except Exception:
                         pass
     
+                    # Tooltip s detaily – používá running_total z chronologického výpočtu
                     if rec_cum_pct is None:
                         tt_pct = "n/a"
                     else:
@@ -6756,19 +6779,23 @@ class FitnessTrackerApp(QMainWindow):
                     rec_item.setToolTip(1, tt)
                     rec_item.setToolTip(2, tt)
     
+                    # payload pro mazání / reselect
                     rec_item.setData(3, Qt.UserRole, {
-                        'date': date_str,
-                        'record_id': record_id,
-                        'exercise': exercisetype
+                        "date": date_str,
+                        "record_id": record_id,
+                        "exercise": exercise_type,
                     })
     
+                    # Re-select po refreshi (pokud byl vybrán)
                     if (date_str, record_id) in preserved:
                         rec_item.setSelected(True)
     
+                # Viditelné označení dne (když byl vybrán den, nebo všechny jeho děti)
                 sel_children = preserved_children_by_day.get(date_str, set())
                 if date_str in preserved_days or (record_count > 0 and len(sel_children) == record_count):
                     day_item.setSelected(True)
     
+            # Výchozí chování po PRVNÍM naplnění: vše sbalené
             if first_population:
                 tree.collapseAll()
                 tree.setProperty("_ever_populated", True)
@@ -6776,7 +6803,7 @@ class FitnessTrackerApp(QMainWindow):
             tree.blockSignals(False)
     
         except Exception as e:
-            print(f"Chyba při update_exercise_tab pro {exercisetype}: {e}")
+            print(f"Chyba při update_exercise_tab pro {exercise_type}: {e}")
             import traceback
             traceback.print_exc()
 
