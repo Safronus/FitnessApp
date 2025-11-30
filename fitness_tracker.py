@@ -31,7 +31,7 @@ from matplotlib.collections import LineCollection
 import matplotlib.pyplot as plt
 
 TITLE = "Fitness Tracker"
-VERSION = "4.0.4"
+VERSION = "4.0.5"
 VERSION_DATE = "30.11.2025"
 
 # Dark Theme Stylesheet
@@ -3943,6 +3943,8 @@ class FitnessTrackerApp(QMainWindow):
 
         from datetime import datetime, timedelta
         import matplotlib.dates as mdates
+        # Potřebujeme pyplot pro nastavení rotace ticků, pokud není globálně dostupný, použijeme fig.autofmt_xdate
+        import matplotlib.pyplot as plt
 
         self.bmi_plan_weeks_tree.clear()
 
@@ -3988,10 +3990,13 @@ class FitnessTrackerApp(QMainWindow):
                     key = day.strftime("%Y-%m-%d")
                     day_data = workouts.get(key)
                     if day_data and exercise_id in day_data:
-                        records = day_data[exercise_id][exercise_id] if isinstance(day_data.get(exercise_id), dict) and exercise_id in day_data[exercise_id] else day_data[exercise_id] # Fix nested dict potential
-                        # Fallback na normalni cteni
-                        records = day_data[exercise_id]
-                        
+                        # Ošetření proti vnořeným dictům nebo přímým hodnotám
+                        raw_rec = day_data[exercise_id]
+                        records = raw_rec
+                        if isinstance(raw_rec, dict) and exercise_id in raw_rec:
+                             # Někdy se stávalo vnoření {cvik: {cvik: ...}} - fallback
+                             records = raw_rec[exercise_id]
+
                         if isinstance(records, list):
                             actual_week += sum(float(r.get("value", 0.0)) for r in records)
                         elif isinstance(records, dict):
@@ -4117,7 +4122,7 @@ class FitnessTrackerApp(QMainWindow):
                 xs_nums = mdates.date2num(xs_days)
                 ys_nums = _np.array(ys_days)
 
-                # Interpolace pro hladkou křivku (Fritsch-Carlson)
+                # Interpolace pro hladkou křivku
                 x_smooth = _np.linspace(xs_nums.min(), xs_nums.max(), len(xs_nums) * 5)
                 try:
                     interpolator = PchipInterpolator(xs_nums, ys_nums)
@@ -4126,13 +4131,29 @@ class FitnessTrackerApp(QMainWindow):
                 except Exception:
                      line, = ax.plot(xs_nums, ys_nums, color="#14919b", linewidth=2, alpha=0.8, label="Průběh plnění")
 
-                # Vykreslení bodů (pro hover detekci)
+                # Vykreslení bodů
                 sc = ax.scatter(xs_nums, ys_nums, color="#00e5ff", s=15, zorder=3)
 
-                # Formátování osy X
+                # === FORMÁTOVÁNÍ OSY X - Detailní týdny a dny ===
+                # Interval pro popisky týdnů (aby se nepřekrývaly u dlouhých horizontů)
+                week_interval = 1
+                if horizon_weeks > 20: week_interval = 2
+                if horizon_weeks > 40: week_interval = 4
+
+                # Hlavní tiky = začátky týdnů (Pondělí)
+                ax.xaxis.set_major_locator(mdates.WeekdayLocator(byweekday=mdates.MO, interval=week_interval))
                 ax.xaxis.set_major_formatter(mdates.DateFormatter('%d.%m.'))
-                ax.xaxis.set_major_locator(mdates.DayLocator(interval=max(1, len(xs_days) // 10)))
+
+                # Vedlejší tiky = dny (pro detail)
+                if horizon_weeks <= 26:
+                    ax.xaxis.set_minor_locator(mdates.DayLocator())
+
+                # Mřížka - vertikální linky jen pro začátky týdnů
+                ax.grid(True, which='major', axis='x', color='#3d3d3d', linestyle='--', alpha=0.5)
                 
+                # Rotace popisků pro lepší čitelnost
+                plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
+
                 # Anotace pro hover (detaily dne)
                 annot = ax.annotate("", xy=(0,0), xytext=(10,10),textcoords="offset points",
                                     bbox=dict(boxstyle="round", fc="#1e1e1e", ec="#14919b", alpha=0.9),
@@ -4142,11 +4163,13 @@ class FitnessTrackerApp(QMainWindow):
                 def update_annot(ind):
                     pos = sc.get_offsets()[ind["ind"][0]]
                     annot.xy = pos
-                    # Získat datum a hodnotu
                     date_num = pos[0]
                     val = pos[1]
                     date_val = mdates.num2date(date_num)
-                    text = f"{date_val.strftime('%d.%m.%Y')}\nPlnění: {val:.1f} %"
+                    # Zobrazit den v týdnu + datum
+                    cz_days = ["Po", "Út", "St", "Čt", "Pá", "So", "Ne"]
+                    day_name = cz_days[date_val.weekday()]
+                    text = f"{day_name} {date_val.strftime('%d.%m.%Y')}\nPlnění: {val:.1f} %"
                     annot.set_text(text)
                     annot.get_bbox_patch().set_alpha(0.9)
 
@@ -4170,11 +4193,12 @@ class FitnessTrackerApp(QMainWindow):
         ax.set_title("Denní průběh plnění plánu (v rámci týdnů)")
         ax.set_ylabel("Plnění týdenního cíle [%]")
         ax.set_ylim(bottom=0, top=max(110, max(ys_days) + 10) if 'ys_days' in locals() and ys_days else 120)
+        
+        # Legenda
         ax.legend(loc="upper left", fontsize=8, facecolor="#1e1e1e", edgecolor="#3d3d3d", labelcolor="#e0e0e0")
         
         fig.tight_layout()
         self.bmi_plan_canvas.draw()
-
 
     def refresh_add_tab_goals(self):
         """Aktualizuje přehled cílů při změně data"""
