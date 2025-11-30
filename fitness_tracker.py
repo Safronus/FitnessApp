@@ -31,7 +31,7 @@ from matplotlib.collections import LineCollection
 import matplotlib.pyplot as plt
 
 TITLE = "Fitness Tracker"
-VERSION = "4.0.6"
+VERSION = "4.0.7"
 VERSION_DATE = "30.11.2025"
 
 # Dark Theme Stylesheet
@@ -4196,23 +4196,33 @@ class FitnessTrackerApp(QMainWindow):
         fig.tight_layout()
         self.bmi_plan_canvas.draw()
 
-
     def refresh_add_tab_goals(self):
-        """Aktualizuje přehled cílů při změně data"""
+        """Aktualizuje přehled cílů (labels) v záložce Přidat výkon podle vybraného data a přepočítá BMI plán."""
+        if not hasattr(self, "add_goals_labels") or not hasattr(self, "add_date_edit"):
+            return
+
         selected_date_str = self.add_date_edit.date().toString("yyyy-MM-dd")
-        
-        # **OPRAVENO: Dynamicky získat aktivní cvičení**
-        for exercise_id in self.get_active_exercises():
+
+        # 1. Aktualizace cílů pro den (horní box)
+        active_exercises = self.get_active_exercises()
+        for exercise_id in active_exercises:
+            if exercise_id not in self.add_goals_labels:
+                continue
+
+            config = self.get_exercise_config(exercise_id)
             goal = self.calculate_goal(exercise_id, selected_date_str)
-            
+
             current_value = 0
-            if selected_date_str in self.data["workouts"] and exercise_id in self.data["workouts"][selected_date_str]:
+            if (
+                selected_date_str in self.data["workouts"]
+                and exercise_id in self.data["workouts"][selected_date_str]
+            ):
                 records = self.data["workouts"][selected_date_str][exercise_id]
                 if isinstance(records, list):
-                    current_value = sum(r["value"] for r in records)
+                    current_value = sum(r.get("value", 0) for r in records)
                 elif isinstance(records, dict):
                     current_value = records.get("value", 0)
-            
+
             if current_value >= goal:
                 status = f"✅ Splněno ({current_value}/{goal})"
                 color = "#32c766"
@@ -4222,11 +4232,14 @@ class FitnessTrackerApp(QMainWindow):
             else:
                 status = f"❌ Nesplněno (0/{goal})"
                 color = "#ff6b6b"
-            
-            if exercise_id in self.add_goals_labels:
-                config = self.get_exercise_config(exercise_id)
-                self.add_goals_labels[exercise_id].setText(f"{config['icon']} {config['name']}: {status}")
-                self.add_goals_labels[exercise_id].setStyleSheet(f"font-size: 13px; padding: 5px; color: {color}; font-weight: bold;")
+
+            lbl = self.add_goals_labels[exercise_id]
+            lbl.setText(f"{config['icon']} {config['name']}: {status}")
+            lbl.setStyleSheet(f"font-size: 13px; padding: 5px; color: {color}; font-weight: bold;")
+
+        # 2. Automatický refresh BMI plánu a grafu
+        self.recompute_bmi_plan()
+
 
     def on_tab_changed(self, index):
         """Refresh při přepnutí záložky"""
