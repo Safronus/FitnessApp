@@ -5932,8 +5932,7 @@ class FitnessTrackerApp(QMainWindow):
         widget = QWidget()
         main_layout = QHBoxLayout(widget)
     
-        # ==================== LEVÝ PANEL ====================
-        left_panel = QWidget()
+        # ==================== LEVÝ PANEL ====================\n        left_panel = QWidget()
         left_layout = QVBoxLayout(left_panel)
         left_layout.setContentsMargins(0, 0, 0, 0)
     
@@ -6035,6 +6034,11 @@ class FitnessTrackerApp(QMainWindow):
     
         tree.setColumnWidth(0, max(80, tree.columnWidth(0)))
         tree.setColumnWidth(1, max(70, tree.columnWidth(1)))
+        
+        # --- KONTEXTOVÉ MENU (OPRAVA) ---
+        tree.setContextMenuPolicy(Qt.CustomContextMenu)
+        # Předáváme exercise_type přes lambda
+        tree.customContextMenuRequested.connect(lambda pos, et=exercise_type: self.on_tree_context_menu(pos, et))
     
         left_layout.addWidget(tree)
         main_layout.addWidget(left_panel, 1)
