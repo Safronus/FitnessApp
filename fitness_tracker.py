@@ -31,7 +31,7 @@ from matplotlib.collections import LineCollection
 import matplotlib.pyplot as plt
 
 TITLE = "Fitness Tracker"
-VERSION = "4.1.7"
+VERSION = "4.1.10"
 
 VERSION_DATE = "30.11.2025"
 
@@ -6732,17 +6732,12 @@ class FitnessTrackerApp(QMainWindow):
     
             # --- UCHOVÁNÍ VÝBĚRU ---
             preserved = set()             # {(date_str, record_id)}
-            
-            # Pro zachování rozbalení dnů/měsíců
-            # Ukládáme text měsíce a text dne
             expanded_items = set() 
     
-            # Ulož stav před smazáním
             iterator = QTreeWidgetItemIterator(tree)
             while iterator.value():
                 item = iterator.value()
                 if item.isExpanded():
-                    # Uložíme unikátní identifikaci (text prvního sloupce)
                     expanded_items.add(item.text(0))
                 
                 if item.isSelected():
@@ -6780,12 +6775,9 @@ class FitnessTrackerApp(QMainWindow):
             sorted_dates = sorted(days_data.keys(), reverse=True)
             
             # Seskupení do měsíců
-            # months_map: { "YYYY-MM": [date_str, date_str, ...] }
-            # Klíče měsíců seřazeny sestupně
             from collections import defaultdict
             months_map = defaultdict(list)
             for d in sorted_dates:
-                # d je YYYY-MM-DD
                 month_key = d[:7]  # YYYY-MM
                 months_map[month_key].append(d)
             
@@ -6808,65 +6800,57 @@ class FitnessTrackerApp(QMainWindow):
                 child_time_font = None
                 month_font = None
     
-            # Pomocná funkce barvy
+            # Pomocná funkce barvy (přesně dle zadání)
             def _pct_color(p: int) -> QColor:
-                if p < 50: return QColor(176, 176, 176)
-                if p < 100: return QColor(255, 215, 0)
-                if p < 150: return QColor(50, 199, 102)
-                return QColor(0, 188, 212)
-            
+                if p >= 200:
+                    return QColor("#006400") 
+                elif p > 100:
+                    intensity = min((p / 100.0) - 1.0, 1.0)
+                    green_val = int(144 + (100 - 144) * intensity)
+                    return QColor(0, green_val, 0)
+                elif p == 100: 
+                    return QColor("#FFD700") 
+                elif p >= 50:
+                    intensity = (1.0 - (p / 100.0)) * 2.0
+                    val = int(107 + (255 - 107) * (1.0 - intensity))
+                    return QColor(255, val, val)
+                else:
+                    return QColor("#8B0000") 
+    
             current_month_str = datetime.now().strftime("%Y-%m")
+            today_str = datetime.now().strftime("%Y-%m-%d")
             
-            # České názvy měsíců
             cz_months = {
                 "01": "Leden", "02": "Únor", "03": "Březen", "04": "Duben", "05": "Květen", "06": "Červen",
                 "07": "Červenec", "08": "Srpen", "09": "Září", "10": "Říjen", "11": "Listopad", "12": "Prosinec"
             }
     
             for m_key in sorted_months:
-                # m_key = "2025-11"
                 y_str, m_str = m_key.split("-")
                 m_name = cz_months.get(m_str, m_str)
                 month_label = f"{m_name} {y_str}"
                 
-                # Vytvoř položku měsíce
                 month_item = QTreeWidgetItem(tree)
                 month_item.setText(0, month_label)
-                # Metadata pro identifikaci (typ: month)
                 month_item.setData(3, Qt.UserRole, {"type": "month", "key": m_key})
                 
                 if month_font:
                     month_item.setFont(0, month_font)
                 
-                # Podbarvení řádku měsíce
                 month_bg = QColor(45, 45, 45)
                 for c in range(tree.columnCount()):
                     month_item.setBackground(c, month_bg)
                     
-                # Rozbalení: defaultně jen aktuální měsíc, jinak podle paměti
                 is_current = (m_key == current_month_str)
                 if first_population:
                     month_item.setExpanded(is_current)
                 else:
-                    # Pokud uživatel měsíc ručně zavřel/otevřel, respektuj to
                     if month_label in expanded_items:
                         month_item.setExpanded(True)
-                    else:
-                        # Pokud to nebyl v paměti (např. nový měsíc), řiď se defaultem
-                        # Ale pozor: expanded_items obsahuje jen ty co BYLY expanded. 
-                        # Pokud byl sbalený, není tam.
-                        # Takže 'in expanded_items' stačí.
-                        # Ale co když je to nový měsíc? Pak chceme default.
-                        # Kompromis:
-                        pass 
-                        # Necháme to takto: stav z paměti má přednost.
-                        # Pokud je to úplně nový start (first_population), tak is_current.
                 
-                # Projdi dny v tomto měsíci
                 for date_str in months_map[m_key]:
                     records = days_data[date_str]
                     
-                    # Souhrn dne
                     total_day_value = sum(r.get("value", 0) for r in records)
                     record_count = len(records)
                     goal = self.calculate_goal(exercise_type, date_str)
@@ -6874,43 +6858,45 @@ class FitnessTrackerApp(QMainWindow):
                         goal = int(goal) if goal else 0
                     percent = (total_day_value / goal * 100) if goal > 0 else 0
         
+                    # Barva podle logiky
+                    color_status = _pct_color(int(percent))
+                    
                     if percent >= 100:
                         status_icon = "✅"
-                        color = QColor(0, 100, 0)
                     elif percent >= 50:
                         status_icon = "⏳"
-                        color = QColor(255, 215, 0)
                     else:
                         status_icon = "❌"
-                        color = QColor(255, 0, 0)
         
                     day_item = QTreeWidgetItem(month_item)
                     day_item.setText(0, f"{status_icon} {date_str}")
                     day_item.setText(1, f"{total_day_value} ({record_count}×)")
                     day_item.setText(2, f"{percent:.0f}%")
                     
-                    # Metadata (typ: day)
                     day_item.setData(3, Qt.UserRole, {"type": "day", "date": date_str})
         
+                    # Standardní barvy pro sloupce 0 (datum) a 1 (hodnota)
                     day_item.setForeground(0, QColor(255, 255, 255))
                     day_item.setForeground(1, QColor(200, 200, 200))
-                    day_item.setBackground(2, color)
-                    day_item.setForeground(2, QColor(255, 255, 255))
+                    
+                    # Kontrastní text pro barevný sloupec (2)
+                    is_light = False
+                    if percent == 100: is_light = True # Gold
+                    elif 50 <= percent < 100: is_light = True # Light red/pink
+                    text_col = QColor(0, 0, 0) if is_light else QColor(255, 255, 255)
+                    
+                    day_item.setBackground(2, color_status)
+                    day_item.setForeground(2, text_col)
+                    
                     day_item.setTextAlignment(1, Qt.AlignCenter)
                     day_item.setTextAlignment(2, Qt.AlignCenter)
                     
-                    today_str = datetime.now().strftime("%Y-%m-%d")
-                    
-                    # Rozbalení dne
                     if first_population:
-                        # Default: rozbalit, pokud je to DNEŠEK, jinak sbalit
                         day_item.setExpanded(date_str == today_str)
                     else:
-                        # Zachovat stav z paměti
                         day_item.setExpanded(day_item.text(0) in expanded_items)
-
         
-                    # --- ZÁZNAMY (děti dne) ---
+                    # --- ZÁZNAMY ---
                     def _time_key(rec: dict) -> str:
                         ts = rec.get("timestamp", "")
                         if " " in ts:
@@ -6943,7 +6929,6 @@ class FitnessTrackerApp(QMainWindow):
                         rec_item.setText(2, time_only)
                         rec_item.setText(3, record_id)
                         
-                        # Metadata (typ: record) - stejně jako dřív
                         rec_item.setData(3, Qt.UserRole, {
                             "type": "record",
                             "date": date_str,
@@ -6958,7 +6943,9 @@ class FitnessTrackerApp(QMainWindow):
                         if rec_cum_pct is None:
                             rec_item.setForeground(0, QColor(200, 200, 200))
                         else:
+                            # Barva TEXTU procent u záznamu (pozadí ne)
                             rec_item.setForeground(0, _pct_color(rec_cum_pct))
+                            
                         rec_item.setForeground(1, QColor(240, 240, 240))
                         rec_item.setForeground(2, QColor(180, 180, 180))
         
@@ -6983,6 +6970,7 @@ class FitnessTrackerApp(QMainWindow):
             print(f"Chyba při update_exercise_tab pro {exercise_type}: {e}")
             import traceback
             traceback.print_exc()
+
 
     def update_detailed_overview(self, exercise_type, selected_year):
         """Aktualizuje detailní přehled: Den, Týden, Měsíc, Zbytek roku (pro aktuální rok) nebo Roční souhrn (pro jiné roky)."""
