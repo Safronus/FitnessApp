@@ -31,7 +31,7 @@ from matplotlib.collections import LineCollection
 import matplotlib.pyplot as plt
 
 TITLE = "Fitness Tracker"
-VERSION = "4.1.1"
+VERSION = "4.1.2"
 VERSION_DATE = "30.11.2025"
 
 # Dark Theme Stylesheet
@@ -6876,11 +6876,16 @@ class FitnessTrackerApp(QMainWindow):
                     day_item.setTextAlignment(1, Qt.AlignCenter)
                     day_item.setTextAlignment(2, Qt.AlignCenter)
                     
+                    today_str = datetime.now().strftime("%Y-%m-%d")
+                    
                     # Rozbalení dne
                     if first_population:
-                        day_item.setExpanded(False)
+                        # Default: rozbalit, pokud je to DNEŠEK, jinak sbalit
+                        day_item.setExpanded(date_str == today_str)
                     else:
+                        # Zachovat stav z paměti
                         day_item.setExpanded(day_item.text(0) in expanded_items)
+
         
                     # --- ZÁZNAMY (děti dne) ---
                     def _time_key(rec: dict) -> str:
