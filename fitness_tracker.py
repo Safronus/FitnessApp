@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (
     QTabWidget, QLabel, QSpinBox, QPushButton, QDateEdit, QTableWidget, QMenu,
     QTableWidgetItem, QGroupBox, QFormLayout, QHeaderView, QMessageBox,
     QGridLayout, QComboBox, QScrollArea, QFrame, QProgressBar, QTextEdit,
-    QDialog, QListWidget, QListWidgetItem, QInputDialog, QCheckBox, QFileDialog,
+    QDialog, QListWidget, QListWidgetItem, QInputDialog, QCheckBox, QFileDialog, QSizePolicy,
     QTreeWidget, QTreeWidgetItem, QLineEdit, QTextBrowser, QAbstractItemView, QRadioButton, QTimeEdit
 )
 from PySide6.QtCore import Qt, QDate, QTime, QTimer, QSize
@@ -31,7 +31,7 @@ from matplotlib.collections import LineCollection
 import matplotlib.pyplot as plt
 
 TITLE = "Fitness Tracker"
-VERSION = "4.0.5"
+VERSION = "4.0.6"
 VERSION_DATE = "30.11.2025"
 
 # Dark Theme Stylesheet
@@ -3588,7 +3588,7 @@ class FitnessTrackerApp(QMainWindow):
         )
         self.bmi_plan_weeks_tree.setRootIsDecorated(True)
         self.bmi_plan_weeks_tree.setAlternatingRowColors(True)
-        self.bmi_plan_weeks_tree.setMinimumHeight(260)
+        self.bmi_plan_weeks_tree.setMinimumHeight(150) # Zmenšeno, aby graf dominoval
         w_header = self.bmi_plan_weeks_tree.header()
         w_header.setStretchLastSection(False)
         w_header.setSectionResizeMode(0, QHeaderView.Stretch)
@@ -3598,27 +3598,28 @@ class FitnessTrackerApp(QMainWindow):
         w_header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
         weekly_layout.addWidget(self.bmi_plan_weeks_tree)
 
-        # Graf plnění plánu po týdnech
-        self.bmi_plan_fig = Figure(figsize=(6, 2.5), facecolor="#121212")
+        # Graf plnění plánu po týdnech - ZVĚTŠENÝ
+        self.bmi_plan_fig = Figure(figsize=(10, 4), facecolor="#121212") # Větší figsize
         self.bmi_plan_canvas = FigureCanvas(self.bmi_plan_fig)
         self.bmi_plan_canvas.setStyleSheet("background-color: #121212;")
-        self.bmi_plan_canvas.setMinimumHeight(200)
+        self.bmi_plan_canvas.setMinimumHeight(350) # Větší minimální výška
+        self.bmi_plan_canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         weekly_layout.addWidget(self.bmi_plan_canvas)
 
         # Poměr výšek uvnitř týdenní sekce:
-        #   - Týdenní rozpis ~ 2
-        #   - Graf ~ 3
-        weekly_layout.setStretch(weekly_layout.indexOf(self.bmi_plan_weeks_tree), 2)
-        weekly_layout.setStretch(weekly_layout.indexOf(self.bmi_plan_canvas), 3)
+        #   - Týdenní rozpis ~ 1
+        #   - Graf ~ 4 (graf dominuje)
+        weekly_layout.setStretch(weekly_layout.indexOf(self.bmi_plan_weeks_tree), 1)
+        weekly_layout.setStretch(weekly_layout.indexOf(self.bmi_plan_canvas), 4)
 
         weekly_group.setLayout(weekly_layout)
         plan_layout.addWidget(weekly_group)
 
         # Poměr výšek v rámci plánovací sekce:
         #   - Cvik tabulka ~ 1
-        #   - Týdenní rozpis + graf ~ 6 (tedy výrazně vyšší)
+        #   - Týdenní rozpis + graf ~ 8
         plan_layout.setStretch(plan_layout.indexOf(self.bmi_plan_tree), 1)
-        plan_layout.setStretch(plan_layout.indexOf(weekly_group), 6)
+        plan_layout.setStretch(plan_layout.indexOf(weekly_group), 8)
 
         plan_group.setLayout(plan_layout)
         layout.addWidget(plan_group)
@@ -3629,13 +3630,10 @@ class FitnessTrackerApp(QMainWindow):
         self.bmi_plan_horizon_combo.currentIndexChanged.connect(self.recompute_bmi_plan)
         self.bmi_plan_mode_combo.currentIndexChanged.connect(self.recompute_bmi_plan)
 
-        # ŽÁDNÝ layout.addStretch() – necháme plánovací část využít výšku okna
-
         # Inicializace plánu (při otevření záložky / aplikace)
         self.recompute_bmi_plan()
 
         return widget
-
 
     def _persist_bmi_plan_settings(self, *_) -> None:
         """
@@ -3943,7 +3941,6 @@ class FitnessTrackerApp(QMainWindow):
 
         from datetime import datetime, timedelta
         import matplotlib.dates as mdates
-        # Potřebujeme pyplot pro nastavení rotace ticků, pokud není globálně dostupný, použijeme fig.autofmt_xdate
         import matplotlib.pyplot as plt
 
         self.bmi_plan_weeks_tree.clear()
@@ -3951,14 +3948,13 @@ class FitnessTrackerApp(QMainWindow):
         workouts = self.data.get("workouts", {})
 
         today = datetime.now().date()
-        # pondělí aktuálního týdne
-        # Počátek plánu = zvolené datum v sekci „Plán k dosažení cílového BMI“
+        # pondělí aktuálního týdne (nebo start plánu)
         try:
             ds = self.bmi_plan_start_date_edit.date().toString("yyyy-MM-dd")
             week0 = datetime.strptime(ds, "%Y-%m-%d").date()
         except Exception:
             week0 = datetime.now().date()
-        monday0 = week0  # první 7denní interval začíná přesně vybraným dnem
+        monday0 = week0  # Start plánu (nemusí být pondělí, ale pro účely plánu je to "den 0")
 
         # kumulativní součty plánu a skutečnosti pro každý cvik
         cumulative_plan: dict[str, float] = {ex_id: 0.0 for ex_id in active_exercises}
@@ -3990,11 +3986,10 @@ class FitnessTrackerApp(QMainWindow):
                     key = day.strftime("%Y-%m-%d")
                     day_data = workouts.get(key)
                     if day_data and exercise_id in day_data:
-                        # Ošetření proti vnořeným dictům nebo přímým hodnotám
+                        # Ošetření proti vnořeným dictům
                         raw_rec = day_data[exercise_id]
                         records = raw_rec
                         if isinstance(raw_rec, dict) and exercise_id in raw_rec:
-                             # Někdy se stávalo vnoření {cvik: {cvik: ...}} - fallback
                              records = raw_rec[exercise_id]
 
                         if isinstance(records, list):
@@ -4003,7 +3998,7 @@ class FitnessTrackerApp(QMainWindow):
                             actual_week += float(records.get("value", 0.0))
                     day += timedelta(days=1)
 
-                # Kumulativní skutečnost – přidáme hodnotu za tento týden
+                # Kumulativní skutečnost
                 cumulative_actual[exercise_id] += actual_week
 
                 plan_cum = cumulative_plan[exercise_id]
@@ -4037,7 +4032,7 @@ class FitnessTrackerApp(QMainWindow):
 
             weekly_compliance.append((week_start, avg_percent))
 
-        # Graf plnění plánu (kumulativně)
+        # Graf plnění plánu
         if not hasattr(self, "bmi_plan_fig") or not hasattr(self, "bmi_plan_canvas"):
             return
 
@@ -4053,12 +4048,12 @@ class FitnessTrackerApp(QMainWindow):
             spine.set_color("#e0e0e0")
 
         if True:
-            # === Denní průběh plnění v rámci týdnů (markery pro každý den) ===
+            # === Denní průběh plnění ===
             from collections import defaultdict
             import numpy as _np
             from scipy.interpolate import PchipInterpolator
         
-            # 1) Připrav denní součty skutečnosti pro každý cvik (rychlý přístup)
+            # 1) Data preparation (same as before)
             daily_totals_by_ex: dict[str, dict[str, float]] = {}
             for exercise_id in active_exercises:
                 m: dict[str, float] = defaultdict(float)
@@ -4077,7 +4072,6 @@ class FitnessTrackerApp(QMainWindow):
                             pass
                 daily_totals_by_ex[exercise_id] = m
         
-            # 2) Poskládej denní body (kumulativně v rámci týdne)
             horizon_days = max(1, int(horizon_weeks) * 7)
             xs_days: list[datetime.date] = []
             ys_days: list[float] = []
@@ -4113,16 +4107,13 @@ class FitnessTrackerApp(QMainWindow):
                     ys_days.append(avg_percent)
         
                     d += timedelta(days=1)
-        
                 current_week_start = current_week_start + timedelta(days=7)
         
-            # 3) Vykreslení s vyhlazením a formátováním
+            # 2) Plotting
             if xs_days and len(xs_days) > 1:
-                # Convert dates to numbers for matplotlib
                 xs_nums = mdates.date2num(xs_days)
                 ys_nums = _np.array(ys_days)
 
-                # Interpolace pro hladkou křivku
                 x_smooth = _np.linspace(xs_nums.min(), xs_nums.max(), len(xs_nums) * 5)
                 try:
                     interpolator = PchipInterpolator(xs_nums, ys_nums)
@@ -4131,30 +4122,35 @@ class FitnessTrackerApp(QMainWindow):
                 except Exception:
                      line, = ax.plot(xs_nums, ys_nums, color="#14919b", linewidth=2, alpha=0.8, label="Průběh plnění")
 
-                # Vykreslení bodů
                 sc = ax.scatter(xs_nums, ys_nums, color="#00e5ff", s=15, zorder=3)
 
-                # === FORMÁTOVÁNÍ OSY X - Detailní týdny a dny ===
-                # Interval pro popisky týdnů (aby se nepřekrývaly u dlouhých horizontů)
-                week_interval = 1
-                if horizon_weeks > 20: week_interval = 2
-                if horizon_weeks > 40: week_interval = 4
-
-                # Hlavní tiky = začátky týdnů (Pondělí)
-                ax.xaxis.set_major_locator(mdates.WeekdayLocator(byweekday=mdates.MO, interval=week_interval))
+                # === ZVÝRAZNĚNÍ ZAČÁTKŮ TÝDNŮ DLE ROZPISU ===
+                # Vykreslíme vertikální čáru pro každý začátek týdne (monday0, monday0+7, ...)
+                # Bez ohledu na to, jestli je to kalendářní pondělí.
+                week_starts = [monday0 + timedelta(days=7*i) for i in range(horizon_weeks + 1)]
+                
+                for ws in week_starts:
+                    if ws > end_d: break
+                    ax.axvline(x=mdates.date2num(ws), color='#555555', linestyle='-', linewidth=1.5, alpha=0.8)
+                
+                # === ZOBRAZIT KAŽDÝ DEN NA OSE X ===
+                ax.xaxis.set_major_locator(mdates.DayLocator(interval=1))
                 ax.xaxis.set_major_formatter(mdates.DateFormatter('%d.%m.'))
 
-                # Vedlejší tiky = dny (pro detail)
-                if horizon_weeks <= 26:
-                    ax.xaxis.set_minor_locator(mdates.DayLocator())
+                # Pokud je dnů hodně, zmenšíme font nebo proředíme popisky, 
+                # ale grid/tiky necháme pro každý den
+                if len(xs_days) > 30:
+                     # Ponecháme major locator na každý den pro grid, ale formatter jen občas?
+                     # Matplotlib to dělá těžko odděleně. 
+                     # Uděláme kompromis: Locator každý den, ale popisky rotované a menší font.
+                     pass
 
-                # Mřížka - vertikální linky jen pro začátky týdnů
-                ax.grid(True, which='major', axis='x', color='#3d3d3d', linestyle='--', alpha=0.5)
+                # Jemná mřížka pro každý den
+                ax.grid(True, which='major', axis='x', color='#2d2d2d', linestyle=':', alpha=0.3)
                 
-                # Rotace popisků pro lepší čitelnost
-                plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
-
-                # Anotace pro hover (detaily dne)
+                plt.setp(ax.get_xticklabels(), rotation=90, ha='center', fontsize=8)
+                
+                # Anotace pro hover
                 annot = ax.annotate("", xy=(0,0), xytext=(10,10),textcoords="offset points",
                                     bbox=dict(boxstyle="round", fc="#1e1e1e", ec="#14919b", alpha=0.9),
                                     color="#ffffff", fontsize=9)
@@ -4166,7 +4162,6 @@ class FitnessTrackerApp(QMainWindow):
                     date_num = pos[0]
                     val = pos[1]
                     date_val = mdates.num2date(date_num)
-                    # Zobrazit den v týdnu + datum
                     cz_days = ["Po", "Út", "St", "Čt", "Pá", "So", "Ne"]
                     day_name = cz_days[date_val.weekday()]
                     text = f"{day_name} {date_val.strftime('%d.%m.%Y')}\nPlnění: {val:.1f} %"
@@ -4188,17 +4183,19 @@ class FitnessTrackerApp(QMainWindow):
                 
                 fig.canvas.mpl_connect("motion_notify_event", hover)
 
-        # 100% linie
         ax.axhline(y=100.0, color="#32CD32", linestyle="--", linewidth=1, alpha=0.5, label="Cíl 100 %")
         ax.set_title("Denní průběh plnění plánu (v rámci týdnů)")
-        ax.set_ylabel("Plnění týdenního cíle [%]")
+        ax.set_ylabel("Plnění [%]")
+        # Rozšíření limitů osy X, aby graf vyplnil celý prostor
+        if xs_days:
+            ax.set_xlim(left=mdates.date2num(start_d), right=mdates.date2num(end_d))
+            
         ax.set_ylim(bottom=0, top=max(110, max(ys_days) + 10) if 'ys_days' in locals() and ys_days else 120)
-        
-        # Legenda
         ax.legend(loc="upper left", fontsize=8, facecolor="#1e1e1e", edgecolor="#3d3d3d", labelcolor="#e0e0e0")
         
         fig.tight_layout()
         self.bmi_plan_canvas.draw()
+
 
     def refresh_add_tab_goals(self):
         """Aktualizuje přehled cílů při změně data"""
