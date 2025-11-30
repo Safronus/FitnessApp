@@ -5932,7 +5932,8 @@ class FitnessTrackerApp(QMainWindow):
         widget = QWidget()
         main_layout = QHBoxLayout(widget)
     
-        # ==================== LEVÝ PANEL ====================\n        left_panel = QWidget()
+        # ==================== LEVÝ PANEL ====================
+        left_panel = QWidget()
         left_layout = QVBoxLayout(left_panel)
         left_layout.setContentsMargins(0, 0, 0, 0)
     
@@ -6034,11 +6035,12 @@ class FitnessTrackerApp(QMainWindow):
     
         tree.setColumnWidth(0, max(80, tree.columnWidth(0)))
         tree.setColumnWidth(1, max(70, tree.columnWidth(1)))
-        
-        # --- KONTEXTOVÉ MENU (OPRAVA) ---
+
+        # KONTEXTOVÉ MENU (Added)
         tree.setContextMenuPolicy(Qt.CustomContextMenu)
-        # Předáváme exercise_type přes lambda
-        tree.customContextMenuRequested.connect(lambda pos, et=exercise_type: self.on_tree_context_menu(pos, et))
+        tree.customContextMenuRequested.connect(
+            lambda pos: self.on_exercise_tree_context_menu(pos, tree, exercise_type)
+        )
     
         left_layout.addWidget(tree)
         main_layout.addWidget(left_panel, 1)
@@ -6121,6 +6123,72 @@ class FitnessTrackerApp(QMainWindow):
         # POZOR: NEVOLAT day_item.sortChildren(...) – pořadí už udělala update_exercise_tab
     
         return widget
+
+
+    def on_exercise_tree_context_menu(self, pos, tree, exercise_type):
+        """Zobrazí kontextové menu pro záznamy ve stromu cvičení."""
+        item = tree.itemAt(pos)
+        if not item:
+            return
+
+        menu = QMenu(self)
+        
+        # Zjištění, zda jde o záznam (child) nebo den (parent)
+        # Záznamy mají v datech uložené dictionary s 'record_id'
+        data = item.data(3, Qt.UserRole)
+        is_record = isinstance(data, dict) and "record_id" in data
+        
+        if is_record:
+            # == MENU PRO ZÁZNAM ==
+            edit_action = menu.addAction("✏️ Upravit záznam")
+            delete_action = menu.addAction("🗑️ Smazat záznam")
+            
+            action = menu.exec_(tree.viewport().mapToGlobal(pos))
+            
+            if action == edit_action:
+                self.edit_workout(exercise_type, data["date"], data["record_id"])
+            elif action == delete_action:
+                # Smazání jednoho záznamu (použijeme logiku z delete_selected, ale jen pro tento jeden)
+                # Nebo přímo zavoláme logiku smazání. Pro konzistenci vyvoláme dotaz.
+                reply = QMessageBox.question(
+                    self, "Smazat záznam", "Opravdu smazat tento záznam?",
+                    QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+                )
+                if reply == QMessageBox.Yes:
+                    # Načtení a smazání
+                    date_str = data["date"]
+                    rec_id = data["record_id"]
+                    if date_str in self.data["workouts"] and exercise_type in self.data["workouts"][date_str]:
+                        recs = self.data["workouts"][date_str][exercise_type]
+                        if isinstance(recs, list):
+                            self.data["workouts"][date_str][exercise_type] = [r for r in recs if r["id"] != rec_id]
+                            self.save_data()
+                            self.update_exercise_tab_and_calendar(exercise_type)
+                            self.show_message("Smazáno", "Záznam byl odstraněn.")
+        
+        else:
+            # == MENU PRO DEN (PARENT) ==
+            # Parent item má datum jako text, ale nemáme přímé ID.
+            # Můžeme nabídnout smazání celého dne pro toto cvičení.
+            delete_day_action = menu.addAction("🗑️ Smazat všechny záznamy dne")
+            
+            action = menu.exec_(tree.viewport().mapToGlobal(pos))
+            
+            if action == delete_day_action:
+                txt = item.text(0)
+                # Očekáváme formát "Pá 2025-11-28" nebo jen "2025-11-28"
+                date_str = txt.split(" ", 1)[1] if " " in txt else txt
+                
+                reply = QMessageBox.question(
+                    self, "Smazat den", f"Opravdu smazat všechny záznamy z {date_str}?",
+                    QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+                )
+                if reply == QMessageBox.Yes:
+                    if date_str in self.data["workouts"] and exercise_type in self.data["workouts"][date_str]:
+                        del self.data["workouts"][date_str][exercise_type]
+                        self.save_data()
+                        self.update_exercise_tab_and_calendar(exercise_type)
+                        self.show_message("Smazáno", "Záznamy dne byly odstraněny.")
 
 
     def ensure_exercise_chart_expands(self, exercise_type: str) -> None:
