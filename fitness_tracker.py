@@ -31,7 +31,7 @@ from matplotlib.collections import LineCollection
 import matplotlib.pyplot as plt
 
 TITLE = "Fitness Tracker"
-VERSION = "4.1.6"
+VERSION = "4.1.7"
 
 VERSION_DATE = "30.11.2025"
 
@@ -3959,10 +3959,9 @@ class FitnessTrackerApp(QMainWindow):
             week0 = datetime.now().date()
         monday0 = week0  # Start plánu (nemusí být pondělí, ale pro účely plánu je to "den 0")
 
-        # kumulativní součty plánu a skutečnosti pro každý cvik
-        cumulative_plan: dict[str, float] = {ex_id: 0.0 for ex_id in active_exercises}
-        cumulative_actual: dict[str, float] = {ex_id: 0.0 for ex_id in active_exercises}
-
+        # Pro tabulku chceme "týdenní" pohled (reset každý týden), aby seděl s grafem.
+        # Odstraněna kumulace přes celou historii.
+        
         weekly_compliance: list[tuple[datetime.date, float]] = []
 
         for week_idx in range(horizon_weeks):
@@ -3986,9 +3985,6 @@ class FitnessTrackerApp(QMainWindow):
             for exercise_id in active_exercises:
                 plan_week = planned_weekly.get(exercise_id, 0.0)
 
-                # Kumulativní plán – přidáme plán pro tento týden
-                cumulative_plan[exercise_id] += plan_week
-
                 # Skutečná hodnota v tomto týdnu
                 actual_week = 0.0
                 day = week_start
@@ -4008,14 +4004,9 @@ class FitnessTrackerApp(QMainWindow):
                             actual_week += float(records.get("value", 0.0))
                     day += timedelta(days=1)
 
-                # Kumulativní skutečnost
-                cumulative_actual[exercise_id] += actual_week
-
-                plan_cum = cumulative_plan[exercise_id]
-                actual_cum = cumulative_actual[exercise_id]
-
-                if plan_cum > 0:
-                    percent = (actual_cum / plan_cum) * 100.0
+                # Výpočet procenta pro tento týden (nikoliv kumulativně z historie)
+                if plan_week > 0:
+                    percent = (actual_week / plan_week) * 100.0
                     week_percent_sum += percent
                     week_percent_count += 1
                 else:
@@ -4026,8 +4017,8 @@ class FitnessTrackerApp(QMainWindow):
                 child = QTreeWidgetItem([
                     "",
                     f"{config['icon']} {config['name']}",
-                    f"{plan_cum:.1f}",
-                    f"{actual_cum:.1f}",
+                    f"{plan_week:.1f}",     # Zobrazení plánu pro tento týden
+                    f"{actual_week:.1f}",   # Zobrazení skutečnosti pro tento týden
                     f"{percent:.0f} %",
                 ])
                 child.setTextAlignment(2, Qt.AlignCenter)
@@ -4043,7 +4034,8 @@ class FitnessTrackerApp(QMainWindow):
             weekly_compliance.append((week_start, avg_percent))
 
             # Barevné podbarvení týdne (Gradient: Červená -> Zelená)
-            # Pokud je týden v budoucnu, nepodbarvujeme
+            # Pokud je týden v budoucnu (celý), nepodbarvujeme, nebo jen šedě.
+            # Pokud už začal (week_start <= today), barvíme.
             if week_start <= today:
                 p = min(100.0, max(0.0, avg_percent)) / 100.0
                 
@@ -4227,7 +4219,6 @@ class FitnessTrackerApp(QMainWindow):
         
         fig.tight_layout()
         self.bmi_plan_canvas.draw()
-
 
     def refresh_add_tab_goals(self):
         """Aktualizuje přehled cílů (labels) v záložce Přidat výkon podle vybraného data a přepočítá BMI plán."""
