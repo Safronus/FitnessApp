@@ -31,7 +31,8 @@ from matplotlib.collections import LineCollection
 import matplotlib.pyplot as plt
 
 TITLE = "Fitness Tracker"
-VERSION = "4.1.2"
+VERSION = "4.1.6"
+
 VERSION_DATE = "30.11.2025"
 
 # Dark Theme Stylesheet
@@ -3943,6 +3944,7 @@ class FitnessTrackerApp(QMainWindow):
         from datetime import datetime, timedelta
         import matplotlib.dates as mdates
         import matplotlib.pyplot as plt
+        from PySide6.QtGui import QColor
 
         self.bmi_plan_weeks_tree.clear()
 
@@ -3967,9 +3969,16 @@ class FitnessTrackerApp(QMainWindow):
             week_start = monday0 + timedelta(days=7 * week_idx)
             week_end = week_start + timedelta(days=6)
 
-            week_label = f"{week_start.strftime('%d.%m.%Y')} – {week_end.strftime('%d.%m.%Y')}"
+            # Číslo týdne v plánu
+            plan_week_num = week_idx + 1
+            week_label = f"Týden {plan_week_num}: {week_start.strftime('%d.%m.%Y')} – {week_end.strftime('%d.%m.%Y')}"
+            
             week_item = QTreeWidgetItem([week_label, "", "", "", ""])
             self.bmi_plan_weeks_tree.addTopLevelItem(week_item)
+
+            # Rozbalit, pokud je to aktuální týden
+            is_current = (week_start <= today <= week_end)
+            week_item.setExpanded(is_current)
 
             week_percent_sum = 0.0
             week_percent_count = 0
@@ -4032,6 +4041,28 @@ class FitnessTrackerApp(QMainWindow):
                 avg_percent = 0.0
 
             weekly_compliance.append((week_start, avg_percent))
+
+            # Barevné podbarvení týdne (Gradient: Červená -> Zelená)
+            # Pokud je týden v budoucnu, nepodbarvujeme
+            if week_start <= today:
+                p = min(100.0, max(0.0, avg_percent)) / 100.0
+                
+                if p < 0.5:
+                    # Červená (tmavá) -> Žlutá (tmavá)
+                    ratio = p / 0.5
+                    r = 77
+                    g = int(77 * ratio)
+                    b = 0
+                else:
+                    # Žlutá (tmavá) -> Zelená (tmavá)
+                    ratio = (p - 0.5) / 0.5
+                    r = int(77 * (1 - ratio))
+                    g = int(77 - (27 * ratio)) # 77 -> 50 (tmavě zelená)
+                    b = 0
+                
+                bg_color = QColor(r, g, b)
+                for c in range(5):
+                    week_item.setBackground(c, bg_color)
 
         # Graf plnění plánu
         if not hasattr(self, "bmi_plan_fig") or not hasattr(self, "bmi_plan_canvas"):
@@ -4196,6 +4227,7 @@ class FitnessTrackerApp(QMainWindow):
         
         fig.tight_layout()
         self.bmi_plan_canvas.draw()
+
 
     def refresh_add_tab_goals(self):
         """Aktualizuje přehled cílů (labels) v záložce Přidat výkon podle vybraného data a přepočítá BMI plán."""
