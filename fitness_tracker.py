@@ -31,8 +31,8 @@ from matplotlib.collections import LineCollection
 import matplotlib.pyplot as plt
 
 TITLE = "Fitness Tracker"
-VERSION = "4.0.0"
-VERSION_DATE = "17.11.2025"
+VERSION = "4.0.1"
+VERSION_DATE = "30.11.2025"
 
 # Dark Theme Stylesheet
 DARK_THEME = """
@@ -1558,7 +1558,7 @@ class EditExerciseDialog(QDialog):
         }
 
 class EditWorkoutDialog(QDialog):
-    """Dialog pro editaci existujícího záznamu"""
+    """Dialog pro editaci existujícího záznamu (počet a čas)"""
     def __init__(self, exercise_type, date_str, current_value, timestamp, parent=None):
         super().__init__(parent)
         self.setWindowTitle(f"Upravit záznam - {exercise_type}")
@@ -1571,16 +1571,33 @@ class EditWorkoutDialog(QDialog):
         layout.addWidget(info_label)
         
         if timestamp:
-            time_label = QLabel(f"Původně přidáno: {timestamp}")
+            time_label = QLabel(f"Původní čas: {timestamp}")
             time_label.setStyleSheet("font-size: 10px; color: #a0a0a0; padding: 2px;")
             layout.addWidget(time_label)
         
         form_layout = QFormLayout()
         
+        # Počet
         self.value_spin = QSpinBox()
-        self.value_spin.setRange(0, 1000)
-        self.value_spin.setValue(current_value)
+        self.value_spin.setRange(0, 10000)
+        self.value_spin.setValue(int(current_value))
         form_layout.addRow("Počet:", self.value_spin)
+        
+        # Čas
+        self.time_edit = QTimeEdit()
+        self.time_edit.setDisplayFormat("HH:mm:ss")
+        
+        # Parse timestamp pro nastavení času (očekává "YYYY-MM-DD HH:MM:SS")
+        t = QTime.currentTime()
+        if timestamp and " " in timestamp:
+            try:
+                time_part = timestamp.split(' ')[1]
+                t = QTime.fromString(time_part, "HH:mm:ss")
+            except:
+                pass
+        self.time_edit.setTime(t)
+        
+        form_layout.addRow("Čas:", self.time_edit)
         
         layout.addLayout(form_layout)
         
@@ -1608,12 +1625,14 @@ class EditWorkoutDialog(QDialog):
         
         layout.addLayout(buttons_layout)
     
-    def get_value(self):
-        return self.value_spin.value()
+    def get_data(self):
+        """Vrátí (nová_hodnota, nový_čas_string)"""
+        return self.value_spin.value(), self.time_edit.time().toString("HH:mm:ss")
     
     def delete_record(self):
         self.delete_requested = True
         self.accept()
+
 
 class FitnessTrackerApp(QMainWindow):
     def __init__(self):
@@ -6476,46 +6495,78 @@ class FitnessTrackerApp(QMainWindow):
         return total_performed, total_goal, goal_to_date
 
     def edit_workout(self, exercise_type, date_str, record_id):
-        """Upraví konkrétní záznam"""
+        """Upraví konkrétní záznam (počet i čas) pomocí dialogu"""
         if date_str not in self.data['workouts'] or exercise_type not in self.data['workouts'][date_str]:
             self.show_message("Chyba", "Záznam nenalezen!", QMessageBox.Critical)
             return
         
         records = self.data['workouts'][date_str][exercise_type]
         
+        target_record = None
         if isinstance(records, list):
-            record = next((r for r in records if r['id'] == record_id), None)
+            target_record = next((r for r in records if r['id'] == record_id), None)
         elif isinstance(records, dict) and records.get('id') == record_id:
-            record = records
-        else:
-            record = None
+            target_record = records
         
-        if not record:
+        if not target_record:
             self.show_message("Chyba", "Záznam nenalezen!", QMessageBox.Critical)
             return
         
-        old_value = record['value']
+        old_value = target_record.get('value', 0)
+        current_timestamp = target_record.get('timestamp', f"{date_str} 12:00:00")
         
-        new_value, ok = QInputDialog.getInt(
-            self,
-            "Upravit výkon",
-            f"Nový výkon pro {exercise_type} ({date_str}):",
-            old_value,
-            0,
-            10000,  # OPRAVA: Maximum 10000
-            1
-        )
-        
-        if ok and new_value != old_value:
-            record['value'] = new_value
-            record['timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        # Otevření dialogu
+        dialog = EditWorkoutDialog(exercise_type, date_str, old_value, current_timestamp, self)
+        if dialog.exec():
+            # 1. Pokud uživatel zvolil "Smazat" uvnitř dialogu
+            if dialog.delete_requested:
+                reply = QMessageBox.question(
+                    self, "Smazat záznam", "Opravdu smazat tento záznam?",
+                    QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+                )
+                if reply == QMessageBox.Yes:
+                    if isinstance(records, list):
+                        self.data['workouts'][date_str][exercise_type] = [r for r in records if r['id'] != record_id]
+                    elif isinstance(records, dict):
+                        del self.data['workouts'][date_str][exercise_type]
+                    
+                    self.save_data()
+                    self.update_exercise_tab(exercise_type)
+                    self.refresh_exercise_calendar(exercise_type)
+                    self.refresh_add_tab_goals()
+                    if exercise_type in self.chart_modes:
+                        self.update_performance_chart(exercise_type, self.chart_modes[exercise_type])
+                    
+                    self.show_message("Smazáno", "Záznam byl odstraněn.")
+                return
+
+            # 2. Uložení změn (Počet + Čas)
+            new_value, new_time_str = dialog.get_data()
+            
+            # Aktualizace hodnoty
+            target_record['value'] = new_value
+            
+            # Aktualizace času (zachováme datum, změníme čas)
+            try:
+                date_part = current_timestamp.split(' ')[0]
+                target_record['timestamp'] = f"{date_part} {new_time_str}"
+            except:
+                # Fallback kdyby byl timestamp poškozený
+                target_record['timestamp'] = f"{date_str} {new_time_str}"
             
             self.save_data()
+            
+            # Refresh UI
             self.update_exercise_tab(exercise_type)
             self.refresh_exercise_calendar(exercise_type)
             self.refresh_add_tab_goals()
             
-            self.show_message("Upraveno", f"Výkon upraven z {old_value} na {new_value}")
+            # Refresh grafu
+            if exercise_type in self.chart_modes:
+                self.update_performance_chart(exercise_type, self.chart_modes[exercise_type])
+            
+            self.show_message("Upraveno", f"Záznam upraven na: {new_value} ks ({new_time_str})")
+
             
     def _calendar_tooltip_with_contrast(self, tooltip_text: str, bg_hex: str) -> str:
         """
