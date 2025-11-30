@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QDoubleSpinBox, 
     QTabWidget, QLabel, QSpinBox, QPushButton, QDateEdit, QTableWidget, QMenu,
     QTableWidgetItem, QGroupBox, QFormLayout, QHeaderView, QMessageBox,
-    QGridLayout, QComboBox, QScrollArea, QFrame, QProgressBar, QTextEdit,
+    QGridLayout, QComboBox, QScrollArea, QFrame, QProgressBar, QTextEdit, QTreeWidgetItemIterator, 
     QDialog, QListWidget, QListWidgetItem, QInputDialog, QCheckBox, QFileDialog, QSizePolicy,
     QTreeWidget, QTreeWidgetItem, QLineEdit, QTextBrowser, QAbstractItemView, QRadioButton, QTimeEdit
 )
@@ -31,7 +31,7 @@ from matplotlib.collections import LineCollection
 import matplotlib.pyplot as plt
 
 TITLE = "Fitness Tracker"
-VERSION = "4.0.10"
+VERSION = "4.1.1"
 VERSION_DATE = "30.11.2025"
 
 # Dark Theme Stylesheet
@@ -6120,7 +6120,6 @@ class FitnessTrackerApp(QMainWindow):
     
         return widget
 
-
     def on_exercise_tree_context_menu(self, pos, tree, exercise_type):
         """Zobrazí kontextové menu pro záznamy ve stromu cvičení."""
         item = tree.itemAt(pos)
@@ -6129,12 +6128,15 @@ class FitnessTrackerApp(QMainWindow):
 
         menu = QMenu(self)
         
-        # Zjištění, zda jde o záznam (child) nebo den (parent)
-        # Záznamy mají v datech uložené dictionary s 'record_id'
-        data = item.data(3, Qt.UserRole)
-        is_record = isinstance(data, dict) and "record_id" in data
+        # Načti metadata pro identifikaci
+        payload = item.data(3, Qt.UserRole)
         
-        if is_record:
+        # Zjistíme typ
+        item_type = "unknown"
+        if isinstance(payload, dict):
+            item_type = payload.get("type", "unknown")
+        
+        if item_type == "record":
             # == MENU PRO ZÁZNAM ==
             edit_action = menu.addAction("✏️ Upravit záznam")
             delete_action = menu.addAction("🗑️ Smazat záznam")
@@ -6142,39 +6144,45 @@ class FitnessTrackerApp(QMainWindow):
             action = menu.exec_(tree.viewport().mapToGlobal(pos))
             
             if action == edit_action:
-                self.edit_workout(exercise_type, data["date"], data["record_id"])
+                self.edit_workout(exercise_type, payload["date"], payload["record_id"])
             elif action == delete_action:
-                # Smazání jednoho záznamu (použijeme logiku z delete_selected, ale jen pro tento jeden)
-                # Nebo přímo zavoláme logiku smazání. Pro konzistenci vyvoláme dotaz.
                 reply = QMessageBox.question(
                     self, "Smazat záznam", "Opravdu smazat tento záznam?",
                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No
                 )
                 if reply == QMessageBox.Yes:
-                    # Načtení a smazání
-                    date_str = data["date"]
-                    rec_id = data["record_id"]
+                    date_str = payload["date"]
+                    rec_id = payload["record_id"]
                     if date_str in self.data["workouts"] and exercise_type in self.data["workouts"][date_str]:
                         recs = self.data["workouts"][date_str][exercise_type]
                         if isinstance(recs, list):
                             self.data["workouts"][date_str][exercise_type] = [r for r in recs if r["id"] != rec_id]
+                            # Clean up
+                            if not self.data["workouts"][date_str][exercise_type]:
+                                del self.data["workouts"][date_str][exercise_type]
+                            if not self.data["workouts"][date_str]:
+                                del self.data["workouts"][date_str]
+                                
                             self.save_data()
-                            self.update_exercise_tab_and_calendar(exercise_type)
+                            self.update_exercise_tab(exercise_type)
+                            self.refresh_exercise_calendar(exercise_type)
+                            if exercise_type in self.chart_modes:
+                                self.update_performance_chart(exercise_type, self.chart_modes[exercise_type])
                             self.show_message("Smazáno", "Záznam byl odstraněn.")
         
-        else:
-            # == MENU PRO DEN (PARENT) ==
-            # Parent item má datum jako text, ale nemáme přímé ID.
-            # Můžeme nabídnout smazání celého dne pro toto cvičení.
+        elif item_type == "day":
+            # == MENU PRO DEN ==
             delete_day_action = menu.addAction("🗑️ Smazat všechny záznamy dne")
             
             action = menu.exec_(tree.viewport().mapToGlobal(pos))
             
             if action == delete_day_action:
-                txt = item.text(0)
-                # Očekáváme formát "Pá 2025-11-28" nebo jen "2025-11-28"
-                date_str = txt.split(" ", 1)[1] if " " in txt else txt
-                
+                date_str = payload.get("date")
+                if not date_str: 
+                    # Fallback parsing z textu, kdyby payload chyběl
+                    txt = item.text(0)
+                    date_str = txt.split(" ", 1)[1] if " " in txt else txt
+
                 reply = QMessageBox.question(
                     self, "Smazat den", f"Opravdu smazat všechny záznamy z {date_str}?",
                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No
@@ -6182,10 +6190,19 @@ class FitnessTrackerApp(QMainWindow):
                 if reply == QMessageBox.Yes:
                     if date_str in self.data["workouts"] and exercise_type in self.data["workouts"][date_str]:
                         del self.data["workouts"][date_str][exercise_type]
+                        if not self.data["workouts"][date_str]:
+                            del self.data["workouts"][date_str]
+                            
                         self.save_data()
-                        self.update_exercise_tab_and_calendar(exercise_type)
+                        self.update_exercise_tab(exercise_type)
+                        self.refresh_exercise_calendar(exercise_type)
+                        if exercise_type in self.chart_modes:
+                            self.update_performance_chart(exercise_type, self.chart_modes[exercise_type])
                         self.show_message("Smazáno", "Záznamy dne byly odstraněny.")
-
+                        
+        else:
+            # Měsíc nebo jiné - zatím nic
+            pass
 
     def ensure_exercise_chart_expands(self, exercise_type: str) -> None:
         """
@@ -6356,7 +6373,6 @@ class FitnessTrackerApp(QMainWindow):
 
     def delete_selected_records(self, exercise_type):
         """Smaže vybrané záznamy v levém přehledu (QTreeWidget)."""
-        # Cílíme na strom v záložce cvičení
         tree = self.findChild(QTreeWidget, f"tree_{exercise_type}")
         if not tree:
             self.show_message("Chyba", "Strom záznamů nebyl nalezen.", QMessageBox.Warning)
@@ -6367,25 +6383,32 @@ class FitnessTrackerApp(QMainWindow):
             self.show_message("Informace", "Nejprve vyber záznam(y) ke smazání.", QMessageBox.Information)
             return
     
-        # Nasbírej konkrétní recordy (mohou být označené jednotlivé záznamy, nebo celé dny)
+        # Pomocná funkce pro sběr ID z itemu (a jeho dětí)
         to_delete = []  # list[(date_str, record_id)]
-        for item in selected_items:
-            payload = item.data(3, Qt.UserRole)  # v update_exercise_tab ukládáme dict do sloupce 3
-            if isinstance(payload, dict) and 'date' in payload and 'record_id' in payload:
-                to_delete.append((payload['date'], payload['record_id']))
+        
+        def collect_records(item):
+            payload = item.data(3, Qt.UserRole)
+            if isinstance(payload, dict):
+                itype = payload.get("type")
+                if itype == "record":
+                    to_delete.append((payload["date"], payload["record_id"]))
+                elif itype == "day" or itype == "month":
+                    # Je to kontejner, projdi děti
+                    for i in range(item.childCount()):
+                        collect_records(item.child(i))
             else:
-                # Je to den -> vezmi všechny děti = záznamy
+                # Fallback kdyby payload chyběl, zkus děti
                 for i in range(item.childCount()):
-                    child = item.child(i)
-                    p2 = child.data(3, Qt.UserRole)
-                    if isinstance(p2, dict) and 'date' in p2 and 'record_id' in p2:
-                        to_delete.append((p2['date'], p2['record_id']))
+                    collect_records(item.child(i))
+
+        for item in selected_items:
+            collect_records(item)
     
         # Dedup
         to_delete = list({(d, r) for (d, r) in to_delete})
     
         if not to_delete:
-            self.show_message("Informace", "Nebyl vybrán žádný konkrétní záznam.", QMessageBox.Information)
+            self.show_message("Informace", "Nebyly nalezeny žádné záznamy ke smazání.", QMessageBox.Information)
             return
     
         # Potvrzení
@@ -6401,32 +6424,31 @@ class FitnessTrackerApp(QMainWindow):
     
         # Proveď smazání
         for date_str, record_id in to_delete:
-            if date_str in self.data['workouts'] and exercise_type in self.data['workouts'][date_str]:
-                records = self.data['workouts'][date_str][exercise_type]
+            if date_str in self.data["workouts"] and exercise_type in self.data["workouts"][date_str]:
+                records = self.data["workouts"][date_str][exercise_type]
                 if isinstance(records, list):
-                    self.data['workouts'][date_str][exercise_type] = [r for r in records if r.get('id') != record_id]
-                    # Pokud už pro tento den není žádné cvičení, odstraň klíč
-                    if not self.data['workouts'][date_str][exercise_type]:
-                        del self.data['workouts'][date_str][exercise_type]
-                    # Pokud je den prázdný, odstraň i datum
-                    if not self.data['workouts'][date_str]:
-                        del self.data['workouts'][date_str]
+                    self.data["workouts"][date_str][exercise_type] = [r for r in records if r.get("id") != record_id]
+                    if not self.data["workouts"][date_str][exercise_type]:
+                        del self.data["workouts"][date_str][exercise_type]
+                    if not self.data["workouts"][date_str]:
+                        del self.data["workouts"][date_str]
                 elif isinstance(records, dict):
-                    if records.get('id') == record_id:
-                        del self.data['workouts'][date_str][exercise_type]
-                        if not self.data['workouts'][date_str]:
-                            del self.data['workouts'][date_str]
+                    if records.get("id") == record_id:
+                        del self.data["workouts"][date_str][exercise_type]
+                        if not self.data["workouts"][date_str]:
+                            del self.data["workouts"][date_str]
     
         self.save_data()
     
         # Refresh UI
         self.update_exercise_tab(exercise_type)
         self.refresh_exercise_calendar(exercise_type)
-        mode = self.chart_modes.get(exercise_type, "weekly") if hasattr(self, "chart_modes") else "weekly"
-        self.update_performance_chart(exercise_type, mode)
+        if exercise_type in self.chart_modes:
+            self.update_performance_chart(exercise_type, self.chart_modes[exercise_type])
         self.refresh_add_tab_goals()
     
         self.show_message("Smazáno", f"{len(to_delete)} záznamů bylo smazáno.")
+
 
     def update_exercise_tab_and_calendar(self, exercise_type):
         """Bezpečná aktualizace"""
@@ -6667,10 +6689,7 @@ class FitnessTrackerApp(QMainWindow):
     def update_exercise_tab(self, exercise_type):
         """
         Aktualizuje statistiky a strom záznamů daného cvičení.
-    
-        - Dny: nejnovější den první (YYYY-MM-DD, reverse=True).
-        - Záznamy v rámci dne: nejnovější čas první, ale kumulativní procenta
-          jsou počítána v chronologickém pořádku, takže nahoře vidíš nejvyšší %.
+        Struktura: Měsíc (YYYY-MM) -> Den (YYYY-MM-DD) -> Záznamy.
         """
         try:
             if exercise_type not in self.exercise_year_selectors:
@@ -6690,37 +6709,25 @@ class FitnessTrackerApp(QMainWindow):
     
             # --- UCHOVÁNÍ VÝBĚRU ---
             preserved = set()             # {(date_str, record_id)}
-            preserved_days = set()        # {date_str}
-            preserved_children_by_day: dict[str, set] = {}
+            
+            # Pro zachování rozbalení dnů/měsíců
+            # Ukládáme text měsíce a text dne
+            expanded_items = set() 
     
-            for it in tree.selectedItems():
-                payload = it.data(3, Qt.UserRole)
-                if isinstance(payload, dict) and "date" in payload and "record_id" in payload:
-                    date_str = payload["date"]
-                    rec_id = payload["record_id"]
-                    preserved.add((date_str, rec_id))
-                    preserved_children_by_day.setdefault(date_str, set()).add(rec_id)
-                else:
-                    # Vybraný den (top-level) → ulož datum i děti
-                    txt = it.text(0) if it is not None else ""
-                    date_str = txt.split(" ", 1)[1] if " " in txt else txt
-                    if date_str:
-                        preserved_days.add(date_str)
-                    for i in range(it.childCount()):
-                        ch = it.child(i)
-                        p2 = ch.data(3, Qt.UserRole)
-                        if isinstance(p2, dict) and "date" in p2 and "record_id" in p2:
-                            preserved.add((p2["date"], p2["record_id"]))
-                            preserved_children_by_day.setdefault(p2["date"], set()).add(p2["record_id"])
-    
-            # --- UCHOVÁNÍ ROZBALENÍ DNŮ ---
-            expanded_dates = set()
-            for i in range(tree.topLevelItemCount()):
-                item = tree.topLevelItem(i)
-                if item and item.isExpanded():
-                    txt = item.text(0)
-                    date_str = txt.split(" ", 1)[1] if " " in txt else txt
-                    expanded_dates.add(date_str)
+            # Ulož stav před smazáním
+            iterator = QTreeWidgetItemIterator(tree)
+            while iterator.value():
+                item = iterator.value()
+                if item.isExpanded():
+                    # Uložíme unikátní identifikaci (text prvního sloupce)
+                    expanded_items.add(item.text(0))
+                
+                if item.isSelected():
+                    payload = item.data(3, Qt.UserRole)
+                    if isinstance(payload, dict) and "date" in payload and "record_id" in payload:
+                        preserved.add((payload["date"], payload["record_id"]))
+                
+                iterator += 1
     
             first_population = (tree.property("_ever_populated") is not True)
     
@@ -6730,7 +6737,7 @@ class FitnessTrackerApp(QMainWindow):
             # Multi-select a výkon
             tree.setSelectionMode(QAbstractItemView.ExtendedSelection)
             tree.setSelectionBehavior(QAbstractItemView.SelectItems)
-            tree.setAlternatingRowColors(False)  # child řádky prokládáme ručně
+            tree.setAlternatingRowColors(False)
             tree.setUniformRowHeights(True)
     
             # --- Data po dnech (jen zvolený rok) ---
@@ -6748,184 +6755,206 @@ class FitnessTrackerApp(QMainWindow):
     
             # Dny: nejnovější datum první
             sorted_dates = sorted(days_data.keys(), reverse=True)
+            
+            # Seskupení do měsíců
+            # months_map: { "YYYY-MM": [date_str, date_str, ...] }
+            # Klíče měsíců seřazeny sestupně
+            from collections import defaultdict
+            months_map = defaultdict(list)
+            for d in sorted_dates:
+                # d je YYYY-MM-DD
+                month_key = d[:7]  # YYYY-MM
+                months_map[month_key].append(d)
+            
+            sorted_months = sorted(months_map.keys(), reverse=True)
     
-            # Připrav fonty pro child řádky
+            # Připrav fonty
             try:
                 from PySide6.QtGui import QFont
                 child_val_font = QFont()
                 child_val_font.setBold(True)
-    
-                # Monospace pro čas (macOS: Menlo; fallback funguje i jinde)
                 child_time_font = QFont("Menlo")
                 base_size = tree.font().pointSize() if tree.font().pointSize() > 0 else 11
                 child_time_font.setPointSize(max(base_size - 1, 9))
+                
+                month_font = QFont()
+                month_font.setBold(True)
+                month_font.setPointSize(base_size + 1)
             except Exception:
                 child_val_font = None
                 child_time_font = None
+                month_font = None
     
-            # Pomocná funkce pro barvu kumulativního % v 1. sloupci (dark-friendly)
+            # Pomocná funkce barvy
             def _pct_color(p: int) -> QColor:
-                # <50 % šedá, 50–99 % zlatá, 100–149 % zelená, 150 %+ tyrkys
-                if p < 50:
-                    return QColor(176, 176, 176)
-                if p < 100:
-                    return QColor(255, 215, 0)   # zlatá
-                if p < 150:
-                    return QColor(50, 199, 102)  # zelená
-                return QColor(0, 188, 212)       # tyrkys
+                if p < 50: return QColor(176, 176, 176)
+                if p < 100: return QColor(255, 215, 0)
+                if p < 150: return QColor(50, 199, 102)
+                return QColor(0, 188, 212)
+            
+            current_month_str = datetime.now().strftime("%Y-%m")
+            
+            # České názvy měsíců
+            cz_months = {
+                "01": "Leden", "02": "Únor", "03": "Březen", "04": "Duben", "05": "Květen", "06": "Červen",
+                "07": "Červenec", "08": "Srpen", "09": "Září", "10": "Říjen", "11": "Listopad", "12": "Prosinec"
+            }
     
-            for date_str in sorted_dates:
-                records = days_data[date_str]
-    
-                # Souhrn dne
-                total_day_value = sum(r.get("value", 0) for r in records)
-                record_count = len(records)
-                goal = self.calculate_goal(exercise_type, date_str)
-                if not isinstance(goal, int):
-                    goal = int(goal) if goal else 0
-                percent = (total_day_value / goal * 100) if goal > 0 else 0
-    
-                # Top-level (den) – emoji + barevný % sloupec
-                if percent >= 100:
-                    status_icon = "✅"
-                    color = QColor(0, 100, 0)
-                elif percent >= 50:
-                    status_icon = "⏳"
-                    color = QColor(255, 215, 0)
+            for m_key in sorted_months:
+                # m_key = "2025-11"
+                y_str, m_str = m_key.split("-")
+                m_name = cz_months.get(m_str, m_str)
+                month_label = f"{m_name} {y_str}"
+                
+                # Vytvoř položku měsíce
+                month_item = QTreeWidgetItem(tree)
+                month_item.setText(0, month_label)
+                # Metadata pro identifikaci (typ: month)
+                month_item.setData(3, Qt.UserRole, {"type": "month", "key": m_key})
+                
+                if month_font:
+                    month_item.setFont(0, month_font)
+                
+                # Podbarvení řádku měsíce
+                month_bg = QColor(45, 45, 45)
+                for c in range(tree.columnCount()):
+                    month_item.setBackground(c, month_bg)
+                    
+                # Rozbalení: defaultně jen aktuální měsíc, jinak podle paměti
+                is_current = (m_key == current_month_str)
+                if first_population:
+                    month_item.setExpanded(is_current)
                 else:
-                    status_icon = "❌"
-                    color = QColor(255, 0, 0)
-    
-                day_item = QTreeWidgetItem(tree)
-                day_item.setText(0, f"{status_icon} {date_str}")
-                day_item.setText(1, f"{total_day_value} ({record_count}×)")
-                day_item.setText(2, f"{percent:.0f}%")
-    
-                day_item.setForeground(0, QColor(255, 255, 255))
-                day_item.setForeground(1, QColor(200, 200, 200))
-                day_item.setBackground(2, color)
-                day_item.setForeground(2, QColor(255, 255, 255))
-                day_item.setTextAlignment(1, Qt.AlignCenter)
-                day_item.setTextAlignment(2, Qt.AlignCenter)
-    
-                # Respektuj stav rozbalení / výchozí sbalení
-                day_item.setExpanded(date_str in expanded_dates if not first_population else False)
-    
-                # --- Child záznamy: kumulativní podíl + správné pořadí procent ---
-    
-                # 1) Klíč pro čas (HH:MM:SS z timestampu)
-                def _time_key(rec: dict) -> str:
-                    ts = rec.get("timestamp", "")
-                    if " " in ts:
-                        return ts.split(" ", 1)[1]
-                    return ts
-    
-                # 2) Nejprve spočti kumulativní hodnoty VZESTUPNĚ (od nejstaršího času)
-                records_sorted_asc = sorted(records, key=_time_key)
-                cumulative_pairs: list[tuple[dict, int]] = []
-                running_total = 0
-                for rec in records_sorted_asc:
-                    running_total += rec.get("value", 0)
-                    cumulative_pairs.append((rec, running_total))
-    
-                # 3) Pak vykresli záznamy v opačném pořadí (nejnovější první),
-                #    ale použij už spočítaný running_total z kroku 2.
-                for idx, (record, running_total) in enumerate(reversed(cumulative_pairs)):
-                    value = record.get("value", 0)
-                    timestamp = record.get("timestamp", "N/A")
-                    time_only = timestamp.split(" ")[1] if " " in timestamp else timestamp
-                    record_id = record.get("id", "")
-    
-                    if goal > 0:
-                        rec_cum_pct = int(round((running_total / goal) * 100))
-                        pct_text = f"{rec_cum_pct} %"
+                    # Pokud uživatel měsíc ručně zavřel/otevřel, respektuj to
+                    if month_label in expanded_items:
+                        month_item.setExpanded(True)
                     else:
-                        rec_cum_pct = None
-                        pct_text = "—"
-    
-                    rec_item = QTreeWidgetItem(day_item)
-    
-                    # Sloupce: [kumulativní % vůči cíli] [hodnota] [čas] [id]
-                    rec_item.setText(0, pct_text)
-                    rec_item.setText(1, str(value))
-                    rec_item.setText(2, time_only)
-                    rec_item.setText(3, record_id)
-    
-                    # Zarovnání
-                    rec_item.setTextAlignment(0, Qt.AlignCenter)
-                    rec_item.setTextAlignment(1, Qt.AlignCenter)
-                    rec_item.setTextAlignment(2, Qt.AlignCenter)
-    
-                    # Barvy textu (dark-friendly)
-                    if rec_cum_pct is None:
-                        rec_item.setForeground(0, QColor(200, 200, 200))  # goal = 0
+                        # Pokud to nebyl v paměti (např. nový měsíc), řiď se defaultem
+                        # Ale pozor: expanded_items obsahuje jen ty co BYLY expanded. 
+                        # Pokud byl sbalený, není tam.
+                        # Takže 'in expanded_items' stačí.
+                        # Ale co když je to nový měsíc? Pak chceme default.
+                        # Kompromis:
+                        pass 
+                        # Necháme to takto: stav z paměti má přednost.
+                        # Pokud je to úplně nový start (first_population), tak is_current.
+                
+                # Projdi dny v tomto měsíci
+                for date_str in months_map[m_key]:
+                    records = days_data[date_str]
+                    
+                    # Souhrn dne
+                    total_day_value = sum(r.get("value", 0) for r in records)
+                    record_count = len(records)
+                    goal = self.calculate_goal(exercise_type, date_str)
+                    if not isinstance(goal, int):
+                        goal = int(goal) if goal else 0
+                    percent = (total_day_value / goal * 100) if goal > 0 else 0
+        
+                    if percent >= 100:
+                        status_icon = "✅"
+                        color = QColor(0, 100, 0)
+                    elif percent >= 50:
+                        status_icon = "⏳"
+                        color = QColor(255, 215, 0)
                     else:
-                        rec_item.setForeground(0, _pct_color(rec_cum_pct))
-                    rec_item.setForeground(1, QColor(240, 240, 240))
-                    rec_item.setForeground(2, QColor(180, 180, 180))
-    
-                    # Fonty
-                    if child_val_font:
-                        rec_item.setFont(1, child_val_font)
-                    if child_time_font:
-                        rec_item.setFont(2, child_time_font)
-    
-                    # Lehký „striping“ child řádků (jen uvnitř dne)
-                    if idx % 2 == 1:
-                        shade = QColor(255, 255, 255, 14)
-                        rec_item.setBackground(0, shade)
-                        rec_item.setBackground(1, shade)
-                        rec_item.setBackground(2, shade)
-    
-                    # Výška řádku
-                    try:
-                        rec_item.setData(0, Qt.SizeHintRole, QSize(0, 22))
-                    except Exception:
-                        pass
-    
-                    # Tooltip s detaily – používá running_total z chronologického výpočtu
-                    if rec_cum_pct is None:
-                        tt_pct = "n/a"
+                        status_icon = "❌"
+                        color = QColor(255, 0, 0)
+        
+                    day_item = QTreeWidgetItem(month_item)
+                    day_item.setText(0, f"{status_icon} {date_str}")
+                    day_item.setText(1, f"{total_day_value} ({record_count}×)")
+                    day_item.setText(2, f"{percent:.0f}%")
+                    
+                    # Metadata (typ: day)
+                    day_item.setData(3, Qt.UserRole, {"type": "day", "date": date_str})
+        
+                    day_item.setForeground(0, QColor(255, 255, 255))
+                    day_item.setForeground(1, QColor(200, 200, 200))
+                    day_item.setBackground(2, color)
+                    day_item.setForeground(2, QColor(255, 255, 255))
+                    day_item.setTextAlignment(1, Qt.AlignCenter)
+                    day_item.setTextAlignment(2, Qt.AlignCenter)
+                    
+                    # Rozbalení dne
+                    if first_population:
+                        day_item.setExpanded(False)
                     else:
-                        tt_pct = f"{rec_cum_pct} %"
-                    tt = (
-                        f"Hodnota: {value}\n"
-                        f"Kumulativně: {running_total} ({tt_pct})\n"
-                        f"Čas: {time_only}\n"
-                        f"ID: {record_id}"
-                    )
-                    rec_item.setToolTip(0, tt)
-                    rec_item.setToolTip(1, tt)
-                    rec_item.setToolTip(2, tt)
+                        day_item.setExpanded(day_item.text(0) in expanded_items)
+        
+                    # --- ZÁZNAMY (děti dne) ---
+                    def _time_key(rec: dict) -> str:
+                        ts = rec.get("timestamp", "")
+                        if " " in ts:
+                            return ts.split(" ", 1)[1]
+                        return ts
+        
+                    records_sorted_asc = sorted(records, key=_time_key)
+                    cumulative_pairs = []
+                    running_total = 0
+                    for rec in records_sorted_asc:
+                        running_total += rec.get("value", 0)
+                        cumulative_pairs.append((rec, running_total))
+        
+                    for idx, (record, running_total) in enumerate(reversed(cumulative_pairs)):
+                        value = record.get("value", 0)
+                        timestamp = record.get("timestamp", "N/A")
+                        time_only = timestamp.split(" ")[1] if " " in timestamp else timestamp
+                        record_id = record.get("id", "")
+        
+                        if goal > 0:
+                            rec_cum_pct = int(round((running_total / goal) * 100))
+                            pct_text = f"{rec_cum_pct} %"
+                        else:
+                            rec_cum_pct = None
+                            pct_text = "—"
+        
+                        rec_item = QTreeWidgetItem(day_item)
+                        rec_item.setText(0, pct_text)
+                        rec_item.setText(1, str(value))
+                        rec_item.setText(2, time_only)
+                        rec_item.setText(3, record_id)
+                        
+                        # Metadata (typ: record) - stejně jako dřív
+                        rec_item.setData(3, Qt.UserRole, {
+                            "type": "record",
+                            "date": date_str,
+                            "record_id": record_id,
+                            "exercise": exercise_type,
+                        })
+        
+                        rec_item.setTextAlignment(0, Qt.AlignCenter)
+                        rec_item.setTextAlignment(1, Qt.AlignCenter)
+                        rec_item.setTextAlignment(2, Qt.AlignCenter)
+        
+                        if rec_cum_pct is None:
+                            rec_item.setForeground(0, QColor(200, 200, 200))
+                        else:
+                            rec_item.setForeground(0, _pct_color(rec_cum_pct))
+                        rec_item.setForeground(1, QColor(240, 240, 240))
+                        rec_item.setForeground(2, QColor(180, 180, 180))
+        
+                        if child_val_font: rec_item.setFont(1, child_val_font)
+                        if child_time_font: rec_item.setFont(2, child_time_font)
+                        
+                        if idx % 2 == 1:
+                            shade = QColor(255, 255, 255, 14)
+                            rec_item.setBackground(0, shade)
+                            rec_item.setBackground(1, shade)
+                            rec_item.setBackground(2, shade)
+                            
+                        if (date_str, record_id) in preserved:
+                            rec_item.setSelected(True)
     
-                    # payload pro mazání / reselect
-                    rec_item.setData(3, Qt.UserRole, {
-                        "date": date_str,
-                        "record_id": record_id,
-                        "exercise": exercise_type,
-                    })
-    
-                    # Re-select po refreshi (pokud byl vybrán)
-                    if (date_str, record_id) in preserved:
-                        rec_item.setSelected(True)
-    
-                # Viditelné označení dne (když byl vybrán den, nebo všechny jeho děti)
-                sel_children = preserved_children_by_day.get(date_str, set())
-                if date_str in preserved_days or (record_count > 0 and len(sel_children) == record_count):
-                    day_item.setSelected(True)
-    
-            # Výchozí chování po PRVNÍM naplnění: vše sbalené
             if first_population:
-                tree.collapseAll()
                 tree.setProperty("_ever_populated", True)
-    
+            
             tree.blockSignals(False)
     
         except Exception as e:
             print(f"Chyba při update_exercise_tab pro {exercise_type}: {e}")
             import traceback
             traceback.print_exc()
-
 
     def update_detailed_overview(self, exercise_type, selected_year):
         """Aktualizuje detailní přehled: Den, Týden, Měsíc, Zbytek roku (pro aktuální rok) nebo Roční souhrn (pro jiné roky)."""
