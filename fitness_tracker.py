@@ -31,7 +31,7 @@ from matplotlib.collections import LineCollection
 import matplotlib.pyplot as plt
 
 TITLE = "Fitness Tracker"
-VERSION = "4.0.1"
+VERSION = "4.0.4"
 VERSION_DATE = "30.11.2025"
 
 # Dark Theme Stylesheet
@@ -1638,9 +1638,12 @@ class FitnessTrackerApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle(f"{TITLE} v{VERSION} - Sledování cvičení")
-        # macOS/HiDPI: aby se pohodlně vešly graf + celý kalendář
-        self.setMinimumSize(1680, 1000)
-        self.resize(1680, 1050)
+        
+        # macOS/HiDPI & FullHD fix:
+        # Původně 1680x1000, což je na FullHD (1080p) s taskbarem moc.
+        # Snižuji minimum, aby šlo okno zmenšit/přizpůsobit.
+        self.setMinimumSize(1280, 800)
+        self.resize(1440, 900)
 
         self.data_file = Path("fitness_data.json")
         self.exercise_year_selectors = {}
@@ -1661,6 +1664,7 @@ class FitnessTrackerApp(QMainWindow):
         self.update_timer = QTimer()
         self.update_timer.timeout.connect(self.auto_refresh)
         self.update_timer.start(5000)
+
         
     def ensure_body_metrics(self):
         """Zajistí existenci sekce body_metrics pro BMI/váhu."""
@@ -3397,13 +3401,8 @@ class FitnessTrackerApp(QMainWindow):
         # Přidávání výkonů - dynamické řádky
         add_group = QGroupBox("➕ Zadat výkon")
         add_layout = QVBoxLayout()
-
-        # Společné styly
-        #main_button_style = "font-size: 12px; padding: 8px; min-height: 35px; background-color: #0d7377;"
-        #quick_button_style = (
-        #    "font-size: 11px; padding: 8px; min-height: 35px; "
-        #    "background-color: #2a4d50; color: #b0b0b0;"
-        #)
+        add_layout.setSpacing(5)  # Menší mezery mezi řádky
+        add_layout.setContentsMargins(10, 10, 10, 10)
 
         # Dynamicky vytvořit řádek pro každé cvičení
         self.exercise_spinboxes = {}
@@ -3412,23 +3411,24 @@ class FitnessTrackerApp(QMainWindow):
             config = self.get_exercise_config(exercise_id)
 
             exercise_row = QHBoxLayout()
+            exercise_row.setSpacing(8) # Menší mezery mezi prvky v řádku
 
-            # Label
+            # Label (bez fixní šířky, aby se vešel text)
             label = QLabel(f"{config['icon']} {config['name']}:")
-            label.setFixedWidth(80)
+            label.setMinimumWidth(80) # Místo fixed width
             exercise_row.addWidget(label)
 
             # SpinBox
             spinbox = QSpinBox()
             spinbox.setRange(0, 10000)
             spinbox.setValue(0)
-            spinbox.setFixedWidth(100)
+            spinbox.setFixedWidth(90)
             exercise_row.addWidget(spinbox)
             self.exercise_spinboxes[exercise_id] = spinbox
 
             # Hlavní tlačítko "Přidat"
             main_btn = QPushButton("Přidat")
-            main_btn.setFixedWidth(80)
+            main_btn.setFixedWidth(70)
             main_btn.clicked.connect(
                 lambda checked, ex_id=exercise_id: self.add_single_workout(
                     ex_id,
@@ -3441,7 +3441,7 @@ class FitnessTrackerApp(QMainWindow):
             quick_buttons = config.get("quick_buttons", [10, 20, 30])
             for quick_val in quick_buttons:
                 quick_btn = QPushButton(str(quick_val))
-                quick_btn.setFixedWidth(50)
+                quick_btn.setFixedWidth(40) # Trochu užší
                 quick_btn.clicked.connect(
                     lambda checked, ex_id=exercise_id, val=quick_val: self.add_single_workout(
                         ex_id,
@@ -3635,6 +3635,7 @@ class FitnessTrackerApp(QMainWindow):
         self.recompute_bmi_plan()
 
         return widget
+
 
     def _persist_bmi_plan_settings(self, *_) -> None:
         """
@@ -3987,7 +3988,10 @@ class FitnessTrackerApp(QMainWindow):
                     key = day.strftime("%Y-%m-%d")
                     day_data = workouts.get(key)
                     if day_data and exercise_id in day_data:
+                        records = day_data[exercise_id][exercise_id] if isinstance(day_data.get(exercise_id), dict) and exercise_id in day_data[exercise_id] else day_data[exercise_id] # Fix nested dict potential
+                        # Fallback na normalni cteni
                         records = day_data[exercise_id]
+                        
                         if isinstance(records, list):
                             actual_week += sum(float(r.get("value", 0.0)) for r in records)
                         elif isinstance(records, dict):
@@ -4045,9 +4049,9 @@ class FitnessTrackerApp(QMainWindow):
 
         if True:
             # === Denní průběh plnění v rámci týdnů (markery pro každý den) ===
-            # Potřebujeme: week0/monday0 (začátek plánu), horizon_weeks, planned_weekly, active_exercises, workouts
             from collections import defaultdict
             import numpy as _np
+            from scipy.interpolate import PchipInterpolator
         
             # 1) Připrav denní součty skutečnosti pro každý cvik (rychlý přístup)
             daily_totals_by_ex: dict[str, dict[str, float]] = {}
@@ -4073,25 +4077,20 @@ class FitnessTrackerApp(QMainWindow):
             xs_days: list[datetime.date] = []
             ys_days: list[float] = []
         
-            # POZOR: v kódu výše máme 'monday0 = week0' (začátek plánu dle zvoleného data)
             start_d = monday0
             end_d = monday0 + timedelta(days=horizon_days - 1)
         
-            # Pro každý týden zvlášť držíme průběžné součty
             current_week_start = start_d
             while current_week_start <= end_d:
                 current_week_end = min(current_week_start + timedelta(days=6), end_d)
-                # průběžné součty skutečnosti v rámci právě iterovaného týdne
                 running_by_ex = {ex: 0.0 for ex in active_exercises}
         
                 d = current_week_start
                 while d <= current_week_end:
                     ds = d.strftime("%Y-%m-%d")
-                    # aktualizace běžného součtu za týden pro každý cvik
                     for ex in active_exercises:
                         running_by_ex[ex] += daily_totals_by_ex.get(ex, {}).get(ds, 0.0)
         
-                    # průměrné procento plnění za den (v rámci týdne), omezené na 0–200 %
                     day_percent_sum = 0.0
                     day_percent_count = 0
                     for ex in active_exercises:
@@ -4100,7 +4099,6 @@ class FitnessTrackerApp(QMainWindow):
                             percent = 0.0
                         else:
                             percent = (running_by_ex[ex] / plan_week) * 100.0
-                        # clamp a nasčítání
                         percent = max(0.0, min(200.0, percent))
                         day_percent_sum += percent
                         day_percent_count += 1
@@ -4113,110 +4111,70 @@ class FitnessTrackerApp(QMainWindow):
         
                 current_week_start = current_week_start + timedelta(days=7)
         
-            # 3) Stejné vyhlazení jako u denního grafu – monotónní Hermite (Fritsch–Carlson)
-            def _smooth_monotone_curve_x(xs_dt, ys_vals, points_per_segment: int = 30):
-                # převod dat na numerické hodnoty osy X
-                xs_num_raw = _np.array([mdates.date2num(x) for x in xs_dt], dtype=float)
-                ys_raw = _np.array(ys_vals, dtype=float)
-                if xs_num_raw.size < 3:
-                    return xs_dt, ys_raw
+            # 3) Vykreslení s vyhlazením a formátováním
+            if xs_days and len(xs_days) > 1:
+                # Convert dates to numbers for matplotlib
+                xs_nums = mdates.date2num(xs_days)
+                ys_nums = _np.array(ys_days)
+
+                # Interpolace pro hladkou křivku (Fritsch-Carlson)
+                x_smooth = _np.linspace(xs_nums.min(), xs_nums.max(), len(xs_nums) * 5)
+                try:
+                    interpolator = PchipInterpolator(xs_nums, ys_nums)
+                    y_smooth = interpolator(x_smooth)
+                    line, = ax.plot(x_smooth, y_smooth, color="#14919b", linewidth=2, alpha=0.8, label="Průběh plnění")
+                except Exception:
+                     line, = ax.plot(xs_nums, ys_nums, color="#14919b", linewidth=2, alpha=0.8, label="Průběh plnění")
+
+                # Vykreslení bodů (pro hover detekci)
+                sc = ax.scatter(xs_nums, ys_nums, color="#00e5ff", s=15, zorder=3)
+
+                # Formátování osy X
+                ax.xaxis.set_major_formatter(mdates.DateFormatter('%d.%m.'))
+                ax.xaxis.set_major_locator(mdates.DayLocator(interval=max(1, len(xs_days) // 10)))
+                
+                # Anotace pro hover (detaily dne)
+                annot = ax.annotate("", xy=(0,0), xytext=(10,10),textcoords="offset points",
+                                    bbox=dict(boxstyle="round", fc="#1e1e1e", ec="#14919b", alpha=0.9),
+                                    color="#ffffff", fontsize=9)
+                annot.set_visible(False)
+
+                def update_annot(ind):
+                    pos = sc.get_offsets()[ind["ind"][0]]
+                    annot.xy = pos
+                    # Získat datum a hodnotu
+                    date_num = pos[0]
+                    val = pos[1]
+                    date_val = mdates.num2date(date_num)
+                    text = f"{date_val.strftime('%d.%m.%Y')}\nPlnění: {val:.1f} %"
+                    annot.set_text(text)
+                    annot.get_bbox_patch().set_alpha(0.9)
+
+                def hover(event):
+                    vis = annot.get_visible()
+                    if event.inaxes == ax:
+                        cont, ind = sc.contains(event)
+                        if cont:
+                            update_annot(ind)
+                            annot.set_visible(True)
+                            fig.canvas.draw_idle()
+                        else:
+                            if vis:
+                                annot.set_visible(False)
+                                fig.canvas.draw_idle()
+                
+                fig.canvas.mpl_connect("motion_notify_event", hover)
+
+        # 100% linie
+        ax.axhline(y=100.0, color="#32CD32", linestyle="--", linewidth=1, alpha=0.5, label="Cíl 100 %")
+        ax.set_title("Denní průběh plnění plánu (v rámci týdnů)")
+        ax.set_ylabel("Plnění týdenního cíle [%]")
+        ax.set_ylim(bottom=0, top=max(110, max(ys_days) + 10) if 'ys_days' in locals() and ys_days else 120)
+        ax.legend(loc="upper left", fontsize=8, facecolor="#1e1e1e", edgecolor="#3d3d3d", labelcolor="#e0e0e0")
         
-                # deduplikace shodných X – ponecháme poslední Y
-                xx = [xs_num_raw[0]]
-                yy = [ys_raw[0]]
-                for i in range(1, len(xs_num_raw)):
-                    if xs_num_raw[i] == xx[-1]:
-                        yy[-1] = ys_raw[i]
-                    else:
-                        xx.append(xs_num_raw[i])
-                        yy.append(ys_raw[i])
-        
-                x = _np.asarray(xx, dtype=float)
-                y = _np.asarray(yy, dtype=float)
-                n = len(x)
-                if n < 3:
-                    return [mdates.num2date(v) for v in x], y
-        
-                h = _np.diff(x)
-                d = _np.diff(y) / h
-        
-                m = _np.empty(n, dtype=float)
-                m[0] = d[0]
-                m[-1] = d[-1]
-                for i in range(1, n - 1):
-                    if d[i - 1] == 0.0 or d[i] == 0.0 or (d[i - 1] > 0 and d[i] < 0) or (d[i - 1] < 0 and d[i] > 0):
-                        m[i] = 0.0
-                    else:
-                        w1 = 2.0 * h[i] + h[i - 1]
-                        w2 = h[i] + 2.0 * h[i - 1]
-                        m[i] = (w1 + w2) / (w1 / d[i - 1] + w2 / d[i])  # vážený harmonický průměr
-        
-                # Fritsch–Carlson limiter
-                for i in range(n - 1):
-                    if d[i] == 0.0:
-                        m[i] = 0.0
-                        m[i + 1] = 0.0
-                    else:
-                        a = m[i] / d[i]
-                        b = m[i + 1] / d[i]
-                        if a < 0.0:
-                            m[i] = 0.0
-                            a = 0.0
-                        if b < 0.0:
-                            m[i + 1] = 0.0
-                            b = 0.0
-                        s = a * a + b * b
-                        if s > 9.0:
-                            t = 3.0 / _np.sqrt(s)
-                            m[i] = t * a * d[i]
-                            m[i + 1] = t * b * d[i]
-        
-                xs_out = []
-                ys_out = []
-                for i in range(n - 1):
-                    xi, xi1 = x[i], x[i + 1]
-                    hi = xi1 - xi
-                    yi, yi1 = y[i], y[i + 1]
-                    mi, mi1 = m[i], m[i + 1]
-        
-                    ts = _np.linspace(0.0, 1.0, points_per_segment, endpoint=(i == n - 2))
-                    for t in ts:
-                        t2 = t * t
-                        t3 = t2 * t
-                        h00 = 2 * t3 - 3 * t2 + 1
-                        h10 = t3 - 2 * t2 + t
-                        h01 = -2 * t3 + 3 * t2
-                        h11 = t3 - t2
-                        xs_out.append(xi + t * hi)
-                        ys_out.append(h00 * yi + h10 * hi * mi + h01 * yi1 + h11 * hi * mi1)
-        
-                return [mdates.num2date(v) for v in xs_out], _np.array(ys_out, dtype=float)
-        
-            if xs_days:
-                xs_smooth, ys_smooth = _smooth_monotone_curve_x(xs_days, ys_days, points_per_segment=20)
-                ax.plot(xs_smooth, ys_smooth, linewidth=2.0, color="#0d7377")
-                # tečky pro KAŽDÝ DEN
-                ax.scatter(xs_days, ys_days, s=20, color="#0d7377", zorder=5)
-        
-                ax.set_xlabel("Týden (od) / dny")
-                ax.set_ylabel("Plnění plánu [% – kumulativně]")
-                ax.set_title("Plnění plánu po týdnech (kumulativně)")
-        
-                # hlavní tick po týdnech, vedlejší po dnech
-                ax.xaxis.set_major_locator(mdates.DayLocator(interval=7))
-                ax.xaxis.set_major_formatter(mdates.DateFormatter("%d.%m.%Y"))
-                ax.xaxis.set_minor_locator(mdates.DayLocator(interval=1))
-                fig.autofmt_xdate(rotation=30)
-        
-                ax.grid(which="major", axis="x", linestyle="--", alpha=0.25)
-        
-                ymax = max(ys_days + [100.0])
-                ax.set_ylim(0, max(120.0, ymax * 1.1))
-            else:
-                ax.set_title("Plán zatím nemá období k zobrazení.")
-                ax.set_xlabel("Týden")
-                ax.set_ylabel("Plnění plánu [%]")
+        fig.tight_layout()
         self.bmi_plan_canvas.draw()
+
 
     def refresh_add_tab_goals(self):
         """Aktualizuje přehled cílů při změně data"""
@@ -7739,10 +7697,10 @@ def main():
     app.setWindowIcon(app_icon)
 
     window = FitnessTrackerApp()
-    window.show()
+    # Na menších rozlišeních (FullHD) je lepší využít celou plochu, 
+    # aby se prvky (kalendář/graf) nepřekrývaly.
+    window.showMaximized()
     sys.exit(app.exec())
-
-
 
 if __name__ == "__main__":
     main()
