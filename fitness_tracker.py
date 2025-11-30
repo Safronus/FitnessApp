@@ -2319,105 +2319,105 @@ class FitnessTrackerApp(QMainWindow):
         self.bmi_chart_mode_combo = QComboBox()
         self.bmi_chart_mode_combo.addItems(["Váha", "BMI", "Obojí"])
         self.bmi_chart_mode_combo.setSizeAdjustPolicy(QComboBox.AdjustToContents)
-        self.bmi_chart_mode_combo.setMinimumContentsLength(10)
-        self.bmi_chart_mode_combo.setMinimumWidth(150)
-        # výchozí režim: Oba – váha i BMI
-        self.bmi_chart_mode_combo.setCurrentText("Obojí")
+        self.bmi_chart_mode_combo.setCurrentIndex(1) # Defaultně BMI
+        self.bmi_chart_mode_combo.currentTextChanged.connect(lambda: self.update_bmi_time_chart())
         mode_row.addWidget(self.bmi_chart_mode_combo)
-
-        mode_row.addSpacing(16)
-        mode_row.addWidget(QLabel("Období:"))
-
-        # Přepínání období – Týden / Měsíc / Rok
-        self.bmi_period_buttons = {}
-
-        week_btn = QPushButton("📅 Týden")
-        week_btn.setCheckable(True)
-        week_btn.setFixedWidth(100)
-        week_btn.clicked.connect(lambda: self.set_bmi_period_mode("week"))
-        mode_row.addWidget(week_btn)
-        self.bmi_period_buttons["week"] = week_btn
-
-        month_btn = QPushButton("📆 Měsíc")
-        month_btn.setCheckable(True)
-        month_btn.setFixedWidth(100)
-        month_btn.clicked.connect(lambda: self.set_bmi_period_mode("month"))
-        mode_row.addWidget(month_btn)
-        self.bmi_period_buttons["month"] = month_btn
-
-        year_btn = QPushButton("📊 Rok")
-        year_btn.setCheckable(True)
-        year_btn.setFixedWidth(100)
-        year_btn.clicked.connect(lambda: self.set_bmi_period_mode("year"))
-        mode_row.addWidget(year_btn)
-        self.bmi_period_buttons["year"] = year_btn
-
         mode_row.addStretch()
         time_layout.addLayout(mode_row)
 
-        # Vlastní rozsah Od–Do
-        custom_row = QHBoxLayout()
-        custom_row.addWidget(QLabel("Vlastní rozsah:"))
+        # Výběr období (Týden, Měsíc, Rok, Vlastní)
+        period_row = QHBoxLayout()
+        period_row.setSpacing(5)
+        self.bmi_period_week_btn = QPushButton("Týden")
+        self.bmi_period_month_btn = QPushButton("Měsíc")
+        self.bmi_period_year_btn = QPushButton("Rok")
+        self.bmi_period_custom_btn = QPushButton("Vlastní")
 
-        self.bmi_custom_from_edit = QDateEdit()
-        self.bmi_custom_from_edit.setCalendarPopup(True)
-        self.bmi_custom_from_edit.setDate(QDate.currentDate().addMonths(-1))
-        custom_row.addWidget(self.bmi_custom_from_edit)
+        for btn in [self.bmi_period_week_btn, self.bmi_period_month_btn, self.bmi_period_year_btn, self.bmi_period_custom_btn]:
+            btn.setCheckable(True)
+            btn.setStyleSheet("""
+                QPushButton { background-color: #2d2d2d; border: 1px solid #3d3d3d; padding: 5px; }
+                QPushButton:checked { background-color: #0d7377; border: 1px solid #00a8cc; }
+            """)
 
-        custom_row.addWidget(QLabel("–"))
+        # Default: Vlastní (posledních 30 dní)
+        self.bmi_period_mode = "custom"
+        self.bmi_period_custom_btn.setChecked(True)
+        self.bmi_period_week_btn.setChecked(False)
+        self.bmi_period_month_btn.setChecked(False)
+        self.bmi_period_year_btn.setChecked(False)
 
-        self.bmi_custom_to_edit = QDateEdit()
-        self.bmi_custom_to_edit.setCalendarPopup(True)
-        self.bmi_custom_to_edit.setDate(QDate.currentDate())
-        custom_row.addWidget(self.bmi_custom_to_edit)
+        # Custom Date Selectors
+        self.bmi_custom_range_widget = QWidget()
+        custom_layout = QHBoxLayout(self.bmi_custom_range_widget)
+        custom_layout.setContentsMargins(0, 0, 0, 0)
+        
+        self.bmi_custom_from_date = QDateEdit()
+        self.bmi_custom_from_date.setCalendarPopup(True)
+        # Defaultně posledních 30 dní
+        self.bmi_custom_from_date.setDate(QDate.currentDate().addDays(-30))
+        
+        self.bmi_custom_to_date = QDateEdit()
+        self.bmi_custom_to_date.setCalendarPopup(True)
+        self.bmi_custom_to_date.setDate(QDate.currentDate())
 
-        self.bmi_custom_apply_button = QPushButton("Použít")
-        self.bmi_custom_apply_button.clicked.connect(self.apply_bmi_custom_range)
-        custom_row.addWidget(self.bmi_custom_apply_button)
+        custom_layout.addWidget(QLabel("Od:"))
+        custom_layout.addWidget(self.bmi_custom_from_date)
+        custom_layout.addWidget(QLabel("Do:"))
+        custom_layout.addWidget(self.bmi_custom_to_date)
+        
+        # Zobrazit vždy, protože default je custom
+        self.bmi_custom_range_widget.setVisible(True)
 
-        custom_row.addStretch()
-        time_layout.addLayout(custom_row)
+        # Signály tlačítek
+        self.bmi_period_week_btn.clicked.connect(lambda: self.set_bmi_period_mode("week"))
+        self.bmi_period_month_btn.clicked.connect(lambda: self.set_bmi_period_mode("month"))
+        self.bmi_period_year_btn.clicked.connect(lambda: self.set_bmi_period_mode("year"))
+        self.bmi_period_custom_btn.clicked.connect(lambda: self.set_bmi_period_mode("custom"))
+        
+        # Signály datumovek
+        self.bmi_custom_from_date.dateChanged.connect(lambda: self.update_bmi_time_chart())
+        self.bmi_custom_to_date.dateChanged.connect(lambda: self.update_bmi_time_chart())
 
-        # Výchozí mód období: Týden
-        self.bmi_period_mode = "week"
-        week_btn.setChecked(True)
+        period_row.addWidget(self.bmi_period_week_btn)
+        period_row.addWidget(self.bmi_period_month_btn)
+        period_row.addWidget(self.bmi_period_year_btn)
+        period_row.addWidget(self.bmi_period_custom_btn)
+        period_row.addStretch()
+        time_layout.addLayout(period_row)
+        time_layout.addWidget(self.bmi_custom_range_widget)
 
-        self.bmi_time_fig = Figure(figsize=(8, 3), facecolor="#121212")
+        self.bmi_time_fig = Figure(figsize=(5, 3), dpi=100)
         self.bmi_time_canvas = FigureCanvas(self.bmi_time_fig)
         self.bmi_time_canvas.setStyleSheet("background-color: #121212;")
+        self.bmi_time_canvas.setMinimumHeight(250)
         time_layout.addWidget(self.bmi_time_canvas)
 
         time_group.setLayout(time_layout)
         right_layout.addWidget(time_group, 2)
 
-        # 🧪 BMI zóny
-        zones_group = QGroupBox("🧪 BMI zóny – přehled")
+        # 📊 Zónový graf
+        zones_group = QGroupBox("📊 BMI Zóny")
         zones_layout = QVBoxLayout()
 
-        self.bmi_zones_fig = Figure(figsize=(8, 2), facecolor="#121212")
+        self.bmi_zones_fig = Figure(figsize=(5, 2), dpi=100)
         self.bmi_zones_canvas = FigureCanvas(self.bmi_zones_fig)
         self.bmi_zones_canvas.setStyleSheet("background-color: #121212;")
+        self.bmi_zones_canvas.setMinimumHeight(150)
         zones_layout.addWidget(self.bmi_zones_canvas)
 
         zones_group.setLayout(zones_layout)
         right_layout.addWidget(zones_group, 1)
 
-        main_layout.addLayout(right_layout, 1)
+        main_layout.addLayout(right_layout, 2)
 
-        # Signály
-        self.bmi_height_spin.valueChanged.connect(self.on_bmi_height_changed)
+        # Propojení signálů
+        self.bmi_save_button.clicked.connect(self.save_bmi_measurement)
         self.bmi_weight_spin.valueChanged.connect(self.update_bmi_current_display)
-        self.bmi_date_edit.dateChanged.connect(self.update_bmi_current_display)
-        self.bmi_time_edit.timeChanged.connect(self.update_bmi_current_display)
-        self.bmi_save_button.clicked.connect(self.add_weight_measurement)
-        self.bmi_chart_mode_combo.currentIndexChanged.connect(self.update_bmi_charts)
-
-        # Inicializace
-        self.refresh_bmi_history()
-        self.update_bmi_current_display()
-        self.update_bmi_charts()
+        self.bmi_height_spin.valueChanged.connect(self.update_bmi_current_display)
 
         return tab
+
 
     def set_bmi_period_mode(self, mode: str):
         """Nastaví období grafu (week/month/year) a přepne tlačítka."""
@@ -2741,6 +2741,45 @@ class FitnessTrackerApp(QMainWindow):
         self.update_bmi_time_chart()
         self.update_bmi_zones_chart()
 
+    def save_bmi_measurement(self):
+        """Uloží nové měření váhy a aktualizuje statistiky."""
+        weight = self.bmi_weight_spin.value()
+        height = self.bmi_height_spin.value()
+
+        # Uložení výšky (pokud se změnila)
+        if "body_metrics" not in self.data:
+            self.data["body_metrics"] = {}
+        self.data["body_metrics"]["height_cm"] = height
+
+        # Sestavení záznamu měření
+        date_val = self.bmi_date_edit.date().toString("yyyy-MM-dd")
+        time_val = self.bmi_time_edit.time().toString("HH:mm:ss")
+        
+        new_entry = {
+            "id": str(uuid.uuid4()),
+            "date": date_val,
+            "timestamp": f"{date_val} {time_val}",
+            "value": weight
+        }
+
+        # Přidání do historie
+        if "weight_history" not in self.data["body_metrics"]:
+            self.data["body_metrics"]["weight_history"] = []
+        
+        self.data["body_metrics"]["weight_history"].append(new_entry)
+        
+        # Uložení dat
+        self.save_data()
+
+        # Aktualizace UI
+        self.refresh_bmi_history()
+        self.update_bmi_charts()
+        self.update_bmi_current_display()
+        self.recompute_bmi_plan()  # Přepočet plánu, pokud se změnila váha
+
+        self.show_message("Uloženo", f"Měření váhy {weight} kg bylo uloženo.")
+
+
     def update_bmi_time_chart(self):
         """Časový graf pro váhu a BMI s kalendářním týdnem/měsícem/rokem a vlastním rozsahem.
 
@@ -2784,8 +2823,8 @@ class FitnessTrackerApp(QMainWindow):
             end_q = QDate(today.year(), 12, 31)
             period_label = f"rok {today.year()}"
         elif period_mode == "custom" and hasattr(self, "bmi_custom_from_date") and hasattr(self, "bmi_custom_to_date"):
-            start_q = self.bmi_custom_from_date
-            end_q = self.bmi_custom_to_date
+            start_q = self.bmi_custom_from_date.date()
+            end_q = self.bmi_custom_to_date.date()
             period_label = f"období {start_q.toString('dd.MM.yyyy')} – {end_q.toString('dd.MM.yyyy')}"
         else:
             # default: měsíc aktuálního dne
@@ -2835,292 +2874,155 @@ class FitnessTrackerApp(QMainWindow):
         all_bmis: list[float] = []
 
         for entry in sorted(history, key=lambda e: e.get("timestamp", "") or e.get("date", "")):
-            ts = entry.get("timestamp")
-            dt = None
-            if ts:
+            ts_str = entry.get("timestamp")
+            date_str = entry.get("date")
+            w_val = float(entry.get("value", 0))
+
+            dt_obj = None
+            if ts_str:
                 try:
-                    dt = datetime.strptime(ts, "%Y-%m-%d %H:%M:%S")
-                except Exception:
-                    dt = None
-            if dt is None:
-                date_str = entry.get("date", "")
+                    dt_obj = datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S")
+                except:
+                    pass
+            if not dt_obj and date_str:
                 try:
-                    dt = datetime.strptime(date_str, "%Y-%m-%d")
-                except Exception:
-                    continue
-
-            if dt > now:
+                    dt_obj = datetime.strptime(date_str, "%Y-%m-%d")
+                except:
+                    pass
+            
+            if not dt_obj:
                 continue
-            if dt < start_dt or dt > end_dt:
+                
+            # Filtr "žádná budoucnost" + rozsah
+            if dt_obj > now:
                 continue
-
-            w = float(entry.get("value", 0.0))
-            bmi_val = self.calculate_bmi(w, height_cm)
-
-            all_times.append(dt)
-            all_weights.append(w)
-            all_bmis.append(bmi_val)
+            if start_dt <= dt_obj <= end_dt:
+                all_times.append(dt_obj)
+                all_weights.append(w_val)
+                bmi_val = w_val / ((height_cm / 100.0) ** 2)
+                all_bmis.append(bmi_val)
 
         if not all_times:
-            ax_weight.set_title(f"V období {period_label} nejsou žádná měření.")
+            ax_weight.set_title(f"Žádná data v rozsahu {period_label}")
             ax_weight.set_xlabel("Datum")
-            ax_weight.set_ylabel("Hodnota")
             self.bmi_time_canvas.draw()
             return
 
-        ax_weight.xaxis.set_major_formatter(mdates.DateFormatter("%d.%m.%Y"))
-        ax_weight.xaxis.set_label_position("bottom")
-        ax_weight.xaxis.tick_bottom()
-        fig.autofmt_xdate(rotation=30)
+        # --- Plotting logic ---
+        show_weight = (mode == "Váha" or mode == "Obojí")
+        show_bmi = (mode == "BMI" or mode == "Obojí")
 
-        # Osa X přesně na dané období
-        ax_weight.set_xlim(start_dt, end_dt)
-
-        times = all_times
-        weights = all_weights
-        bmis = all_bmis
-
-        # Původní x v číslech (datenum) – použijeme pro váhu i BMI
-        xs_raw = [mdates.date2num(t) for t in times]
-
-        # Pomocná funkce pro hladkou křivku (Catmull-Rom spline)
-        def smooth_curve(xs_num: list[float], ys_vals: list[float], points_per_segment: int = 20):
-            """Vrátí zahuštěné (x,y) body hladké křivky přes zadané body."""
-            n = len(xs_num)
-            if n < 3:
-                # Příliš málo bodů – vrať jen původní data (bez vyhlazení)
-                xs_arr = np.array(xs_num, dtype=float)
-                ys_arr = np.array(ys_vals, dtype=float)
-                return xs_arr, ys_arr
-
-            xs_arr = np.array(xs_num, dtype=float)
-            ys_arr = np.array(ys_vals, dtype=float)
-
-            # Body P = (x,y)
-            P = np.stack([xs_arr, ys_arr], axis=1)
-
-            result_points = []
-
-            for i in range(n - 1):
-                # P0,P1,P2,P3 pro segment mezi P1 a P2
-                P1 = P[i]
-                P2 = P[i + 1]
-                P0 = P[i - 1] if i - 1 >= 0 else P1
-                P3 = P[i + 2] if i + 2 < n else P2
-
-                # Parametr t v [0,1]
-                if i < n - 2:
-                    ts = np.linspace(0.0, 1.0, points_per_segment, endpoint=False)
-                else:
-                    # poslední segment včetně konce
-                    ts = np.linspace(0.0, 1.0, points_per_segment, endpoint=True)
-
-                for t in ts:
-                    t2 = t * t
-                    t3 = t2 * t
-                    # Catmull-Rom: 0.5 * (2P1 + (-P0+P2)t + (2P0-5P1+4P2-P3)t^2 + (-P0+3P1-3P2+P3)t^3)
-                    term1 = 2.0 * P1
-                    term2 = (-P0 + P2) * t
-                    term3 = (2.0 * P0 - 5.0 * P1 + 4.0 * P2 - P3) * t2
-                    term4 = (-P0 + 3.0 * P1 - 3.0 * P2 + P3) * t3
-                    point = 0.5 * (term1 + term2 + term3 + term4)
-                    result_points.append(point)
-
-            result_points = np.array(result_points)
-            xs_s = result_points[:, 0]
-            ys_s = result_points[:, 1]
-            return xs_s, ys_s
-
-        weight_line = None
-        bmi_line = None
         ax_bmi = None
+        lines_handles = []
+        lines_labels = []
 
-        # Váha – hladká křivka (modrá)
-        if mode in ("Váha", "Obojí"):
-            xs_weight_smooth, weights_smooth = smooth_curve(xs_raw, weights, points_per_segment=20)
-            times_weight_smooth = [mdates.num2date(x) for x in xs_weight_smooth]
+        # Funkce pro Catmull-Rom spline
+        def catmull_rom_spline(x, y, num_points=100):
+            if len(x) < 2:
+                return x, y
+            t = np.arange(len(x))
+            ti = np.linspace(0, len(x) - 1, num_points * (len(x) - 1))
+            
+            # Jednoduchá interpolace pokud je málo bodů
+            # Pro lepší smooth bychom potřebovali vlastní implementaci nebo scipy
+            # Zde fallback na numpy interp pro čas a váhu
+            # V původním kódu byla PchipInterpolator nebo podobně
+            try:
+                from scipy.interpolate import PchipInterpolator
+                spline = PchipInterpolator(t, y)
+                yi = spline(ti)
+                
+                # Časová osa
+                xi_nums = np.interp(ti, t, mdates.date2num(x))
+                xi = mdates.num2date(xi_nums)
+                return xi, yi
+            except ImportError:
+                # Fallback lineární
+                return x, y
 
-            (weight_line,) = ax_weight.plot(
-                times_weight_smooth,
-                weights_smooth,
-                linestyle="-",
-                linewidth=1.8,
-                label="Váha [kg]",
-                color="#4ea5ff",
-            )
+        # 1) VÁHA
+        if show_weight:
+            xi, yi = catmull_rom_spline(all_times, all_weights)
+            l1, = ax_weight.plot(xi, yi, color="#1e90ff", linewidth=2, label="Váha (kg)")
+            ax_weight.scatter(all_times, all_weights, color="#87cefa", s=20, zorder=5)
             ax_weight.set_ylabel("Váha [kg]")
+            lines_handles.append(l1)
+            lines_labels.append("Váha")
 
-        # BMI – hladká křivka, barevné úseky podle BMI zón
-        if mode in ("BMI", "Obojí"):
-            if mode == "Obojí":
+        # 2) BMI
+        if show_bmi:
+            if show_weight:
                 ax_bmi = ax_weight.twinx()
-                ax_bmi.set_facecolor("#121212")
                 style_axes(ax_bmi)
-                ax_for_bmi = ax_bmi
             else:
-                ax_for_bmi = ax_weight
-
-            # Hladká křivka BMI
-            xs_bmi_smooth, bmis_smooth = smooth_curve(xs_raw, bmis, points_per_segment=20)
-
-            # Hraniční BMI hodnoty mezi zónami
-            zone_thresholds = [18.5, 25.0, 30.0, 35.0]
-
-            segments: list[list[list[float]]] = []
-            seg_colors: list[str] = []
-
-            if len(xs_bmi_smooth) > 1:
-                for i in range(len(xs_bmi_smooth) - 1):
-                    x0, y0 = float(xs_bmi_smooth[i]), float(bmis_smooth[i])
-                    x1, y1 = float(xs_bmi_smooth[i + 1]), float(bmis_smooth[i + 1])
-
-                    if y0 == y1:
-                        mid_bmi = y0
-                        _, col = self.get_bmi_category(mid_bmi)
-                        segments.append([[x0, y0], [x1, y1]])
-                        seg_colors.append(col)
-                        continue
-
-                    # Najdi průsečíky s prahy mezi y0 a y1
-                    crossings = []
-                    for thr in zone_thresholds:
-                        if (y0 < thr < y1) or (y1 < thr < y0):
-                            t = (thr - y0) / (y1 - y0)
-                            x_thr = x0 + t * (x1 - x0)
-                            crossings.append((t, x_thr, thr))
-
-                    crossings.sort(key=lambda c: c[0])
-
-                    points = [(x0, y0)]
-                    for _, x_thr, y_thr in crossings:
-                        points.append((x_thr, y_thr))
-                    points.append((x1, y1))
-
-                    for j in range(len(points) - 1):
-                        xa, ya = points[j]
-                        xb, yb = points[j + 1]
-                        mid_bmi = (ya + yb) / 2.0
-                        _, col = self.get_bmi_category(mid_bmi)
-                        segments.append([[xa, ya], [xb, yb]])
-                        seg_colors.append(col)
-
-                bmi_collection = LineCollection(
-                    segments,
-                    colors=seg_colors,
-                    linewidths=1.6,
-                    linestyles="--",
-                )
-                ax_for_bmi.add_collection(bmi_collection)
-                bmi_line = bmi_collection
-            else:
-                # Jen jeden bod – žádný úsek, BMI čára bude jen bod
-                (bmi_line,) = ax_for_bmi.plot(
-                    times,
-                    bmis,
-                    linestyle="--",
-                    linewidth=1.6,
-                    label="BMI",
-                )
-
-            ax_for_bmi.set_ylabel("BMI")
-
-            # Rozumné limity pro BMI osu podle vyhlazených hodnot
-            if len(bmis) > 1:
-                ymin = float(min(bmis_smooth))
-                ymax = float(max(bmis_smooth))
-            else:
-                ymin = min(bmis)
-                ymax = max(bmis)
-            margin = max(1.0, (ymax - ymin) * 0.1)
-            ax_for_bmi.set_ylim(ymin - margin, ymax + margin)
-        else:
-            ax_bmi = None
-
-        # Barevné body podle BMI kategorie (na původních měřeních)
-        for t, w, bmi_val in zip(times, weights, bmis):
-            _, color = self.get_bmi_category(bmi_val)
-            if mode in ("Váha", "Obojí") and weight_line is not None:
-                ax_weight.scatter([t], [w], color=color, s=30, zorder=5)
-            if mode in ("BMI", "Obojí") and bmi_line is not None:
-                target_ax = ax_bmi if ax_bmi is not None else ax_weight
-                target_ax.scatter([t], [bmi_val], color=color, s=30, zorder=6)
-
-        # BMI zóny – horizontální pásy
-        if mode in ("BMI", "Obojí"):
-            target_ax = ax_bmi if ax_bmi is not None else ax_weight
-            bmi_zones = [
-                (0.0, 18.5, "Podváha", "#4ea5ff"),
-                (18.5, 25.0, "Normální", "#32c766"),
-                (25.0, 30.0, "Nadváha", "#ffc107"),
-                (30.0, 35.0, "Obezita I", "#ff7043"),
-                (35.0, 50.0, "Obezita II+", "#ff1744"),
+                ax_bmi = ax_weight
+            
+            ax_bmi.set_ylabel("BMI")
+            
+            # Pásy
+            zones = [
+                (0, 18.5, "#87CEEB", 0.1),   # Podváha
+                (18.5, 25, "#32CD32", 0.15), # Norma
+                (25, 30, "#FFD700", 0.1),    # Nadváha
+                (30, 35, "#FF8C00", 0.1),    # Obezita 1
+                (35, 40, "#FF4500", 0.1),    # Obezita 2
+                (40, 100, "#8B0000", 0.15)   # Obezita 3
             ]
-            for start_b, end_b, label_b, color_b in bmi_zones:
-                target_ax.axhspan(start_b, end_b, alpha=0.08, color=color_b)
+            
+            # Dynamický nebo fixní rozsah Y pro BMI
+            min_bmi_data = min(all_bmis) if all_bmis else 20
+            max_bmi_data = max(all_bmis) if all_bmis else 30
+            
+            # Defaultně 20-35, pokud data nevybočují
+            y_min = min(20.0, min_bmi_data - 1.0)
+            y_max = max(35.0, max_bmi_data + 1.0)
+            
+            ax_bmi.set_ylim(y_min, y_max)
 
-        # Titulek podle režimu + období
-        if mode == "Váha":
-            title = "Vývoj váhy"
-        elif mode == "BMI":
-            title = "Vývoj BMI"
-        else:
-            title = "Vývoj váhy a BMI"
+            # Vykreslení pásů
+            for (low, high, col, alpha) in zones:
+                if low < y_max and high > y_min:
+                    ax_bmi.axhspan(max(low, y_min), min(high, y_max), color=col, alpha=alpha, lw=0)
 
-        title = f"{title} – {period_label}"
-        ax_weight.set_title(title)
+            # Křivka BMI
+            xi, yi = catmull_rom_spline(all_times, all_bmis)
+            
+            # Pokud zobrazujeme pouze BMI, můžeme udělat barevnou čáru (LineCollection)
+            # Pokud obojí, raději jednu barvu, aby se to nemlátilo s váhou
+            if not show_weight:
+                # Barevná čára podle hodnoty
+                points = np.array([mdates.date2num(xi), yi]).T.reshape(-1, 1, 2)
+                segments = np.concatenate([points[:-1], points[1:]], axis=1)
+                
+                # Normalizace pro colormap nebo manuální barvy? 
+                # Jednodušší: uděláme bílou/šedou křivku na barevném pozadí
+                l2, = ax_bmi.plot(xi, yi, color="#ffffff", linewidth=2.5, label="BMI")
+                lines_handles.append(l2)
+                lines_labels.append("BMI")
+            else:
+                # Oranžová pro BMI v kombinovaném grafu
+                l2, = ax_bmi.plot(xi, yi, color="#ffa500", linewidth=2, label="BMI")
+                lines_handles.append(l2)
+                lines_labels.append("BMI")
 
-        # Legenda – jen to, co je skutečně zobrazeno, pod grafem
-        legend_handles = []
-        legend_labels = []
+            ax_bmi.scatter(all_times, all_bmis, color="#ffffff", s=15, zorder=5)
 
-        if mode in ("Váha", "Obojí") and weight_line is not None:
-            legend_handles.append(weight_line)
-            legend_labels.append("Váha [kg]")
+        # Osy X
+        ax_weight.set_title(f"Vývoj – {period_label}")
+        ax_weight.xaxis.set_major_formatter(mdates.DateFormatter('%d.%m.'))
+        
+        # Nastavení limitů osy X podle vybraného období (fixní rozsah)
+        ax_weight.set_xlim(mdates.date2num(start_dt), mdates.date2num(end_dt))
 
-        if mode in ("BMI", "Obojí") and bmi_line is not None:
-            target_ax = ax_bmi if ax_bmi is not None else ax_weight
-            dummy_bmi_line, = target_ax.plot(
-                [], [],
-                linestyle="--",
-                linewidth=1.6,
-                color="#e0e0e0",
-            )
-            legend_handles.append(dummy_bmi_line)
-            legend_labels.append("BMI")
+        # Legenda
+        if lines_handles:
+            ax_weight.legend(lines_handles, lines_labels, loc='upper center', 
+                             bbox_to_anchor=(0.5, -0.15), ncol=2, 
+                             facecolor="#1e1e1e", edgecolor="#3d3d3d", labelcolor="#e0e0e0")
 
-        if legend_handles:
-            legend = ax_weight.legend(
-                legend_handles,
-                legend_labels,
-                loc="upper center",
-                bbox_to_anchor=(0.5, -0.18),
-                ncol=len(legend_handles),
-                facecolor="#222222",
-                edgecolor="#e0e0e0",
-                labelcolor="#e0e0e0",
-            )
-            legend.get_frame().set_alpha(0.9)
-        weight_min, weight_max = 60.0, 90.0
-        bmi_min, bmi_max = 20.0, 35.0
-
-        if mode in ("Váha", "Obojí"):
-            try:
-                ax_weight.set_ylim(weight_min, weight_max)
-            except Exception:
-                pass
-
-        # Režim "BMI" a "Obojí" – osa BMI 20–35
-        try:
-            ax_bmi  # jen ověření, že existuje
-        except NameError:
-            ax_bmi = None
-
-        if mode in ("BMI", "Obojí") and ax_bmi is not None:
-            try:
-                ax_bmi.set_ylim(bmi_min, bmi_max)
-            except Exception:
-                pass
+        fig.tight_layout()
         self.bmi_time_canvas.draw()
+
 
     def update_bmi_zones_chart(self):
         """„Vědecký“ graf BMI zón s vyznačením aktuálního BMI."""
