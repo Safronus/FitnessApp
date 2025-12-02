@@ -31,9 +31,8 @@ from matplotlib.collections import LineCollection
 import matplotlib.pyplot as plt
 
 TITLE = "Fitness Tracker"
-VERSION = "4.1.10"
-
-VERSION_DATE = "30.11.2025"
+VERSION = "4.1.19"
+VERSION_DATE = "02.12.2025"
 
 # Dark Theme Stylesheet
 DARK_THEME = """
@@ -2181,7 +2180,7 @@ class FitnessTrackerApp(QMainWindow):
             print(f"Chyba při obnovování stavu: {e}")
     
     def setup_ui(self):
-        """Vytvoří UI - dynamické záložky podle active exercises"""
+        """Vytvoří UI - dynamické záložky s fixním scrollováním pro cvičení."""
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         layout = QVBoxLayout(central_widget)
@@ -2189,39 +2188,66 @@ class FitnessTrackerApp(QMainWindow):
         self.tabs = QTabWidget()
         self.tabs.currentChanged.connect(self.on_tab_changed)
         layout.addWidget(self.tabs)
-        # -- TabBar chování: nepoužívej expanzi, povol rolování, neschovávej, bez elips --
+    
+        # TabBar chování
         try:
             from PySide6.QtCore import Qt
+            from PySide6.QtWidgets import QFrame, QSizePolicy
+    
             tb = self.tabs.tabBar()
-            tb.setExpanding(False)           # každý tab má šířku podle obsahu (už žádné „na sílu stejně široké“)
-            tb.setElideMode(Qt.ElideNone)    # nevypisuj „…“, ponech celý text
-            self.tabs.setUsesScrollButtons(True)   # pokud je tabů moc, povol šipky
-            self.tabs.setTabBarAutoHide(False)     # neschovávej tabbar
+            tb.setExpanding(False)
+            tb.setElideMode(Qt.ElideNone)
+            self.tabs.setUsesScrollButtons(True)
+            self.tabs.setTabBarAutoHide(False)
         except Exception:
             pass
     
-        # Záložka "Přidat výkon" - vždy první
-        self.tabs.addTab(self.create_add_workout_tab(), "➕ Přidat výkon")
+        # ==================== ZÁLOŽKA „Přidat výkon" ====================
+        add_widget = self.create_add_workout_tab()
+        add_scroll = QScrollArea()
+        add_scroll.setWidgetResizable(True)
+        add_scroll.setFrameShape(QFrame.NoFrame)
+        add_scroll.setStyleSheet("QScrollArea { border: none; background-color: #1e1e1e; }")
+        add_scroll.setWidget(add_widget)
+        self.tabs.addTab(add_scroll, "Přidat výkon")
     
-        # DYNAMICKÉ ZÁLOŽKY PRO CVIČENÍ (pořadí nechávám dle vašeho get_active_exercises)
+        # ==================== DYNAMICKÉ ZÁLOŽKY PRO CVIČENÍ (FIX) ====================
         active_exercises = self.get_active_exercises()
         for exercise_id in active_exercises:
             config = self.get_exercise_config(exercise_id)
-            tab_label = f"{config['icon']} {config['name']}"
-            self.tabs.addTab(self.create_exercise_tab(exercise_id, config['icon']), tab_label)
-        
-        # Záložka "BMI & váha" - požadováno před "O aplikaci"
-        self.tabs.addTab(self.create_bmi_tab(), "⚖️ BMI + váha")
+            icon = config.get("icon", "")
+            name = config.get("name", exercise_id.capitalize())
+            tab_label = f"{icon} {name}".strip()
     
-        # Záložka "Nastavení"
-        self.tabs.addTab(self.create_settings_tab(), "⚙️ Nastavení")
+            # 1. Vytvoříme obsah záložky (layout s kalendářem a grafem)
+            ex_widget = self.create_exercise_tab(exercise_id, icon)
+            
+            # 2. ZÁSADNÍ FIX: Nastavíme PEVNOU MINIMÁLNÍ VELIKOST obsahu.
+            #    Tím zabráníme deformaci ("zcvrknutí") kalendáře a grafů.
+            #    Pokud je okno menší než toto, objeví se scrollbary.
+            #    Hodnoty 1600x900 zajistí, že layout vypadá jako na velkém monitoru.
+            ex_widget.setMinimumSize(1600, 900) 
+            
+            # 3. Vytvoříme ScrollArea
+            ex_scroll = QScrollArea()
+            # widgetResizable=True dovolí roztažení na VĚTŠÍCH monitorech...
+            # ...ale díky setMinimumSize se nikdy nezmenší pod 1600x900 na MENŠÍCH.
+            ex_scroll.setWidgetResizable(True) 
+            ex_scroll.setFrameShape(QFrame.NoFrame)
+            ex_scroll.setStyleSheet("QScrollArea { border: none; background-color: #1e1e1e; }")
+            
+            ex_scroll.setWidget(ex_widget)
     
-        # Záložka "O aplikaci" - zůstává poslední
-        self.tabs.addTab(self.create_about_tab(), "ℹ️ O aplikaci")
+            self.tabs.addTab(ex_scroll, tab_label)
     
-        # Volitelný hook, který už v projektu máte – ponechávám
+        # ==================== OSTATNÍ ZÁLOŽKY (beze změny) ====================
+        self.tabs.addTab(self.create_bmi_tab(), "BMI + váha")
+        self.tabs.addTab(self.create_settings_tab(), "Nastavení")
+        self.tabs.addTab(self.create_about_tab(), "O aplikaci")
+    
         self.inject_about_updates()
-        
+
+
     def create_bmi_tab(self):
         """Záložka pro sledování váhy a výpočet BMI."""
         tab = QWidget()
@@ -5944,10 +5970,9 @@ class FitnessTrackerApp(QMainWindow):
     
         canvas.draw()
 
-        
     def create_exercise_tab(self, exercise_type, icon):
         """Vytvoří záložku pro konkrétní cvičení - BEZ přidávání (jen layout a tabulka záznamů)."""
-        from PySide6.QtWidgets import QHeaderView, QSizePolicy  # lokální import, ať neměníme globály
+        from PySide6.QtWidgets import QHeaderView, QSizePolicy  # lokální import
         widget = QWidget()
         main_layout = QHBoxLayout(widget)
     
@@ -5962,7 +5987,7 @@ class FitnessTrackerApp(QMainWindow):
         year_selector = QComboBox()
         year_selector.setMinimumWidth(80)
     
-        # Naplnění roků (od min(year,data) do max(year,today))
+        # Naplnění roků
         years = set()
         today = datetime.now().date()
         for k in self.data.get("workouts", {}).keys():
@@ -5976,7 +6001,7 @@ class FitnessTrackerApp(QMainWindow):
         years = sorted(years)
         for y in years:
             year_selector.addItem(str(y))
-        # Ulož selector pro dané cvičení
+        
         if not hasattr(self, "exercise_year_selectors"):
             self.exercise_year_selectors = {}
         self.exercise_year_selectors[exercise_type] = year_selector
@@ -5985,7 +6010,7 @@ class FitnessTrackerApp(QMainWindow):
         year_selector_layout.addStretch()
         left_layout.addLayout(year_selector_layout)
     
-        # Přehledové sekce (DNES / TÝDEN / MĚSÍC / ZBYTEK ROKU)
+        # Přehledové sekce
         goals_frame = QFrame()
         goals_frame.setObjectName(f"goals_frame_{exercise_type}")
         goals_frame.setStyleSheet(
@@ -6011,7 +6036,7 @@ class FitnessTrackerApp(QMainWindow):
         month_section.setWordWrap(True)
         goals_layout.addWidget(month_section)
     
-        # Roční sekce (zbytek)
+        # Roční sekce
         year_rest_section = QLabel()
         year_rest_section.setObjectName(f"year_rest_section_{exercise_type}")
         year_rest_section.setStyleSheet("font-size: 12px; color: #87CEEB; padding: 5px;")
@@ -6026,7 +6051,7 @@ class FitnessTrackerApp(QMainWindow):
     
         left_layout.addWidget(goals_frame)
     
-        # Bulk akce: smazat vybrané
+        # Bulk akce
         bulk_actions_layout = QHBoxLayout()
         delete_selected_btn = QPushButton("🗑️ Smazat vybrané")
         delete_selected_btn.clicked.connect(lambda: self.delete_selected_records(exercise_type))
@@ -6037,25 +6062,22 @@ class FitnessTrackerApp(QMainWindow):
         # ==================== TABULKA ZÁZNAMŮ ====================
         tree = QTreeWidget()
         tree.setObjectName(f"tree_{exercise_type}")
-        tree.setColumnCount(4)  # 4. sloupec (Poznámka) hned skryjeme – minimální zásah pro zbytek kódu
+        tree.setColumnCount(4)
         tree.setHeaderLabels(["📅 Den", "⏱️ Čas", "💪 Hodnota", "Poznámka"])
         tree.setSelectionMode(QTreeWidget.ExtendedSelection)
-    
-        # DŮLEŽITÉ: nespoléhat na automatické sortItems; pořadí řeší update_exercise_tab
         tree.setSortingEnabled(False)
     
         header = tree.header()
         header.setStretchLastSection(True)
-        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)  # 📅 Den
-        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)  # ⏱️ Čas
-        header.setSectionResizeMode(2, QHeaderView.Stretch)           # 💪 Hodnota
-        header.setSectionResizeMode(3, QHeaderView.Fixed)             # Poznámka (skrytá)
+        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(2, QHeaderView.Stretch)
+        header.setSectionResizeMode(3, QHeaderView.Fixed)
         tree.setColumnHidden(3, True)
     
         tree.setColumnWidth(0, max(80, tree.columnWidth(0)))
         tree.setColumnWidth(1, max(70, tree.columnWidth(1)))
 
-        # KONTEXTOVÉ MENU (Added)
         tree.setContextMenuPolicy(Qt.CustomContextMenu)
         tree.customContextMenuRequested.connect(
             lambda pos: self.on_exercise_tree_context_menu(pos, tree, exercise_type)
@@ -6064,7 +6086,7 @@ class FitnessTrackerApp(QMainWindow):
         left_layout.addWidget(tree)
         main_layout.addWidget(left_panel, 1)
     
-        # ==================== PRAVÁ STRANA (SCROLLOVACÍ OBLAST) ====================
+        # ==================== PRAVÁ STRANA ====================
         right_panel = QWidget()
         right_layout = QVBoxLayout(right_panel)
         right_layout.setContentsMargins(0, 0, 0, 0)
@@ -6127,7 +6149,13 @@ class FitnessTrackerApp(QMainWindow):
         calendar_layout.addWidget(stats_year_label)
     
         self.create_performance_chart(exercise_type, calendar_layout)
-    
+        
+        # OPRAVA: Vynucení minimální výšky grafu (Canvasu)
+        # Vytáhneme si canvas z uložených referencí a nastavíme mu min výšku.
+        if hasattr(self, "chart_canvases") and exercise_type in self.chart_canvases:
+            canvas = self.chart_canvases[exercise_type]
+            canvas.setMinimumHeight(350)  # Zde nastavujeme minimální výšku grafu!
+
         scroll.setWidget(scroll_content)
         right_layout.addWidget(scroll, 1)
     
@@ -6139,9 +6167,8 @@ class FitnessTrackerApp(QMainWindow):
         self.update_exercise_tab(exercise_type)
         self.refresh_exercise_calendar(exercise_type)
     
-        # POZOR: NEVOLAT day_item.sortChildren(...) – pořadí už udělala update_exercise_tab
-    
         return widget
+
 
     def on_exercise_tree_context_menu(self, pos, tree, exercise_type):
         """Zobrazí kontextové menu pro záznamy ve stromu cvičení."""
