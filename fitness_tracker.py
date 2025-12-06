@@ -6118,6 +6118,7 @@ class FitnessTrackerApp(QMainWindow):
         add_legend_item("#FFD700", "Akorát")
         add_legend_item("#FF6B6B", "Mírný skluz")
         add_legend_item("#8B0000", "Velký skluz")
+        add_legend_item("#555555", "Necvičil")
         legend_layout.addStretch()
         right_layout.addLayout(legend_layout)
     
@@ -7519,7 +7520,7 @@ class FitnessTrackerApp(QMainWindow):
         else:
             total_status = f"\n📊 Celkový stav k 31.12.: Přesně"
         
-        color = '#FF6B6B'
+        color = '#555555' # Změna barvy na šedou pro neaktivní dny
         tooltip = f"{date_str}\nNecvičil\nCíl: {goal}\nSkluz: -{goal}{total_status}"
         return color, tooltip
 
