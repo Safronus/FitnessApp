@@ -6849,7 +6849,7 @@ class FitnessTrackerApp(QMainWindow):
     def update_exercise_tab(self, exercise_type):
         """
         Aktualizuje statistiky a strom záznamů daného cvičení.
-        Struktura: Měsíc (YYYY-MM) -> Den (YYYY-MM-DD) -> Záznamy.
+        Struktura: Měsíc (YYYY-MM) -> Týden (ISO) -> Den (YYYY-MM-DD) -> Záznamy.
         """
         try:
             if exercise_type not in self.exercise_year_selectors:
@@ -6857,44 +6857,57 @@ class FitnessTrackerApp(QMainWindow):
             selector = self.exercise_year_selectors[exercise_type]
             if not selector or not selector.currentText():
                 return
-    
+
             selected_year = int(selector.currentText())
-    
+
             # Přehledové boxy / progress bar apod.
             self.update_detailed_overview(exercise_type, selected_year)
-    
+
             tree = self.findChild(QTreeWidget, f"tree_{exercise_type}")
             if not tree:
                 return
-    
-            # --- UCHOVÁNÍ VÝBĚRU ---
+
+            # --- UCHOVÁNÍ VÝBĚRU + ROZBALENÍ (unikátní klíče, aby se netloukly týdny) ---
             preserved = set()             # {(date_str, record_id)}
-            expanded_items = set() 
-    
+            expanded_items = set()
+
             iterator = QTreeWidgetItemIterator(tree)
             while iterator.value():
                 item = iterator.value()
+
                 if item.isExpanded():
-                    expanded_items.add(item.text(0))
-                
+                    payload = item.data(3, Qt.UserRole)
+                    if isinstance(payload, dict):
+                        t = payload.get("type")
+                        if t == "month":
+                            expanded_items.add(("month", payload.get("key")))
+                        elif t == "week":
+                            expanded_items.add(("week", payload.get("month_key"), payload.get("week")))
+                        elif t == "day":
+                            expanded_items.add(("day", payload.get("date")))
+                        else:
+                            expanded_items.add(("text", item.text(0)))
+                    else:
+                        expanded_items.add(("text", item.text(0)))
+
                 if item.isSelected():
                     payload = item.data(3, Qt.UserRole)
                     if isinstance(payload, dict) and "date" in payload and "record_id" in payload:
                         preserved.add((payload["date"], payload["record_id"]))
-                
+
                 iterator += 1
-    
+
             first_population = (tree.property("_ever_populated") is not True)
-    
+
             tree.blockSignals(True)
             tree.clear()
-    
+
             # Multi-select a výkon
             tree.setSelectionMode(QAbstractItemView.ExtendedSelection)
             tree.setSelectionBehavior(QAbstractItemView.SelectItems)
             tree.setAlternatingRowColors(False)
             tree.setUniformRowHeights(True)
-    
+
             # --- Data po dnech (jen zvolený rok) ---
             days_data: dict[str, list[dict]] = {}
             for ds, perday in self.data.get("workouts", {}).items():
@@ -6907,19 +6920,19 @@ class FitnessTrackerApp(QMainWindow):
                         days_data.setdefault(ds, []).extend(recs)
                     elif isinstance(recs, dict):
                         days_data.setdefault(ds, []).append(recs)
-    
+
             # Dny: nejnovější datum první
             sorted_dates = sorted(days_data.keys(), reverse=True)
-            
+
             # Seskupení do měsíců
             from collections import defaultdict
             months_map = defaultdict(list)
             for d in sorted_dates:
                 month_key = d[:7]  # YYYY-MM
                 months_map[month_key].append(d)
-            
+
             sorted_months = sorted(months_map.keys(), reverse=True)
-    
+
             # Připrav fonty
             try:
                 from PySide6.QtGui import QFont
@@ -6928,186 +6941,247 @@ class FitnessTrackerApp(QMainWindow):
                 child_time_font = QFont("Menlo")
                 base_size = tree.font().pointSize() if tree.font().pointSize() > 0 else 11
                 child_time_font.setPointSize(max(base_size - 1, 9))
-                
+
                 month_font = QFont()
                 month_font.setBold(True)
                 month_font.setPointSize(base_size + 1)
+
+                week_font = QFont()
+                week_font.setBold(True)
             except Exception:
                 child_val_font = None
                 child_time_font = None
                 month_font = None
-    
+                week_font = None
+
             # Pomocná funkce barvy (přesně dle zadání)
             def _pct_color(p: int) -> QColor:
                 if p >= 200:
-                    return QColor("#006400") 
+                    return QColor("#006400")
                 elif p > 100:
                     intensity = min((p / 100.0) - 1.0, 1.0)
                     green_val = int(144 + (100 - 144) * intensity)
                     return QColor(0, green_val, 0)
-                elif p == 100: 
-                    return QColor("#FFD700") 
+                elif p == 100:
+                    return QColor("#FFD700")
                 elif p >= 50:
                     intensity = (1.0 - (p / 100.0)) * 2.0
                     val = int(107 + (255 - 107) * (1.0 - intensity))
                     return QColor(255, val, val)
                 else:
-                    return QColor("#8B0000") 
-    
+                    return QColor("#8B0000")
+
             current_month_str = datetime.now().strftime("%Y-%m")
             today_str = datetime.now().strftime("%Y-%m-%d")
-            
+
             cz_months = {
                 "01": "Leden", "02": "Únor", "03": "Březen", "04": "Duben", "05": "Květen", "06": "Červen",
                 "07": "Červenec", "08": "Srpen", "09": "Září", "10": "Říjen", "11": "Listopad", "12": "Prosinec"
             }
-    
+
             for m_key in sorted_months:
                 y_str, m_str = m_key.split("-")
                 m_name = cz_months.get(m_str, m_str)
                 month_label = f"{m_name} {y_str}"
-                
+
+                # (1) měsíční suma (suma hodnot)
+                month_total_value = 0
+                for date_str in months_map[m_key]:
+                    records = days_data.get(date_str, [])
+                    try:
+                        month_total_value += sum(r.get("value", 0) for r in records)
+                    except Exception:
+                        pass
+
                 month_item = QTreeWidgetItem(tree)
                 month_item.setText(0, month_label)
+                month_item.setText(1, f"Σ {month_total_value}")
                 month_item.setData(3, Qt.UserRole, {"type": "month", "key": m_key})
-                
+
                 if month_font:
                     month_item.setFont(0, month_font)
-                
+                    month_item.setFont(1, month_font)
+
                 month_bg = QColor(45, 45, 45)
                 for c in range(tree.columnCount()):
                     month_item.setBackground(c, month_bg)
-                    
+
+                month_item.setTextAlignment(1, Qt.AlignCenter)
+
                 is_current = (m_key == current_month_str)
                 if first_population:
                     month_item.setExpanded(is_current)
                 else:
-                    if month_label in expanded_items:
+                    if ("month", m_key) in expanded_items:
                         month_item.setExpanded(True)
-                
+
+                # (2) týdenní seskupení uvnitř měsíce
+                week_map: dict[int, list[str]] = {}
+                week_order: list[int] = []
                 for date_str in months_map[m_key]:
-                    records = days_data[date_str]
-                    
-                    total_day_value = sum(r.get("value", 0) for r in records)
-                    record_count = len(records)
-                    goal = self.calculate_goal(exercise_type, date_str)
-                    if not isinstance(goal, int):
-                        goal = int(goal) if goal else 0
-                    percent = (total_day_value / goal * 100) if goal > 0 else 0
-        
-                    # Barva podle logiky
-                    color_status = _pct_color(int(percent))
-                    
-                    if percent >= 100:
-                        status_icon = "✅"
-                    elif percent >= 50:
-                        status_icon = "⏳"
-                    else:
-                        status_icon = "❌"
-        
-                    day_item = QTreeWidgetItem(month_item)
-                    day_item.setText(0, f"{status_icon} {date_str}")
-                    day_item.setText(1, f"{total_day_value} ({record_count}×)")
-                    day_item.setText(2, f"{percent:.0f}%")
-                    
-                    day_item.setData(3, Qt.UserRole, {"type": "day", "date": date_str})
-        
-                    # Standardní barvy pro sloupce 0 (datum) a 1 (hodnota)
-                    day_item.setForeground(0, QColor(255, 255, 255))
-                    day_item.setForeground(1, QColor(200, 200, 200))
-                    
-                    # Kontrastní text pro barevný sloupec (2)
-                    is_light = False
-                    if percent == 100: is_light = True # Gold
-                    elif 50 <= percent < 100: is_light = True # Light red/pink
-                    text_col = QColor(0, 0, 0) if is_light else QColor(255, 255, 255)
-                    
-                    day_item.setBackground(2, color_status)
-                    day_item.setForeground(2, text_col)
-                    
-                    day_item.setTextAlignment(1, Qt.AlignCenter)
-                    day_item.setTextAlignment(2, Qt.AlignCenter)
-                    
+                    try:
+                        ddt = datetime.strptime(date_str, "%Y-%m-%d").date()
+                        wno = int(ddt.isocalendar().week)
+                    except Exception:
+                        continue
+                    if wno not in week_map:
+                        week_map[wno] = []
+                        week_order.append(wno)
+                    week_map[wno].append(date_str)
+
+                for wno in week_order:
+                    week_item = QTreeWidgetItem(month_item)
+                    week_item.setText(0, f"📆 Týden {wno}")
+                    week_item.setData(3, Qt.UserRole, {"type": "week", "month_key": m_key, "week": wno})
+
+                    if week_font:
+                        week_item.setFont(0, week_font)
+
+                    week_bg = QColor(35, 35, 35)
+                    for c in range(tree.columnCount()):
+                        week_item.setBackground(c, week_bg)
+
+                    contains_today = (today_str in week_map.get(wno, []))
                     if first_population:
-                        day_item.setExpanded(date_str == today_str)
+                        week_item.setExpanded(contains_today and (m_key == current_month_str))
                     else:
-                        day_item.setExpanded(day_item.text(0) in expanded_items)
-        
-                    # --- ZÁZNAMY ---
-                    def _time_key(rec: dict) -> str:
-                        ts = rec.get("timestamp", "")
-                        if " " in ts:
-                            return ts.split(" ", 1)[1]
-                        return ts
-        
-                    records_sorted_asc = sorted(records, key=_time_key)
-                    cumulative_pairs = []
-                    running_total = 0
-                    for rec in records_sorted_asc:
-                        running_total += rec.get("value", 0)
-                        cumulative_pairs.append((rec, running_total))
-        
-                    for idx, (record, running_total) in enumerate(reversed(cumulative_pairs)):
-                        value = record.get("value", 0)
-                        timestamp = record.get("timestamp", "N/A")
-                        time_only = timestamp.split(" ")[1] if " " in timestamp else timestamp
-                        record_id = record.get("id", "")
-        
-                        if goal > 0:
-                            rec_cum_pct = int(round((running_total / goal) * 100))
-                            pct_text = f"{rec_cum_pct} %"
+                        if ("week", m_key, wno) in expanded_items:
+                            week_item.setExpanded(True)
+
+                    for date_str in week_map[wno]:
+                        records = days_data[date_str]
+
+                        total_day_value = sum(r.get("value", 0) for r in records)
+                        record_count = len(records)
+                        goal = self.calculate_goal(exercise_type, date_str)
+                        if not isinstance(goal, int):
+                            goal = int(goal) if goal else 0
+                        percent = (total_day_value / goal * 100) if goal > 0 else 0
+
+                        # Barva podle logiky
+                        color_status = _pct_color(int(percent))
+
+                        if percent >= 100:
+                            status_icon = "✅"
+                        elif percent >= 50:
+                            status_icon = "⏳"
                         else:
-                            rec_cum_pct = None
-                            pct_text = "—"
-        
-                        rec_item = QTreeWidgetItem(day_item)
-                        rec_item.setText(0, pct_text)
-                        rec_item.setText(1, str(value))
-                        rec_item.setText(2, time_only)
-                        rec_item.setText(3, record_id)
-                        
-                        rec_item.setData(3, Qt.UserRole, {
-                            "type": "record",
-                            "date": date_str,
-                            "record_id": record_id,
-                            "exercise": exercise_type,
-                        })
-        
-                        rec_item.setTextAlignment(0, Qt.AlignCenter)
-                        rec_item.setTextAlignment(1, Qt.AlignCenter)
-                        rec_item.setTextAlignment(2, Qt.AlignCenter)
-        
-                        if rec_cum_pct is None:
-                            rec_item.setForeground(0, QColor(200, 200, 200))
+                            status_icon = "❌"
+
+                        day_item = QTreeWidgetItem(week_item)
+                        day_item.setText(0, f"{status_icon} {date_str}")
+                        day_item.setText(1, f"{total_day_value} ({record_count}×)")
+                        day_item.setText(2, f"{percent:.0f}%")
+
+                        day_item.setData(3, Qt.UserRole, {"type": "day", "date": date_str})
+
+                        # Standardní barvy pro sloupce 0 (datum) a 1 (hodnota)
+                        day_item.setForeground(0, QColor(255, 255, 255))
+                        day_item.setForeground(1, QColor(200, 200, 200))
+
+                        # Kontrastní text pro barevný sloupec (2)
+                        is_light = False
+                        if percent == 100:
+                            is_light = True  # Gold
+                        elif 50 <= percent < 100:
+                            is_light = True  # Light red/pink
+                        text_col = QColor(0, 0, 0) if is_light else QColor(255, 255, 255)
+
+                        day_item.setBackground(2, color_status)
+                        day_item.setForeground(2, text_col)
+
+                        day_item.setTextAlignment(1, Qt.AlignCenter)
+                        day_item.setTextAlignment(2, Qt.AlignCenter)
+
+                        if first_population:
+                            day_item.setExpanded(date_str == today_str)
+                            if date_str == today_str:
+                                # při prvním naplnění rozbal i rodiče, aby byl dnešek opravdu vidět
+                                try:
+                                    week_item.setExpanded(True)
+                                    month_item.setExpanded(True)
+                                except Exception:
+                                    pass
                         else:
-                            # Barva TEXTU procent u záznamu (pozadí ne)
-                            rec_item.setForeground(0, _pct_color(rec_cum_pct))
-                            
-                        rec_item.setForeground(1, QColor(240, 240, 240))
-                        rec_item.setForeground(2, QColor(180, 180, 180))
-        
-                        if child_val_font: rec_item.setFont(1, child_val_font)
-                        if child_time_font: rec_item.setFont(2, child_time_font)
-                        
-                        if idx % 2 == 1:
-                            shade = QColor(255, 255, 255, 14)
-                            rec_item.setBackground(0, shade)
-                            rec_item.setBackground(1, shade)
-                            rec_item.setBackground(2, shade)
-                            
-                        if (date_str, record_id) in preserved:
-                            rec_item.setSelected(True)
-    
+                            if ("day", date_str) in expanded_items:
+                                day_item.setExpanded(True)
+
+                        # --- ZÁZNAMY ---
+                        def _time_key(rec: dict) -> str:
+                            ts = rec.get("timestamp", "")
+                            if " " in ts:
+                                return ts.split(" ", 1)[1]
+                            return ts
+
+                        records_sorted_asc = sorted(records, key=_time_key)
+                        cumulative_pairs = []
+                        running_total = 0
+                        for rec in records_sorted_asc:
+                            running_total += rec.get("value", 0)
+                            cumulative_pairs.append((rec, running_total))
+
+                        for idx, (record, running_total) in enumerate(reversed(cumulative_pairs)):
+                            value = record.get("value", 0)
+                            timestamp = record.get("timestamp", "N/A")
+                            time_only = timestamp.split(" ")[1] if " " in timestamp else timestamp
+                            record_id = record.get("id", "")
+
+                            if goal > 0:
+                                rec_cum_pct = int(round((running_total / goal) * 100))
+                                pct_text = f"{rec_cum_pct} %"
+                            else:
+                                rec_cum_pct = None
+                                pct_text = "—"
+
+                            rec_item = QTreeWidgetItem(day_item)
+                            rec_item.setText(0, pct_text)
+                            rec_item.setText(1, str(value))
+                            rec_item.setText(2, time_only)
+                            rec_item.setText(3, record_id)
+
+                            rec_item.setData(3, Qt.UserRole, {
+                                "type": "record",
+                                "date": date_str,
+                                "record_id": record_id,
+                                "exercise": exercise_type,
+                            })
+
+                            rec_item.setTextAlignment(0, Qt.AlignCenter)
+                            rec_item.setTextAlignment(1, Qt.AlignCenter)
+                            rec_item.setTextAlignment(2, Qt.AlignCenter)
+
+                            if rec_cum_pct is None:
+                                rec_item.setForeground(0, QColor(200, 200, 200))
+                            else:
+                                # Barva TEXTU procent u záznamu (pozadí ne)
+                                rec_item.setForeground(0, _pct_color(rec_cum_pct))
+
+                            rec_item.setForeground(1, QColor(240, 240, 240))
+                            rec_item.setForeground(2, QColor(180, 180, 180))
+
+                            if child_val_font:
+                                rec_item.setFont(1, child_val_font)
+                            if child_time_font:
+                                rec_item.setFont(2, child_time_font)
+
+                            if idx % 2 == 1:
+                                shade = QColor(255, 255, 255, 14)
+                                rec_item.setBackground(0, shade)
+                                rec_item.setBackground(1, shade)
+                                rec_item.setBackground(2, shade)
+
+                            if (date_str, record_id) in preserved:
+                                rec_item.setSelected(True)
+
             if first_population:
                 tree.setProperty("_ever_populated", True)
-            
+
             tree.blockSignals(False)
-    
+
         except Exception as e:
             print(f"Chyba při update_exercise_tab pro {exercise_type}: {e}")
             import traceback
             traceback.print_exc()
-
 
     def update_detailed_overview(self, exercise_type, selected_year):
         """Aktualizuje detailní přehled: Den, Týden, Měsíc, Zbytek roku (pro aktuální rok) nebo Roční souhrn (pro jiné roky)."""
