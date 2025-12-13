@@ -31,7 +31,7 @@ from matplotlib.collections import LineCollection
 import matplotlib.pyplot as plt
 
 TITLE = "Fitness Tracker"
-VERSION = "4.2.3"
+VERSION = "4.2.6"
 APP_VERSION = VERSION
 VERSION_DATE = "13.12.2025"
 
@@ -3171,7 +3171,7 @@ class FitnessTrackerApp(QMainWindow):
             legend = ax_weight.legend(
                 legend_handles,
                 legend_labels,
-                loc="upper left",
+                loc="upper right",
                 fontsize=8,
                 facecolor="#1e1e1e",
                 edgecolor="#3d3d3d",
@@ -4274,7 +4274,7 @@ class FitnessTrackerApp(QMainWindow):
             ax.set_xlim(left=mdates.date2num(start_d), right=mdates.date2num(end_d))
             
         ax.set_ylim(bottom=0, top=max(110, max(ys_days) + 10) if 'ys_days' in locals() and ys_days else 120)
-        ax.legend(loc="upper left", fontsize=8, facecolor="#1e1e1e", edgecolor="#3d3d3d", labelcolor="#e0e0e0")
+        ax.legend(loc="upper right", fontsize=8, facecolor="#1e1e1e", edgecolor="#3d3d3d", labelcolor="#e0e0e0")
         
         fig.tight_layout()
         self.bmi_plan_canvas.draw()
@@ -5398,7 +5398,10 @@ class FitnessTrackerApp(QMainWindow):
         
     def create_performance_chart(self, exercisetype, parent_layout):
         """Vytvoří sekci s grafem výkonu a přepínači zobrazení"""
+        from PySide6.QtWidgets import QSizePolicy  # lokální import
+
         chart_group = QGroupBox(f"📊 Graf výkonu - {exercisetype.capitalize()}")
+        chart_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)  # NOVÉ
         chart_layout = QVBoxLayout()
 
         # Přepínače zobrazení
@@ -5440,6 +5443,7 @@ class FitnessTrackerApp(QMainWindow):
         total_label.setObjectName(f"chart_total_label_{exercisetype}")
         total_label.setStyleSheet("font-size: 12px; color: #e0e0e0; padding: 2px 4px;")
         total_label.setText("Σ Nacvičeno za období: 0")
+        total_label.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)  # NOVÉ
         chart_layout.addWidget(total_label)
 
         if not hasattr(self, 'chart_total_labels'):
@@ -5460,7 +5464,9 @@ class FitnessTrackerApp(QMainWindow):
         fig = Figure(figsize=(12, 4), facecolor='#1e1e1e')
         canvas = FigureCanvas(fig)
         canvas.setStyleSheet("background-color: #1e1e1e;")
+        canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)  # NOVÉ
         chart_layout.addWidget(canvas)
+        chart_layout.setStretch(chart_layout.count() - 1, 1)  # NOVÉ: canvas dostane veškerou výšku navíc
 
         # Uložení reference
         if not hasattr(self, 'chart_canvases'):
@@ -5563,39 +5569,6 @@ class FitnessTrackerApp(QMainWindow):
                 selected_year = today.year
         else:
             selected_year = today.year
-
-        # === NOVÉ (minimální): label se součtem nacvičeno za období ===
-        def _set_total_label(total_value: float, range_start=None, range_end=None) -> None:
-            try:
-                from PySide6.QtWidgets import QLabel
-                lbl = self.findChild(QLabel, f"chart_total_label_{exercise_type}")
-                if not lbl:
-                    return
-
-                try:
-                    tv = float(total_value)
-                except Exception:
-                    tv = 0.0
-
-                if abs(tv - round(tv)) < 1e-9:
-                    tv_str = str(int(round(tv)))
-                else:
-                    tv_str = f"{tv:.1f}"
-
-                if range_start is not None and range_end is not None:
-                    try:
-                        rs = range_start.strftime("%d.%m.")
-                        re_ = range_end.strftime("%d.%m.")
-                        if rs == re_:
-                            lbl.setText(f"Σ Nacvičeno ({rs}): {tv_str}")
-                        else:
-                            lbl.setText(f"Σ Nacvičeno ({rs}–{re_}): {tv_str}")
-                    except Exception:
-                        lbl.setText(f"Σ Nacvičeno za období: {tv_str}")
-                else:
-                    lbl.setText(f"Σ Nacvičeno za období: {tv_str}")
-            except Exception:
-                pass
 
         # CZ popisky
         _CZ_WEEKDAY = {
@@ -5701,13 +5674,6 @@ class FitnessTrackerApp(QMainWindow):
                 elif isinstance(raw, dict):
                     recs = [raw]
 
-            # === NOVÉ: Σ nacvičeno za den ===
-            try:
-                total_day = sum(float(r.get("value", 0) or 0) for r in recs if isinstance(r, dict))
-            except Exception:
-                total_day = 0.0
-            _set_total_label(total_day, day_date, day_date)
-
             def _ts_to_dt(ts: str) -> datetime:
                 try:
                     if len(ts) >= 19:
@@ -5730,12 +5696,11 @@ class FitnessTrackerApp(QMainWindow):
                 times.append(dt)
                 cumul.append(running)
 
-            # === NOVÉ: kotva na začátek dne (00:00 -> 0) a plochý úsek do prvního záznamu ===
+            # === kotva na začátek dne (00:00 -> 0) a plochý úsek do prvního záznamu ===
             if times:
                 start_of_day = datetime(day_date.year, day_date.month, day_date.day, 0, 0, 0)
                 first_t = times[0]
                 if first_t > start_of_day:
-                    # vlož 00:00 s 0 a ještě bod těsně před první měřením, aby úsek byl vodorovný
                     t_before = max(start_of_day, first_t - timedelta(seconds=1))
                     times = [start_of_day, t_before] + times
                     cumul = [0.0, 0.0] + cumul
@@ -5861,29 +5826,29 @@ class FitnessTrackerApp(QMainWindow):
 
                 # === ÚPRAVA OSY X PRO DETAILNÍ ZOBRAZENÍ CELÉHO DNE ===
                 ax.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
-                ax.xaxis.set_major_locator(mdates.HourLocator(interval=2))  # Hlavní tiky každé 2 hodiny
-                ax.xaxis.set_minor_locator(mdates.HourLocator(interval=1))  # Vedlejší tiky každou hodinu
+                ax.xaxis.set_major_locator(mdates.HourLocator(interval=2))
+                ax.xaxis.set_minor_locator(mdates.HourLocator(interval=1))
 
-                # Roztáhnout graf na celý den (00:00 až 23:59)
                 start_view = datetime(day_date.year, day_date.month, day_date.day, 0, 0)
                 end_view = datetime(day_date.year, day_date.month, day_date.day, 23, 59, 59)
                 ax.set_xlim(start_view, end_view)
+
+                # (2) více šířky: minimalizace okrajů v ose X
+                ax.margins(x=0.01)
 
             dw = _CZ_WEEKDAY[day_date.weekday()]
             ax.set_title(f"Denní vývoj - {exercise_type.capitalize()} ({dw} {day_date.strftime('%Y-%m-%d')})")
             ax.set_xlabel("Čas")
             ax.set_ylabel("Hodnota")
 
-            # Legenda vpravo
-            fig.subplots_adjust(right=0.78)
+            # (2) legenda uvnitř grafu + využití šířky
+            fig.subplots_adjust(left=0.06, right=0.98, bottom=0.18, top=0.90)
             handles, labels = ax.get_legend_handles_labels()
             if handles:
                 leg = ax.legend(
                     handles,
                     labels,
-                    loc="upper left",
-                    bbox_to_anchor=(1.02, 1.0),
-                    borderaxespad=0.0,
+                    loc="upper right",
                     fontsize=9,
                     facecolor="#2d2d2d",
                     edgecolor="#3d3d3d",
@@ -5899,7 +5864,6 @@ class FitnessTrackerApp(QMainWindow):
         # =================================================================
         workouts = self.data.get("workouts", {})
         if not workouts:
-            _set_total_label(0.0)
             ax.text(
                 0.5,
                 0.5,
@@ -5910,7 +5874,7 @@ class FitnessTrackerApp(QMainWindow):
                 fontsize=14,
                 color="#a0a0a0",
             )
-            fig.subplots_adjust(right=0.78)
+            fig.subplots_adjust(left=0.06, right=0.98, bottom=0.18, top=0.90)
             canvas.draw()
             return
 
@@ -5938,7 +5902,6 @@ class FitnessTrackerApp(QMainWindow):
             daily_values[dt] = daily_values.get(dt, 0.0) + total
 
         if not daily_values:
-            _set_total_label(0.0)
             ax.text(
                 0.5,
                 0.5,
@@ -5949,7 +5912,7 @@ class FitnessTrackerApp(QMainWindow):
                 fontsize=14,
                 color="#a0a0a0",
             )
-            fig.subplots_adjust(right=0.78)
+            fig.subplots_adjust(left=0.06, right=0.98, bottom=0.18, top=0.90)
             canvas.draw()
             return
 
@@ -5986,7 +5949,6 @@ class FitnessTrackerApp(QMainWindow):
             xlabel_format = "%d.%m."
 
         if range_end < range_start:
-            _set_total_label(0.0)
             ax.text(
                 0.5,
                 0.5,
@@ -5997,7 +5959,7 @@ class FitnessTrackerApp(QMainWindow):
                 fontsize=14,
                 color="#a0a0a0",
             )
-            fig.subplots_adjust(right=0.78)
+            fig.subplots_adjust(left=0.06, right=0.98, bottom=0.18, top=0.90)
             canvas.draw()
             return
 
@@ -6019,12 +5981,12 @@ class FitnessTrackerApp(QMainWindow):
             performed.append(v)
             goals.append(g)
 
-        # === NOVÉ: Σ nacvičeno za období ===
-        _set_total_label(sum(performed), range_start, range_end)
-
         bar_w = 0.8 if mode == "weekly" else 0.6
         ax.bar(dates, performed, width=bar_w, label="Výkon", color="#0d7377", alpha=0.8)
         ax.plot(dates, goals, label="Cíl", color="#FFD700", linewidth=2, marker="o", markersize=3)
+
+        # (2) více šířky: minimalizace okrajů v ose X
+        ax.margins(x=0.01)
 
         # Svislá čára začátku cvičení
         if start_date >= dates[0] and start_date <= dates[-1]:
@@ -6036,19 +5998,27 @@ class FitnessTrackerApp(QMainWindow):
                 alpha=0.7,
                 label="Začátek cvičení",
             )
-            y_max = max(max(performed) if performed else 0.0, max(goals) if goals else 0.0)
-            if y_max > 0:
-                ax.text(
-                    start_date,
-                    y_max * 1.05,
-                    f"Start {start_date.strftime('%d.%m.')}",
-                    rotation=90,
-                    va="bottom",
-                    ha="right",
-                    fontsize=9,
-                    color="#32c766",
-                    weight="bold",
-                )
+
+            # (1) Start text uvnitř grafu + y-limit, aby nic nelezlo mimo sekci
+            y_max_data = max(
+                max(performed) if performed else 0.0,
+                max(goals) if goals else 0.0
+            )
+            y_top = (y_max_data * 1.15) if y_max_data > 0 else 1.0
+            ax.set_ylim(0, y_top)
+
+            ax.text(
+                start_date,
+                y_top * 0.95,
+                f"Start {start_date.strftime('%d.%m.')}",
+                rotation=90,
+                va="top",
+                ha="right",
+                fontsize=9,
+                color="#32c766",
+                weight="bold",
+                clip_on=True,
+            )
 
         # X osa
         if mode == "yearly":
@@ -6076,16 +6046,14 @@ class FitnessTrackerApp(QMainWindow):
         else:
             ax.set_title(f"Rok {selected_year}", fontsize=14)
 
-        # Legenda vpravo
-        fig.subplots_adjust(right=0.78)
+        # (2) legenda uvnitř grafu + využití šířky
+        fig.subplots_adjust(left=0.06, right=0.98, bottom=0.20, top=0.90)
         handles, labels = ax.get_legend_handles_labels()
         if handles:
             leg = ax.legend(
                 handles,
                 labels,
-                loc="upper left",
-                bbox_to_anchor=(1.02, 1.0),
-                borderaxespad=0.0,
+                loc="upper right",
                 fontsize=9,
                 facecolor="#2d2d2d",
                 edgecolor="#3d3d3d",
@@ -6100,10 +6068,10 @@ class FitnessTrackerApp(QMainWindow):
         from PySide6.QtWidgets import QHeaderView, QSizePolicy  # lokální import
         widget = QWidget()
 
-        # ZMĚNA: hlavní layout bude vertikální (nahoře obsah, dole graf přes celou šířku)
+        # hlavní layout vertikální (nahoře obsah, dole graf přes celou šířku)
         main_layout = QVBoxLayout(widget)
 
-        # Horní část bude původní dvousloupec (levý panel + pravý panel)
+        # Horní část: dvousloupec (levý panel + pravý panel)
         top_container = QWidget()
         top_layout = QHBoxLayout(top_container)
         top_layout.setContentsMargins(0, 0, 0, 0)
@@ -6281,9 +6249,7 @@ class FitnessTrackerApp(QMainWindow):
         )
         calendar_layout.addWidget(stats_year_label)
 
-        # ZMĚNA: graf už nebude vpravo ve scrollu (aby nebyl "až pod záznamy"),
-        # graf se přidá až pod top_container přes celou šířku okna.
-
+        # Graf je pod top_container (přes celou šířku), ne ve scrollu
         scroll.setWidget(scroll_content)
         right_layout.addWidget(scroll, 1)
 
@@ -6304,15 +6270,16 @@ class FitnessTrackerApp(QMainWindow):
             canvas = self.chart_canvases[exercise_type]
             canvas.setMinimumHeight(350)
 
-        # Stretch: horní část se roztahuje, graf má min výšku
+        # ZMĚNA: bezpečný kompromis – graf může růst, ale horní část se nezhroutí
         main_layout.setStretch(0, 1)
-        main_layout.setStretch(1, 0)
+        main_layout.setStretch(1, 1)
 
         # Refresh záložky a kalendáře
         self.update_exercise_tab(exercise_type)
         self.refresh_exercise_calendar(exercise_type)
 
         return widget
+    
     def on_exercise_tree_context_menu(self, pos, tree, exercise_type):
         """Zobrazí kontextové menu pro záznamy ve stromu cvičení."""
         item = tree.itemAt(pos)
