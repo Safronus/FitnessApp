@@ -31,7 +31,7 @@ from matplotlib.collections import LineCollection
 import matplotlib.pyplot as plt
 
 TITLE = "Fitness Tracker"
-VERSION = "4.4.7b"
+VERSION = "4.4.7c"
 APP_VERSION = VERSION
 VERSION_DATE = "13.12.2025"
 
@@ -4213,16 +4213,16 @@ class FitnessTrackerApp(QMainWindow):
         """Vytvoří týdenní rozpis plánu a graf plnění (kumulativně do jednotlivých týdnů)."""
         if not hasattr(self, "bmi_plan_weeks_tree"):
             return
-
+    
         from datetime import datetime, timedelta
         import matplotlib.dates as mdates
         import matplotlib.pyplot as plt
         from PySide6.QtGui import QColor
-
+    
         self.bmi_plan_weeks_tree.clear()
-
+    
         workouts = self.data.get("workouts", {})
-
+    
         today = datetime.now().date()
         # pondělí aktuálního týdne (nebo start plánu)
         try:
@@ -4231,33 +4231,33 @@ class FitnessTrackerApp(QMainWindow):
         except Exception:
             week0 = datetime.now().date()
         monday0 = week0  # Start plánu (nemusí být pondělí, ale pro účely plánu je to "den 0")
-
+    
         # Pro tabulku chceme "týdenní" pohled (reset každý týden), aby seděl s grafem.
         # Odstraněna kumulace přes celou historii.
         
         weekly_compliance: list[tuple[datetime.date, float]] = []
-
+    
         for week_idx in range(horizon_weeks):
             week_start = monday0 + timedelta(days=7 * week_idx)
             week_end = week_start + timedelta(days=6)
-
+    
             # Číslo týdne v plánu
             plan_week_num = week_idx + 1
             week_label = f"Týden {plan_week_num}: {week_start.strftime('%d.%m.%Y')} – {week_end.strftime('%d.%m.%Y')}"
             
             week_item = QTreeWidgetItem([week_label, "", "", "", ""])
             self.bmi_plan_weeks_tree.addTopLevelItem(week_item)
-
+    
             # Rozbalit, pokud je to aktuální týden
             is_current = (week_start <= today <= week_end)
             week_item.setExpanded(is_current)
-
+    
             week_percent_sum = 0.0
             week_percent_count = 0
-
+    
             for exercise_id in active_exercises:
                 plan_week = planned_weekly.get(exercise_id, 0.0)
-
+    
                 # Skutečná hodnota v tomto týdnu
                 actual_week = 0.0
                 day = week_start
@@ -4270,13 +4270,13 @@ class FitnessTrackerApp(QMainWindow):
                         records = raw_rec
                         if isinstance(raw_rec, dict) and exercise_id in raw_rec:
                              records = raw_rec[exercise_id]
-
+    
                         if isinstance(records, list):
                             actual_week += sum(float(r.get("value", 0.0)) for r in records)
                         elif isinstance(records, dict):
                             actual_week += float(records.get("value", 0.0))
                     day += timedelta(days=1)
-
+    
                 # Výpočet procenta pro tento týden (nikoliv kumulativně z historie)
                 if plan_week > 0:
                     percent = (actual_week / plan_week) * 100.0
@@ -4284,9 +4284,9 @@ class FitnessTrackerApp(QMainWindow):
                     week_percent_count += 1
                 else:
                     percent = 0.0
-
+    
                 config = self.get_exercise_config(exercise_id)
-
+    
                 child = QTreeWidgetItem([
                     "",
                     f"{config['icon']} {config['name']}",
@@ -4298,14 +4298,14 @@ class FitnessTrackerApp(QMainWindow):
                 child.setTextAlignment(3, Qt.AlignCenter)
                 child.setTextAlignment(4, Qt.AlignCenter)
                 week_item.addChild(child)
-
+    
             if week_percent_count > 0:
                 avg_percent = week_percent_sum / week_percent_count
             else:
                 avg_percent = 0.0
-
+    
             weekly_compliance.append((week_start, avg_percent))
-
+    
             # Barevné podbarvení týdne (Gradient: Červená -> Zelená)
             # Pokud je týden v budoucnu (celý), nepodbarvujeme, nebo jen šedě.
             # Pokud už začal (week_start <= today), barvíme.
@@ -4328,11 +4328,11 @@ class FitnessTrackerApp(QMainWindow):
                 bg_color = QColor(r, g, b)
                 for c in range(5):
                     week_item.setBackground(c, bg_color)
-
+    
         # Graf plnění plánu
         if not hasattr(self, "bmi_plan_fig") or not hasattr(self, "bmi_plan_canvas"):
             return
-
+    
         fig = self.bmi_plan_fig
         fig.clear()
         ax = fig.add_subplot(111)
@@ -4343,23 +4343,23 @@ class FitnessTrackerApp(QMainWindow):
         ax.title.set_color("#e0e0e0")
         for spine in ax.spines.values():
             spine.set_color("#e0e0e0")
-
+    
         # (4.4.6) Podkladové pásy po 1/7 v rámci 0–100 % (rychlá vizuální orientace k cíli)
         def _hex_to_rgb(_hx: str):
             _hx = (_hx or "").lstrip("#")
             if len(_hx) != 6:
                 return (0, 0, 0)
             return (int(_hx[0:2], 16), int(_hx[2:4], 16), int(_hx[4:6], 16))
-
+    
         def _rgb_to_hex(_rgb):
             return "#{:02x}{:02x}{:02x}".format(int(_rgb[0]), int(_rgb[1]), int(_rgb[2]))
-
+    
         def _lerp(a: float, b: float, t: float) -> float:
             return a + (b - a) * t
-
+    
         red = _hex_to_rgb("#8B0000")
         yellow = _hex_to_rgb("#FFD700")
-
+    
         for i in range(7):
             y0 = 100.0 * (i / 7.0)
             y1 = 100.0 * ((i + 1) / 7.0)
@@ -4376,7 +4376,7 @@ class FitnessTrackerApp(QMainWindow):
                 alpha=0.10,
                 zorder=0,
             )
-
+    
         if True:
             # === Denní průběh plnění ===
             from collections import defaultdict
@@ -4443,7 +4443,7 @@ class FitnessTrackerApp(QMainWindow):
             if xs_days and len(xs_days) > 1:
                 xs_nums = mdates.date2num(xs_days)
                 ys_nums = _np.array(ys_days)
-
+    
                 x_smooth = _np.linspace(xs_nums.min(), xs_nums.max(), len(xs_nums) * 5)
                 try:
                     interpolator = PchipInterpolator(xs_nums, ys_nums)
@@ -4451,9 +4451,9 @@ class FitnessTrackerApp(QMainWindow):
                     line, = ax.plot(x_smooth, y_smooth, color="#14919b", linewidth=2, alpha=0.8, label="Průběh plnění")
                 except Exception:
                      line, = ax.plot(xs_nums, ys_nums, color="#14919b", linewidth=2, alpha=0.8, label="Průběh plnění")
-
+    
                 sc = ax.scatter(xs_nums, ys_nums, color="#00e5ff", s=15, zorder=3)
-
+    
                 # === ZVÝRAZNĚNÍ ZAČÁTKŮ TÝDNŮ DLE ROZPISU ===
                 # Vykreslíme vertikální čáru pro každý začátek týdne (monday0, monday0+7, ...)
                 # Bez ohledu na to, jestli je to kalendářní pondělí.
@@ -4466,7 +4466,7 @@ class FitnessTrackerApp(QMainWindow):
                 # === ZOBRAZIT KAŽDÝ DEN NA OSE X ===
                 ax.xaxis.set_major_locator(mdates.DayLocator(interval=1))
                 ax.xaxis.set_major_formatter(mdates.DateFormatter('%d.%m.'))
-
+    
                 # Pokud je dnů hodně, zmenšíme font nebo proředíme popisky, 
                 # ale grid/tiky necháme pro každý den
                 if len(xs_days) > 30:
@@ -4474,7 +4474,7 @@ class FitnessTrackerApp(QMainWindow):
                      # Matplotlib to dělá těžko odděleně. 
                      # Uděláme kompromis: Locator každý den, ale popisky rotované a menší font.
                      pass
-
+    
                 # Jemná mřížka pro každý den
                 ax.grid(True, which='major', axis='x', color='#2d2d2d', linestyle=':', alpha=0.3)
                 
@@ -4485,7 +4485,7 @@ class FitnessTrackerApp(QMainWindow):
                                     bbox=dict(boxstyle="round", fc="#1e1e1e", ec="#14919b", alpha=0.9),
                                     color="#ffffff", fontsize=9)
                 annot.set_visible(False)
-
+    
                 def update_annot(ind):
                     pos = sc.get_offsets()[ind["ind"][0]]
                     annot.xy = pos
@@ -4497,7 +4497,7 @@ class FitnessTrackerApp(QMainWindow):
                     text = f"{day_name} {date_val.strftime('%d.%m.%Y')}\nPlnění: {val:.1f} %"
                     annot.set_text(text)
                     annot.get_bbox_patch().set_alpha(0.9)
-
+    
                 def hover(event):
                     vis = annot.get_visible()
                     if event.inaxes == ax:
@@ -4512,7 +4512,7 @@ class FitnessTrackerApp(QMainWindow):
                                 fig.canvas.draw_idle()
                 
                 fig.canvas.mpl_connect("motion_notify_event", hover)
-
+    
         ax.axhline(y=100.0, color="#32CD32", linestyle="--", linewidth=1, alpha=0.5, label="Cíl 100 %")
         ax.set_title("Denní průběh plnění plánu (v rámci týdnů)")
         ax.set_ylabel("Plnění [%]")
@@ -4521,6 +4521,31 @@ class FitnessTrackerApp(QMainWindow):
             ax.set_xlim(left=mdates.date2num(start_d), right=mdates.date2num(end_d))
             
         ax.set_ylim(bottom=0, top=max(110, max(ys_days) + 10) if 'ys_days' in locals() and ys_days else 120)
+    
+        # (4.4.7c) Šedé přerušované čáry po 1/7 + popisky vpravo "1.–7. den v týdnu"
+        try:
+            _step = 100.0 / 7.0
+            # 1/7 .. 6/7 jako šedé přerušované čáry (100 % už má vlastní zelenou čáru)
+            for _i in range(1, 7):
+                _y = _step * _i
+                ax.axhline(y=_y, color="#888888", linestyle="--", linewidth=0.9, alpha=0.55, zorder=0)
+    
+            # popisky vpravo, lehce nad odpovídající hranicí
+            for _i in range(1, 8):
+                _y = _step * _i
+                ax.text(
+                    0.995,
+                    _y + 0.6,
+                    f"{_i}. den v týdnu",
+                    transform=ax.get_yaxis_transform(),
+                    ha="right",
+                    va="bottom",
+                    fontsize=8,
+                    color="#b0b0b0",
+                )
+        except Exception:
+            pass
+    
         ax.legend(loc="upper left", fontsize=8, facecolor="#1e1e1e", edgecolor="#3d3d3d", labelcolor="#e0e0e0")
         
         fig.tight_layout()
