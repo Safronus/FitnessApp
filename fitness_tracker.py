@@ -31,7 +31,7 @@ from matplotlib.collections import LineCollection
 import matplotlib.pyplot as plt
 
 TITLE = "Fitness Tracker"
-VERSION = "4.4.2"
+VERSION = "4.4.4"
 APP_VERSION = VERSION
 VERSION_DATE = "13.12.2025"
 
@@ -3881,27 +3881,34 @@ class FitnessTrackerApp(QMainWindow):
         try:
             self.ensure_app_state()
             plan = dict(self.data.get('app_state', {}).get('bmi_plan', {}))
-    
+
             # Bezpečný odběr hodnot z UI
             target_bmi = float(self.bmi_plan_target_spin.value()) if hasattr(self, 'bmi_plan_target_spin') else None
             horizon = self.bmi_plan_horizon_combo.currentText() if hasattr(self, 'bmi_plan_horizon_combo') else None
             mode = self.bmi_plan_mode_combo.currentText() if hasattr(self, 'bmi_plan_mode_combo') else None
-    
+
             if target_bmi is not None:
                 plan['target_bmi'] = target_bmi
             if isinstance(horizon, str) and horizon:
                 plan['horizon'] = horizon
             if isinstance(mode, str) and mode:
                 plan['mode'] = mode
-    
+
             if 'app_state' not in self.data or not isinstance(self.data['app_state'], dict):
                 self.data['app_state'] = {}
             self.data['app_state']['bmi_plan'] = plan
-    
+
             self.save_data()
         except Exception as e:
             # Nechceme blokovat UI kvůli perzistenci
             print(f"_persist_bmi_plan_settings: {e}")
+
+        # (4.4.3) Vždy po změně parametrů plánu přepočítat a překreslit týdenní rozpis
+        try:
+            self.recompute_bmi_plan()
+            self.apply_weekly_plan_gradient()
+        except Exception:
+            pass
 
     def _persist_plan_start_date(self, qdate) -> None:
         """
@@ -3918,6 +3925,13 @@ class FitnessTrackerApp(QMainWindow):
         except Exception as e:
             # Nechceme brzdit UI kvůli perzistenci
             print(f"_persist_plan_start_date: {e}")
+
+        # (4.4.3) Vždy po změně začátku plánu přepočítat a překreslit týdenní rozpis
+        try:
+            self.recompute_bmi_plan()
+            self.apply_weekly_plan_gradient()
+        except Exception:
+            pass
     
     def get_current_weight_and_bmi(self) -> tuple[float | None, float | None, float | None]:
         """Vrátí aktuální váhu, výšku a BMI z posledního měření, nebo (None, None, None).
@@ -4019,14 +4033,14 @@ class FitnessTrackerApp(QMainWindow):
         """Spočítá a zobrazí plán cvičení k dosažení cílového BMI v záložce „Přidat výkon“."""
         if not hasattr(self, "bmi_plan_tree"):
             return
-    
+
         # Vyčisti předchozí řádky
         self.bmi_plan_tree.clear()
         if hasattr(self, "bmi_plan_weeks_tree"):
             self.bmi_plan_weeks_tree.clear()
         if hasattr(self, "bmi_plan_fig"):
             self.bmi_plan_fig.clear()
-    
+
         weight_now, height_cm, bmi_now = self.get_current_weight_and_bmi()
         if height_cm is None or weight_now is None or bmi_now is None:
             self.bmi_plan_summary_label.setText(
@@ -4036,12 +4050,12 @@ class FitnessTrackerApp(QMainWindow):
             if hasattr(self, "bmi_plan_canvas"):
                 self.bmi_plan_canvas.draw()
             return
-    
+
         target_bmi = float(self.bmi_plan_target_spin.value())
         height_m = height_cm / 100.0
         weight_target = target_bmi * (height_m * height_m)
         delta_weight = max(0.0, weight_now - weight_target)
-    
+
         # Horizont v týdnech (orientačně)
         horizon_text = self.bmi_plan_horizon_combo.currentText()
         if "3" in horizon_text:
@@ -4050,7 +4064,7 @@ class FitnessTrackerApp(QMainWindow):
             horizon_weeks = 26
         else:
             horizon_weeks = 52
-    
+
         mode_text = self.bmi_plan_mode_combo.currentText()
         # Tohle používáme pro odhad času (text) a pro navýšení objemu
         if mode_text == "Opatrný":
@@ -4062,33 +4076,34 @@ class FitnessTrackerApp(QMainWindow):
         else:
             weekly_loss = 0.5
             mode_volume_factor = 0.25
-    
-        # Intenzita: porovnání s "referenčním" středním tempem 0.5 kg/týden
+
+        # Intenzita: aby se změna horizontu projevila do týdenních plánů (a tím i procent)
+        # - pokud je horizont kratší než vychází zvoleným režimem, navýšíme objem
+        # - pokud je horizont delší, objem snížíme
         if delta_weight <= 0:
             weeks_needed = 0.0
             loss_in_horizon = 0.0
             intensity_factor = 1.0  # udržovací
         else:
-            # Odhad času při zvoleném režimu (pro text)
-            weeks_needed = delta_weight / weekly_loss if weekly_loss > 0 else horizon_weeks
-            loss_in_horizon = min(delta_weight, weekly_loss * horizon_weeks)
-    
-            # Referenční doba při středním tempu 0.5 kg/týden
-            moderate_loss = 0.5
-            if moderate_loss > 0:
-                weeks_needed_moderate = delta_weight / moderate_loss
+            # Kolik kg/týden je potřeba, aby se plán stihl v rámci horizontu
+            required_weekly_loss = (delta_weight / float(horizon_weeks)) if horizon_weeks > 0 else weekly_loss
+
+            # Intenzita vůči zvolenému režimu (weekly_loss) – klíčové: závisí na horizontu
+            if weekly_loss > 0:
+                base_intensity = required_weekly_loss / float(weekly_loss)
             else:
-                weeks_needed_moderate = weeks_needed
-    
-            # Intenzita = kolikrát rychlejší/pomalejší je zvolený režim vs. střední
-            base_intensity = weeks_needed_moderate / weeks_needed if weeks_needed > 0 else 1.0
-    
+                base_intensity = 1.0
+
             # Omezit, aby plán nebyl úplně mimo (0.5× až 2×)
             intensity_factor = max(0.5, min(2.0, base_intensity))
-    
+
+            effective_weekly_loss = weekly_loss * intensity_factor
+            weeks_needed = (delta_weight / effective_weekly_loss) if effective_weekly_loss > 0 else float(horizon_weeks)
+            loss_in_horizon = min(delta_weight, effective_weekly_loss * float(horizon_weeks))
+
         predicted_weight = weight_now - loss_in_horizon
         predicted_bmi = predicted_weight / (height_m * height_m) if height_m > 0 else bmi_now
-    
+
         # Textový souhrn
         if delta_weight <= 0:
             summary = (
@@ -4105,7 +4120,7 @@ class FitnessTrackerApp(QMainWindow):
                 f"V zvoleném horizontu {horizon_weeks} týdnů se odhaduje, "
                 f"že bys mohl/a dosáhnout cca {predicted_weight:.1f} kg (BMI ≈ {predicted_bmi:.1f})."
             )
-    
+
             if intensity_factor > 1.05:
                 summary += (
                     f"\nZvolený horizont je kratší než doporučený – plán navyšuje objem cvičení "
@@ -4116,27 +4131,27 @@ class FitnessTrackerApp(QMainWindow):
                     f"\nZvolený horizont je delší než doporučený – plán volí mírnější tempo "
                     f"(cca {intensity_factor * 100:.0f} % běžného objemu)."
                 )
-    
+
         self.bmi_plan_summary_label.setText(summary)
-    
+
         # Základní objem cvičení z historie
         baseline = self.get_weekly_exercise_baseline(weeks=8)
         active_exercises = self.get_active_exercises()
-    
+
         if not baseline and delta_weight > 0:
             self.bmi_plan_summary_label.setText(
                 summary
                 + "\n\n"
                 + "Nebyla nalezena historie výkonů, plán proto používá konzervativní výchozí hodnoty."
             )
-    
+
         # Plánované týdenní hodnoty pro jednotlivé cviky
         planned_weekly: dict[str, float] = {}
-    
+
         for exercise_id in active_exercises:
             config = self.get_exercise_config(exercise_id)
             base_weekly = baseline.get(exercise_id, 0.0)
-    
+
             if base_weekly <= 0:
                 # Žádná historie – jemný start, ale škálujeme režimem i intenzitou
                 base_value = 1.0 if delta_weight > 0 else 0.5
@@ -4149,10 +4164,10 @@ class FitnessTrackerApp(QMainWindow):
                     f"Průměrně {base_weekly:.1f}/týden → režim +{int(mode_volume_factor * 100)} %, "
                     f"intenzita ×{intensity_factor:.2f}."
                 )
-    
+
             planned_weekly[exercise_id] = weekly_value
             total_value = weekly_value * horizon_weeks
-    
+
             item = QTreeWidgetItem([
                 f"{config['icon']} {config['name']}",
                 f"{weekly_value:.1f}",
@@ -4161,9 +4176,9 @@ class FitnessTrackerApp(QMainWindow):
             ])
             item.setTextAlignment(1, Qt.AlignCenter)
             item.setTextAlignment(2, Qt.AlignCenter)
-    
+
             self.bmi_plan_tree.addTopLevelItem(item)
-    
+
         # Vygenerovat týdenní rozpis a graf plnění plánu
         self.recompute_bmi_weekly_breakdown(active_exercises, planned_weekly, horizon_weeks)
 
