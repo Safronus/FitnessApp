@@ -31,7 +31,7 @@ from matplotlib.collections import LineCollection
 import matplotlib.pyplot as plt
 
 TITLE = "Fitness Tracker"
-VERSION = "4.4.1"
+VERSION = "4.4.2"
 APP_VERSION = VERSION
 VERSION_DATE = "13.12.2025"
 
@@ -3439,7 +3439,7 @@ class FitnessTrackerApp(QMainWindow):
             return "#ffffff"
 
     def apply_weekly_plan_gradient(self) -> None:
-        """Dobarví týdenní rozpis + řádky cviků stejným gradientem jako kalendář."""
+        """Dobarví týdenní rozpis + řádky cviků stejným gradientem jako kalendář (celé řádky)."""
         if not hasattr(self, "bmi_plan_weeks_tree"):
             return
 
@@ -3450,12 +3450,22 @@ class FitnessTrackerApp(QMainWindow):
 
         tree = self.bmi_plan_weeks_tree
         today = datetime.now().date()
+        col_count = tree.columnCount()
+
+        def _apply_row_colors(item, bg_hex: str, fg_hex: str) -> None:
+            try:
+                bg = QColor(bg_hex)
+                fg = QColor(fg_hex)
+                for c in range(col_count):
+                    item.setBackground(c, bg)
+                    item.setForeground(c, fg)
+            except Exception:
+                pass
 
         def _parse_percent(txt: str) -> float:
             if not isinstance(txt, str):
                 return 0.0
             t = txt.replace("%", "").replace("％", "").strip()
-            # typicky "85 %" nebo "85"
             try:
                 return float(t)
             except Exception:
@@ -3496,10 +3506,10 @@ class FitnessTrackerApp(QMainWindow):
                 if colorize:
                     bg_hex = self._calendar_percent_bg_hex(p)
                     fg_hex = self._contrast_text_hex_for_bg(bg_hex)
-                    child.setBackground(4, QColor(bg_hex))
-                    child.setForeground(4, QColor(fg_hex))
+                    _apply_row_colors(child, bg_hex, fg_hex)
 
             avg = (sum(percents) / len(percents)) if percents else 0.0
+
             try:
                 week_item.setText(4, f"{avg:.0f} %")
                 week_item.setTextAlignment(4, Qt.AlignCenter)
@@ -3509,8 +3519,7 @@ class FitnessTrackerApp(QMainWindow):
             if colorize:
                 bg_hex = self._calendar_percent_bg_hex(avg)
                 fg_hex = self._contrast_text_hex_for_bg(bg_hex)
-                week_item.setBackground(4, QColor(bg_hex))
-                week_item.setForeground(4, QColor(fg_hex))
+                _apply_row_colors(week_item, bg_hex, fg_hex)
 
     def apply_add_tab_goals_gradient(self) -> None:
         """Gradientní obarvení textu plnění v sekci 'Cíle pro zvolené datum' (stejně jako kalendář)."""
