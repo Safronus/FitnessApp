@@ -31,7 +31,7 @@ from matplotlib.collections import LineCollection
 import matplotlib.pyplot as plt
 
 TITLE = "Fitness Tracker"
-VERSION = "4.4.7a"
+VERSION = "4.4.7b"
 APP_VERSION = VERSION
 VERSION_DATE = "13.12.2025"
 
@@ -6158,7 +6158,7 @@ class FitnessTrackerApp(QMainWindow):
                     t.set_color("#e0e0e0")
     
             # 4.4.7a: symetrické okraje vlevo/vpravo
-            fig.subplots_adjust(left=0.03, right=0.97, top=0.962, bottom=0.105)
+            fig.subplots_adjust(left=0.03, right=0.97, top=0.962, bottom=0.035)
             canvas.draw()
             return
     
@@ -6261,7 +6261,7 @@ class FitnessTrackerApp(QMainWindow):
                 fontsize=14,
                 color="#a0a0a0",
             )
-            fig.subplots_adjust(left=0.03, right=0.97, top=0.962, bottom=0.12)
+            fig.subplots_adjust(left=0.03, right=0.97, top=0.962, bottom=0.035)
             canvas.draw()
             return
     
@@ -6421,7 +6421,7 @@ class FitnessTrackerApp(QMainWindow):
                 t.set_color("#e0e0e0")
     
         # 4.4.7a: symetrické okraje vlevo/vpravo
-        fig.subplots_adjust(left=0.03, right=0.97, top=0.962, bottom=(0.165 if mode == "monthly" else 0.115))
+        fig.subplots_adjust(left=0.03, right=0.97, top=0.962, bottom=(0.065 if mode == "monthly" else 0.035))
         canvas.draw()
 
     def create_exercise_tab(self, exercise_type, icon):
