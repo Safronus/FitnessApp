@@ -31,7 +31,7 @@ from matplotlib.collections import LineCollection
 import matplotlib.pyplot as plt
 
 TITLE = "Fitness Tracker"
-VERSION = "4.1.21"
+VERSION = "4.1.22"
 APP_VERSION = VERSION
 VERSION_DATE = "13.12.2025"
 
@@ -7657,115 +7657,163 @@ class FitnessTrackerApp(QMainWindow):
             if not stats_label:
                 return
 
-            # Rozsah roku (počítáme do dneška / do konce roku, co nastane dřív)
+            today = datetime.now().date()
             year_start = datetime(selected_year, 1, 1).date()
             year_end = datetime(selected_year, 12, 31).date()
-            today = datetime.now().date()
-            end_calc_date = min(year_end, today)
 
-            # Per-exercise start v daném roce (dny před startem jsou irelevantní)
-            exercise_start = self.get_exercise_start_date(exercise_type, selected_year)
-
-            # Irelevantní dny = dny v roce do "end_calc_date", kdy cvičení ještě nezačalo
-            if end_calc_date < year_start:
-                irrelevant_days = 0
-            elif exercise_start > end_calc_date:
-                irrelevant_days = (end_calc_date - year_start).days + 1
+            if selected_year < today.year:
+                end_calc_date = year_end
+            elif selected_year == today.year:
+                end_calc_date = today
             else:
-                irrelevant_days = max(0, (exercise_start - year_start).days)
+                # budoucí rok -> zatím nic "do dneška"
+                end_calc_date = year_start - timedelta(days=1)
 
-            # Počítáme jen relevantní dny od startu cvičení
-            current_date = max(year_start, exercise_start)
+            ex_start = self.get_exercise_start_date(exercise_type, selected_year)
 
-            total_relevant_days = 0
-            days_exact = 0
+            # --- Denní klasifikace do dneška (v rámci roku) ---
+            days_exact_100 = 0
             days_over = 0
             days_partial_missed = 0
             days_not_exercised = 0
+            irrelevant_days = 0
 
-            sum_goal = 0
-            sum_done = 0
+            relevant_days = 0
+            sum_goal_to_date = 0
+            sum_done_to_date = 0
 
-            while current_date <= end_calc_date and current_date <= year_end:
-                date_str = current_date.strftime('%Y-%m-%d')
-                goal = self.calculate_goal(exercise_type, date_str)
+            d = year_start
+            while d <= end_calc_date:
+                if d < ex_start:
+                    irrelevant_days += 1
+                    d += timedelta(days=1)
+                    continue
+
+                ds = d.strftime("%Y-%m-%d")
+                goal = self.calculate_goal(exercise_type, ds)
                 if not isinstance(goal, int):
                     goal = int(goal) if goal else 0
 
-                # Pokud je goal 0, bereme den jako irelevantní
                 if goal <= 0:
                     irrelevant_days += 1
-                    current_date += timedelta(days=1)
+                    d += timedelta(days=1)
                     continue
 
-                total_relevant_days += 1
-                sum_goal += goal
+                relevant_days += 1
+                sum_goal_to_date += goal
 
                 done = 0
-                if date_str in self.data.get('workouts', {}) and exercise_type in self.data['workouts'][date_str]:
-                    workout_data = self.data['workouts'][date_str][exercise_type]
-                    records = workout_data if isinstance(workout_data, list) else [workout_data]
+                if ds in self.data.get("workouts", {}) and exercise_type in self.data["workouts"][ds]:
+                    recs = self.data["workouts"][ds][exercise_type]
                     try:
-                        done = sum(r['value'] for r in records)
+                        done = sum(r["value"] for r in (recs if isinstance(recs, list) else [recs]))
                     except Exception:
-                        # Konzervativní fallback: pokud záznamy nejsou ve standardním formátu, ber 0
-                        done = 0
+                        try:
+                            done = recs.get("value", 0) if isinstance(recs, dict) else 0
+                        except Exception:
+                            done = 0
 
-                sum_done += done
+                sum_done_to_date += done
 
                 if done <= 0:
                     days_not_exercised += 1
                 elif done < goal:
                     days_partial_missed += 1
                 elif done == goal:
-                    days_exact += 1
+                    days_exact_100 += 1
                 else:
                     days_over += 1
 
-                current_date += timedelta(days=1)
+                d += timedelta(days=1)
 
-            # Průměrný výkon od startu cvičení do dneška (relevantní dny)
-            avg_done_per_day = (sum_done / total_relevant_days) if total_relevant_days > 0 else 0
-            avg_pct = (sum_done / sum_goal * 100) if sum_goal > 0 else 0
+            avg_done_per_day = (sum_done_to_date / relevant_days) if relevant_days > 0 else 0
+            avg_pct_to_date = (sum_done_to_date / sum_goal_to_date * 100) if sum_goal_to_date > 0 else 0
 
-            # Kolik zbývá průměrně nacvičit do konce roku (včetně případného „dluhu“)
+            # --- Plán do konce roku (od startu cvičení v daném roce) ---
+            planned_total_to_year_end = 0
+            d = max(year_start, ex_start)
+            while d <= year_end:
+                ds = d.strftime("%Y-%m-%d")
+                g = self.calculate_goal(exercise_type, ds)
+                if not isinstance(g, int):
+                    g = int(g) if g else 0
+                if g > 0:
+                    planned_total_to_year_end += g
+                d += timedelta(days=1)
+
+            remaining_total_to_year_end = planned_total_to_year_end - sum_done_to_date
+            if remaining_total_to_year_end < 0:
+                remaining_total_to_year_end = 0
+
+            # --- ZBYTEK ROKU: stejně jako v DEN/TÝDEN/MĚSÍC/ZBYTEK ---
+            remaining_from_today = 0
             remaining_days = 0
-            remaining_goal_total = 0
-            avg_needed_per_day = 0
+            avg_needed_future = 0.0
 
-            if end_calc_date < year_end:
-                remaining_start = max(end_calc_date + timedelta(days=1), max(year_start, exercise_start))
-                d = remaining_start
-                while d <= year_end:
-                    date_str = d.strftime('%Y-%m-%d')
-                    goal = self.calculate_goal(exercise_type, date_str)
-                    if not isinstance(goal, int):
-                        goal = int(goal) if goal else 0
-                    if goal > 0:
+            if selected_year == today.year:
+                today_str = today.strftime("%Y-%m-%d")
+                day_performed = 0
+                if today_str in self.data.get("workouts", {}) and exercise_type in self.data["workouts"][today_str]:
+                    recs = self.data["workouts"][today_str][exercise_type]
+                    try:
+                        day_performed = sum(r["value"] for r in (recs if isinstance(recs, list) else [recs]))
+                    except Exception:
+                        try:
+                            day_performed = recs.get("value", 0) if isinstance(recs, dict) else 0
+                        except Exception:
+                            day_performed = 0
+
+                cur = max(today, ex_start)
+                while cur <= year_end:
+                    ds = cur.strftime("%Y-%m-%d")
+                    g = self.calculate_goal(exercise_type, ds)
+                    if not isinstance(g, int):
+                        g = int(g) if g else 0
+                    if g > 0:
+                        remaining_from_today += g
                         remaining_days += 1
-                        remaining_goal_total += goal
-                    d += timedelta(days=1)
+                    cur += timedelta(days=1)
 
-                planned_total_year = sum_goal + remaining_goal_total
-                remaining_needed = max(0, planned_total_year - sum_done)
-                avg_needed_per_day = (remaining_needed / remaining_days) if remaining_days > 0 else 0
+                # odečíst dnešní výkon (stejná logika jako rest_goal += day_performed v update_detailed_overview)
+                if today >= ex_start:
+                    g_today = self.calculate_goal(exercise_type, today_str)
+                    if not isinstance(g_today, int):
+                        g_today = int(g_today) if g_today else 0
+                    if g_today > 0:
+                        remaining_from_today -= day_performed
+
+                if remaining_from_today < 0:
+                    remaining_from_today = 0
+
+                avg_needed_future = (remaining_from_today / remaining_days) if remaining_days > 0 else 0.0
 
             stats_text = (
                 f"📊 Statistiky roku {selected_year} (do {end_calc_date.strftime('%d.%m.')}): "
-                f"✅ Přesně 100%: {days_exact} | "
+                f"✅ Přesně 100%: {days_exact_100} | "
                 f"🟢 Nad plán: {days_over} | "
                 f"⚠️ Částečně nesplněno: {days_partial_missed} | "
                 f"❌ Necvičil: {days_not_exercised} | "
                 f"💤 Irelevantní: {irrelevant_days}"
                 f"\n"
-                f"📈 Průměrný výkon: {avg_done_per_day:.1f}/den ({avg_pct:.1f}% plánu) | "
-                f"🎯 Zbývá průměrně: {avg_needed_per_day:.1f}/den (do 31.12.)"
+                f"📈 Průměrný výkon: {avg_done_per_day:.1f}/den ({avg_pct_to_date:.1f}% plánu dosud)"
+                f"\n"
+                f"📌 Od startu nacvičeno: {sum_done_to_date:.0f}"
             )
+
+            if selected_year == today.year:
+                stats_text += (
+                    f"\n"
+                    f"🎯 ZBYTEK ROKU ({max(today, ex_start).strftime('%d.%m.')} – {year_end.strftime('%d.%m.%Y')}): "
+                    f"{remaining_from_today:.0f} (průměrně {avg_needed_future:.1f}/den, zbývá {remaining_days} dní)"
+                )
+
             stats_label.setText(stats_text)
+
         except Exception as e:
             print(f"Chyba v update_year_statistics pro {exercise_type}: {e}")
             import traceback
             traceback.print_exc()
+            
     def export_data(self):
         """Export celého cvičení do JSON souboru"""
         filename, _ = QFileDialog.getSaveFileName(
