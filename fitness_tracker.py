@@ -31,7 +31,7 @@ from matplotlib.collections import LineCollection
 import matplotlib.pyplot as plt
 
 TITLE = "Fitness Tracker"
-VERSION = "4.4.6"
+VERSION = "4.4.6a"
 APP_VERSION = VERSION
 VERSION_DATE = "13.12.2025"
 
@@ -3870,6 +3870,28 @@ class FitnessTrackerApp(QMainWindow):
         self.recompute_bmi_plan()
         self.apply_weekly_plan_gradient()
         self.apply_add_tab_goals_gradient()
+
+        # (4.4.6a) Po startu aplikace ještě není layout hotový -> canvas má menší rozměr.
+        # Vynutíme překreslení po dokončení layoutu (a pro jistotu ještě krátce potom).
+        try:
+            from PySide6.QtCore import QTimer
+
+            def _force_bmi_plan_redraw():
+                try:
+                    self.recompute_bmi_plan()
+                    self.apply_weekly_plan_gradient()
+                    self.apply_add_tab_goals_gradient()
+                    try:
+                        self.bmi_plan_canvas.draw()
+                    except Exception:
+                        pass
+                except Exception:
+                    pass
+
+            QTimer.singleShot(0, _force_bmi_plan_redraw)
+            QTimer.singleShot(200, _force_bmi_plan_redraw)
+        except Exception:
+            pass
 
         return widget
 
