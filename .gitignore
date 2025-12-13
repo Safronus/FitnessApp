@@ -7,3 +7,4 @@ __pycache__/
 fitness_data.json
 *.log
 /Backup/
+backup/

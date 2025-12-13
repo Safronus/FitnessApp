@@ -1684,12 +1684,32 @@ class FitnessTrackerApp(QMainWindow):
             body["weight_history"] = []
 
     def backup_data_file(self):
-        """Vytvoří časovou zálohu JSON dat před migračními zásahy."""
+        """Vytvoří časovou zálohu JSON dat (do složky backup, udržuje max. 10 posledních)."""
         try:
+            if not self.data_file.exists():
+                return
+
+            backup_dir = self.data_file.parent / "backup"
+            backup_dir.mkdir(parents=True, exist_ok=True)
+
             ts = datetime.now().strftime("%Y%m%d-%H%M%S")
-            backup_path = self.data_file.with_name(f"{self.data_file.stem}.backup-{ts}.json")
+            backup_path = backup_dir / f"{self.data_file.stem}-{ts}{self.data_file.suffix}"
+
             with open(self.data_file, "rb") as src, open(backup_path, "wb") as dst:
                 dst.write(src.read())
+
+            # ponechat max 10 posledních záloh pro tento soubor
+            backups = sorted(
+                backup_dir.glob(f"{self.data_file.stem}-*{self.data_file.suffix}"),
+                key=lambda p: p.stat().st_mtime,
+                reverse=True
+            )
+            for old in backups[10:]:
+                try:
+                    old.unlink()
+                except Exception:
+                    pass
+
             print(f"Záloha dat vytvořena: {backup_path}")
         except Exception as e:
             print(f"Záloha dat selhala: {e}")
@@ -1856,6 +1876,18 @@ class FitnessTrackerApp(QMainWindow):
             self.save_app_state()
         except Exception as e:
             print(f"Chyba při ukládání stavu: {e}")
+
+        try:
+            self.save_data()
+        except Exception as e:
+            print(f"Chyba při ukládání dat: {e}")
+
+        try:
+            # Úplně na závěr: záloha do složky backup/
+            self.backup_data_file()
+        except Exception as e:
+            print(f"Chyba při zálohování dat: {e}")
+
         event.accept()
     
     def ensure_app_state(self):
