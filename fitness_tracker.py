@@ -4322,19 +4322,53 @@ class FitnessTrackerApp(QMainWindow):
 
         # 2. Automatický refresh BMI plánu a grafu
         self.recompute_bmi_plan()
+        
+    def expand_today_in_exercise_tree(self, exercise_type):
+        """Rozbalí v seznamu záznamů dnešní den (pokud v tree existuje) pro dané cvičení."""
+        try:
+            tree = self.findChild(QTreeWidget, f"tree_{exercise_type}")
+            if not tree:
+                return
 
+            today_str = datetime.now().strftime("%Y-%m-%d")
+
+            for i in range(tree.topLevelItemCount()):
+                month_item = tree.topLevelItem(i)
+                if not month_item:
+                    continue
+
+                for j in range(month_item.childCount()):
+                    day_item = month_item.child(j)
+                    if not day_item:
+                        continue
+
+                    payload = day_item.data(3, Qt.UserRole)
+                    if isinstance(payload, dict) and payload.get("type") == "day" and payload.get("date") == today_str:
+                        month_item.setExpanded(True)
+                        day_item.setExpanded(True)
+                        try:
+                            tree.setCurrentItem(day_item)
+                            tree.scrollToItem(day_item)
+                        except Exception:
+                            pass
+                        return
+        except Exception as e:
+            print(f"Chyba při rozbalení dne v seznamu záznamů: {e}")
 
     def on_tab_changed(self, index):
         """Refresh při přepnutí záložky"""
         try:
             tab_name = self.tabs.tabText(index)
-            
+
             # **OPRAVENO: Dynamicky najít cvičení podle názvu v záložce**
             for exercise_id in self.get_active_exercises():
                 config = self.get_exercise_config(exercise_id)
                 if config['icon'] in tab_name and config['name'] in tab_name:
                     self.update_exercise_tab(exercise_id)
                     self.refresh_exercise_calendar(exercise_id)
+
+                    # Nově: při přepnutí na záložku vždy rozbal dnešní den (pokud existuje)
+                    self.expand_today_in_exercise_tree(exercise_id)
                     break
         except Exception as e:
             print(f"Chyba při přepnutí záložky: {e}")
