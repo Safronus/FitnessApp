@@ -31,7 +31,7 @@ from matplotlib.collections import LineCollection
 import matplotlib.pyplot as plt
 
 TITLE = "Fitness Tracker"
-VERSION = "4.2.6"
+VERSION = "4.3.1"
 APP_VERSION = VERSION
 VERSION_DATE = "13.12.2025"
 
@@ -7002,7 +7002,8 @@ class FitnessTrackerApp(QMainWindow):
                     month_item.setFont(0, month_font)
                     month_item.setFont(1, month_font)
 
-                month_bg = QColor(45, 45, 45)
+                # (2) barevné odlišení řádků pro měsíce
+                month_bg = QColor(36, 52, 71)  # odlišené od týdnů
                 for c in range(tree.columnCount()):
                     month_item.setBackground(c, month_bg)
 
@@ -7030,14 +7031,27 @@ class FitnessTrackerApp(QMainWindow):
                     week_map[wno].append(date_str)
 
                 for wno in week_order:
+                    # (1) týdenní suma (suma hodnot za týden)
+                    week_total_value = 0
+                    for date_str in week_map.get(wno, []):
+                        records = days_data.get(date_str, [])
+                        try:
+                            week_total_value += sum(r.get("value", 0) for r in records)
+                        except Exception:
+                            pass
+
                     week_item = QTreeWidgetItem(month_item)
                     week_item.setText(0, f"📆 Týden {wno}")
+                    week_item.setText(1, f"Σ {week_total_value}")
+                    week_item.setTextAlignment(1, Qt.AlignCenter)
                     week_item.setData(3, Qt.UserRole, {"type": "week", "month_key": m_key, "week": wno})
 
                     if week_font:
                         week_item.setFont(0, week_font)
+                        week_item.setFont(1, week_font)
 
-                    week_bg = QColor(35, 35, 35)
+                    # (2) barevné odlišení řádků pro týdny
+                    week_bg = QColor(43, 43, 43)  # odlišené od měsíců
                     for c in range(tree.columnCount()):
                         week_item.setBackground(c, week_bg)
 
