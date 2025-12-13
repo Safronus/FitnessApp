@@ -31,7 +31,7 @@ from matplotlib.collections import LineCollection
 import matplotlib.pyplot as plt
 
 TITLE = "Fitness Tracker"
-VERSION = "4.4.0"
+VERSION = "4.4.1"
 APP_VERSION = VERSION
 VERSION_DATE = "13.12.2025"
 
@@ -3306,24 +3306,24 @@ class FitnessTrackerApp(QMainWindow):
         if value <= 0:
             self.show_message("Chyba", f"Zadej nenulovou hodnotu pro {exercise_type}!", QMessageBox.Warning)
             return
-    
+
         selected_date_str = self.add_date_edit.date().toString("yyyy-MM-dd")
-    
+
         if selected_date_str not in self.data["workouts"]:
             self.data["workouts"][selected_date_str] = {}
-    
+
         if exercise_type not in self.data["workouts"][selected_date_str]:
             self.data["workouts"][selected_date_str][exercise_type] = []
-    
+
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.data["workouts"][selected_date_str][exercise_type].append({
             "value": value,
             "timestamp": timestamp,
-            "id": str(uuid.uuid4())
+            "note": ""
         })
-    
+
         self.save_data()
-    
+
         # Aktualizuj všechny záložky
         active_exercises = self.get_active_exercises()
         for exercise in active_exercises:
@@ -3332,12 +3332,14 @@ class FitnessTrackerApp(QMainWindow):
             # >>> DOPLNĚNO: hned přegeneruj i graf (zachová aktuální mód)
             mode = self.chart_modes.get(exercise, "weekly") if hasattr(self, "chart_modes") else "weekly"
             self.update_performance_chart(exercise, mode)
-    
+
         self.refresh_add_tab_goals()
-    
+        self.apply_add_tab_goals_gradient()
+        self.apply_weekly_plan_gradient()
+
         config = self.get_exercise_config(exercise_type)
         self.show_message("Přidáno", f"Výkon byl zaznamenán:\n{value}× {config['name']}")
-    
+
         # Reset správného SpinBoxu
         if exercise_type in self.exercise_spinboxes:
             self.exercise_spinboxes[exercise_type].setValue(0)
@@ -3345,7 +3347,7 @@ class FitnessTrackerApp(QMainWindow):
     def add_all_workouts(self):
         """Přidá všechny výkony najednou"""
         active_exercises = self.get_active_exercises()
-    
+
         # Sbírej hodnoty
         values = {}
         for exercise_id in active_exercises:
@@ -3353,47 +3355,200 @@ class FitnessTrackerApp(QMainWindow):
                 val = self.exercise_spinboxes[exercise_id].value()
                 if val > 0:
                     values[exercise_id] = val
-    
+
         if not values:
             self.show_message("Chyba", "Zadej alespoň jednu nenulovou hodnotu!", QMessageBox.Warning)
             return
-    
+
         selected_date_str = self.add_date_edit.date().toString("yyyy-MM-dd")
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    
+
         if selected_date_str not in self.data["workouts"]:
             self.data["workouts"][selected_date_str] = {}
-    
+
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
         added = []
         for exercise_id, val in values.items():
             if exercise_id not in self.data["workouts"][selected_date_str]:
                 self.data["workouts"][selected_date_str][exercise_id] = []
-    
+
             self.data["workouts"][selected_date_str][exercise_id].append({
                 "value": val,
                 "timestamp": timestamp,
-                "id": str(uuid.uuid4())
+                "note": ""
             })
-    
+
             config = self.get_exercise_config(exercise_id)
-            added.append(f"{config['icon']} {config['name']}: {val}")
-    
+            added.append(f"{val}× {config['name']}")
+
         self.save_data()
-    
+
         # Aktualizuj všechny záložky + GRAFY
         for exercise in active_exercises:
             self.update_exercise_tab(exercise)
             self.refresh_exercise_calendar(exercise)
             mode = self.chart_modes.get(exercise, "weekly") if hasattr(self, "chart_modes") else "weekly"
             self.update_performance_chart(exercise, mode)
-    
+
         self.refresh_add_tab_goals()
+        self.apply_add_tab_goals_gradient()
+        self.apply_weekly_plan_gradient()
         self.show_message("Přidáno", f"Výkony zaznamenány:\n" + "\n".join(added))
-    
+
         # Reset všech SpinBoxů
         for exercise_id in active_exercises:
             if exercise_id in self.exercise_spinboxes:
                 self.exercise_spinboxes[exercise_id].setValue(0)
+                
+    def _calendar_percent_bg_hex(self, percent: float) -> str:
+        """Stejný gradient jako v kalendáři (červená/žlutá/zelená) – mapováno přes % splnění."""
+        try:
+            p = float(percent)
+        except Exception:
+            p = 0.0
+
+        # stejné prahy jako kalendář (přesně 100 -> žlutá)
+        if p >= 200.0:
+            return "#006400"
+        if p > 100.0:
+            intensity = min((p / 100.0) - 1.0, 1.0)
+            green_val = int(144 + (100 - 144) * intensity)  # 144 -> 100
+            return f"#{0:02x}{green_val:02x}{0:02x}"
+        if abs(p - 100.0) < 1e-9:
+            return "#FFD700"
+        if p >= 50.0:
+            intensity = abs(p - 100.0) / 50.0  # 100..50 => 0..1
+            red_val = int(107 + (255 - 107) * (1 - intensity))
+            return f"#ff{red_val:02x}{red_val:02x}"
+        return "#8B0000"
+
+    def _contrast_text_hex_for_bg(self, bg_hex: str) -> str:
+        """Vrátí #000000 / #ffffff podle světlosti pozadí."""
+        try:
+            from PySide6.QtGui import QColor
+            c = QColor(bg_hex)
+            if not c.isValid():
+                return "#ffffff"
+            r = c.red()
+            g = c.green()
+            b = c.blue()
+            # relativní jas (sRGB aproximace)
+            lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255.0
+            return "#000000" if lum > 0.6 else "#ffffff"
+        except Exception:
+            return "#ffffff"
+
+    def apply_weekly_plan_gradient(self) -> None:
+        """Dobarví týdenní rozpis + řádky cviků stejným gradientem jako kalendář."""
+        if not hasattr(self, "bmi_plan_weeks_tree"):
+            return
+
+        from PySide6.QtCore import Qt
+        from PySide6.QtGui import QColor
+        import re
+        from datetime import datetime
+
+        tree = self.bmi_plan_weeks_tree
+        today = datetime.now().date()
+
+        def _parse_percent(txt: str) -> float:
+            if not isinstance(txt, str):
+                return 0.0
+            t = txt.replace("%", "").replace("％", "").strip()
+            # typicky "85 %" nebo "85"
+            try:
+                return float(t)
+            except Exception:
+                m = re.search(r"(-?\d+(?:[\.,]\d+)?)", t)
+                if not m:
+                    return 0.0
+                try:
+                    return float(m.group(1).replace(",", "."))
+                except Exception:
+                    return 0.0
+
+        def _week_start_from_label(lbl: str):
+            # "Týden X: dd.mm.yyyy – dd.mm.yyyy"
+            try:
+                m = re.search(r":\s*(\d{2}\.\d{2}\.\d{4})\s*[–-]", lbl)
+                if not m:
+                    return None
+                return datetime.strptime(m.group(1), "%d.%m.%Y").date()
+            except Exception:
+                return None
+
+        for i in range(tree.topLevelItemCount()):
+            week_item = tree.topLevelItem(i)
+            if not week_item:
+                continue
+
+            week_start = _week_start_from_label(week_item.text(0))
+            colorize = (week_start is None) or (week_start <= today)
+
+            percents = []
+            for j in range(week_item.childCount()):
+                child = week_item.child(j)
+                if not child:
+                    continue
+                p = _parse_percent(child.text(4))
+                percents.append(p)
+
+                if colorize:
+                    bg_hex = self._calendar_percent_bg_hex(p)
+                    fg_hex = self._contrast_text_hex_for_bg(bg_hex)
+                    child.setBackground(4, QColor(bg_hex))
+                    child.setForeground(4, QColor(fg_hex))
+
+            avg = (sum(percents) / len(percents)) if percents else 0.0
+            try:
+                week_item.setText(4, f"{avg:.0f} %")
+                week_item.setTextAlignment(4, Qt.AlignCenter)
+            except Exception:
+                pass
+
+            if colorize:
+                bg_hex = self._calendar_percent_bg_hex(avg)
+                fg_hex = self._contrast_text_hex_for_bg(bg_hex)
+                week_item.setBackground(4, QColor(bg_hex))
+                week_item.setForeground(4, QColor(fg_hex))
+
+    def apply_add_tab_goals_gradient(self) -> None:
+        """Gradientní obarvení textu plnění v sekci 'Cíle pro zvolené datum' (stejně jako kalendář)."""
+        if not hasattr(self, "add_goals_labels") or not hasattr(self, "add_date_edit"):
+            return
+
+        selected_date_str = self.add_date_edit.date().toString("yyyy-MM-dd")
+
+        for exercise_id, label in (self.add_goals_labels or {}).items():
+            if not label:
+                continue
+
+            goal = self.calculate_goal(exercise_id, selected_date_str)
+            try:
+                goal_val = float(goal) if goal else 0.0
+            except Exception:
+                goal_val = 0.0
+
+            current_value = 0.0
+            try:
+                if selected_date_str in self.data.get("workouts", {}) and exercise_id in self.data["workouts"][selected_date_str]:
+                    records = self.data["workouts"][selected_date_str][exercise_id]
+                    if isinstance(records, list):
+                        current_value = sum(float(r.get("value", 0) or 0) for r in records)
+                    elif isinstance(records, dict):
+                        current_value = float(records.get("value", 0) or 0)
+            except Exception:
+                current_value = 0.0
+
+            percent = (current_value / goal_val * 100.0) if goal_val > 0 else 0.0
+            color_hex = self._calendar_percent_bg_hex(percent)
+
+            try:
+                label.setStyleSheet(
+                    f"font-size: 13px; padding: 5px; color: {color_hex}; font-weight: bold;"
+                )
+            except Exception:
+                pass
 
     def create_add_workout_tab(self):
         """Záložka pro přidávání výkonů - dynamická podle aktivních cvičení + plán k dosažení BMI."""
@@ -3411,6 +3566,7 @@ class FitnessTrackerApp(QMainWindow):
         self.add_date_edit.setDate(QDate.currentDate())
         self.add_date_edit.setCalendarPopup(True)
         self.add_date_edit.dateChanged.connect(self.refresh_add_tab_goals)
+        self.add_date_edit.dateChanged.connect(self.apply_add_tab_goals_gradient)
         date_row.addWidget(self.add_date_edit)
         date_row.addStretch()
         layout.addLayout(date_row)
@@ -3697,8 +3853,14 @@ class FitnessTrackerApp(QMainWindow):
         self.bmi_plan_horizon_combo.currentIndexChanged.connect(self.recompute_bmi_plan)
         self.bmi_plan_mode_combo.currentIndexChanged.connect(self.recompute_bmi_plan)
 
+        self.bmi_plan_target_spin.valueChanged.connect(self.apply_weekly_plan_gradient)
+        self.bmi_plan_horizon_combo.currentIndexChanged.connect(self.apply_weekly_plan_gradient)
+        self.bmi_plan_mode_combo.currentIndexChanged.connect(self.apply_weekly_plan_gradient)
+
         # Inicializace plánu (při otevření záložky / aplikace)
         self.recompute_bmi_plan()
+        self.apply_weekly_plan_gradient()
+        self.apply_add_tab_goals_gradient()
 
         return widget
 
