@@ -31,7 +31,7 @@ from matplotlib.collections import LineCollection
 import matplotlib.pyplot as plt
 
 TITLE = "Fitness Tracker"
-VERSION = "4.4.6a"
+VERSION = "4.4.7a"
 APP_VERSION = VERSION
 VERSION_DATE = "13.12.2025"
 
@@ -5781,6 +5781,26 @@ class FitnessTrackerApp(QMainWindow):
             self.chart_modes = {}
         self.chart_modes[exercise_type] = mode
     
+        # Pomocná část: suma nad grafem (pokud existuje label)
+        total_label = None
+        try:
+            if hasattr(self, "chart_total_labels") and exercise_type in self.chart_total_labels:
+                total_label = self.chart_total_labels[exercise_type]
+        except Exception:
+            total_label = None
+    
+        def _set_total(val: float) -> None:
+            if total_label is None:
+                return
+            try:
+                if abs(val - round(val)) < 1e-9:
+                    txt_val = str(int(round(val)))
+                else:
+                    txt_val = f"{val:.2f}"
+                total_label.setText(f"Σ Nacvičeno za období: {txt_val}")
+            except Exception:
+                pass
+    
         # Přepnout stav tlačítek (pokud existují)
         if hasattr(self, "chart_mode_buttons") and exercise_type in self.chart_mode_buttons:
             for btn_mode, btn in self.chart_mode_buttons[exercise_type].items():
@@ -5921,6 +5941,12 @@ class FitnessTrackerApp(QMainWindow):
                 elif isinstance(raw, dict):
                     recs = [raw]
     
+            # suma pro den (nad grafem)
+            try:
+                _set_total(sum(float(r.get("value", 0) or 0) for r in recs))
+            except Exception:
+                _set_total(0.0)
+    
             def _ts_to_dt(ts: str) -> datetime:
                 try:
                     if len(ts) >= 19:
@@ -5943,12 +5969,11 @@ class FitnessTrackerApp(QMainWindow):
                 times.append(dt)
                 cumul.append(running)
     
-            # === NOVÉ: kotva na začátek dne (00:00 -> 0) a plochý úsek do prvního záznamu ===
+            # === kotva na začátek dne (00:00 -> 0) a plochý úsek do prvního záznamu ===
             if times:
                 start_of_day = datetime(day_date.year, day_date.month, day_date.day, 0, 0, 0)
                 first_t = times[0]
                 if first_t > start_of_day:
-                    # vlož 00:00 s 0 a ještě bod těsně před první měřením, aby úsek byl vodorovný
                     t_before = max(start_of_day, first_t - timedelta(seconds=1))
                     times = [start_of_day, t_before] + times
                     cumul = [0.0, 0.0] + cumul
@@ -5957,7 +5982,7 @@ class FitnessTrackerApp(QMainWindow):
             daily_goal = self.calculate_goal(exercise_type, day_str)
             if not isinstance(daily_goal, (int, float)):
                 daily_goal = float(daily_goal) if daily_goal else 0.0
-
+    
             # (4.4.5) Podkladové pásy po 1/7 v rámci 0–100 % denního cíle (červená → žlutá)
             if daily_goal and daily_goal > 0:
                 def _hex_to_rgb(_hx: str):
@@ -5965,20 +5990,20 @@ class FitnessTrackerApp(QMainWindow):
                     if len(_hx) != 6:
                         return (0, 0, 0)
                     return (int(_hx[0:2], 16), int(_hx[2:4], 16), int(_hx[4:6], 16))
-
+    
                 def _rgb_to_hex(_rgb):
                     return "#{:02x}{:02x}{:02x}".format(int(_rgb[0]), int(_rgb[1]), int(_rgb[2]))
-
+    
                 def _lerp(a: float, b: float, t: float) -> float:
                     return a + (b - a) * t
-
+    
                 red = _hex_to_rgb("#8B0000")
                 yellow = _hex_to_rgb("#FFD700")
-
+    
                 for i in range(7):
                     y0 = daily_goal * (i / 7.0)
                     y1 = daily_goal * ((i + 1) / 7.0)
-                    t = (i + 0.5) / 7.0  # 0..1
+                    t = (i + 0.5) / 7.0
                     col = (
                         _lerp(red[0], yellow[0], t),
                         _lerp(red[1], yellow[1], t),
@@ -6031,7 +6056,7 @@ class FitnessTrackerApp(QMainWindow):
                     else:
                         w1 = 2.0 * h[i] + h[i - 1]
                         w2 = h[i] + 2.0 * h[i - 1]
-                        m[i] = (w1 + w2) / (w1 / d[i - 1] + w2 / d[i])  # vážený harmonický průměr
+                        m[i] = (w1 + w2) / (w1 / d[i - 1] + w2 / d[i])
     
                 for i in range(n - 1):
                     if d[i] == 0.0:
@@ -6106,12 +6131,10 @@ class FitnessTrackerApp(QMainWindow):
                         label="Denní cíl",
                     )
     
-                # === ÚPRAVA OSY X PRO DETAILNÍ ZOBRAZENÍ CELÉHO DNE ===
                 ax.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
-                ax.xaxis.set_major_locator(mdates.HourLocator(interval=2)) # Hlavní tiky každé 2 hodiny
-                ax.xaxis.set_minor_locator(mdates.HourLocator(interval=1)) # Vedlejší tiky každou hodinu
-                
-                # Roztáhnout graf na celý den (00:00 až 23:59)
+                ax.xaxis.set_major_locator(mdates.HourLocator(interval=2))
+                ax.xaxis.set_minor_locator(mdates.HourLocator(interval=1))
+    
                 start_view = datetime(day_date.year, day_date.month, day_date.day, 0, 0)
                 end_view = datetime(day_date.year, day_date.month, day_date.day, 23, 59, 59)
                 ax.set_xlim(start_view, end_view)
@@ -6121,16 +6144,12 @@ class FitnessTrackerApp(QMainWindow):
             ax.set_xlabel("Čas")
             ax.set_ylabel("Hodnota")
     
-            # Legenda vpravo
-            fig.subplots_adjust(right=0.78)
             handles, labels = ax.get_legend_handles_labels()
             if handles:
                 leg = ax.legend(
                     handles,
                     labels,
-                    loc="upper left",
-                    bbox_to_anchor=(1.02, 1.0),
-                    borderaxespad=0.0,
+                    loc="upper right",
                     fontsize=9,
                     facecolor="#2d2d2d",
                     edgecolor="#3d3d3d",
@@ -6138,6 +6157,8 @@ class FitnessTrackerApp(QMainWindow):
                 for t in leg.get_texts():
                     t.set_color("#e0e0e0")
     
+            # 4.4.7a: symetrické okraje vlevo/vpravo
+            fig.subplots_adjust(left=0.03, right=0.97, top=0.962, bottom=0.105)
             canvas.draw()
             return
     
@@ -6146,6 +6167,7 @@ class FitnessTrackerApp(QMainWindow):
         # =================================================================
         workouts = self.data.get("workouts", {})
         if not workouts:
+            _set_total(0.0)
             ax.text(
                 0.5,
                 0.5,
@@ -6156,7 +6178,7 @@ class FitnessTrackerApp(QMainWindow):
                 fontsize=14,
                 color="#a0a0a0",
             )
-            fig.subplots_adjust(right=0.78)
+            fig.subplots_adjust(left=0.03, right=0.97, top=0.962, bottom=0.12)
             canvas.draw()
             return
     
@@ -6184,6 +6206,7 @@ class FitnessTrackerApp(QMainWindow):
             daily_values[dt] = daily_values.get(dt, 0.0) + total
     
         if not daily_values:
+            _set_total(0.0)
             ax.text(
                 0.5,
                 0.5,
@@ -6194,13 +6217,9 @@ class FitnessTrackerApp(QMainWindow):
                 fontsize=14,
                 color="#a0a0a0",
             )
-            fig.subplots_adjust(right=0.78)
+            fig.subplots_adjust(left=0.03, right=0.97, top=0.962, bottom=0.12)
             canvas.draw()
             return
-    
-        dates_sorted = sorted(daily_values.keys())
-        min_date = dates_sorted[0]
-        max_date = dates_sorted[-1]
     
         # Rozsah podle režimu
         if mode == "weekly":
@@ -6231,6 +6250,7 @@ class FitnessTrackerApp(QMainWindow):
             xlabel_format = "%d.%m."
     
         if range_end < range_start:
+            _set_total(0.0)
             ax.text(
                 0.5,
                 0.5,
@@ -6241,7 +6261,7 @@ class FitnessTrackerApp(QMainWindow):
                 fontsize=14,
                 color="#a0a0a0",
             )
-            fig.subplots_adjust(right=0.78)
+            fig.subplots_adjust(left=0.03, right=0.97, top=0.962, bottom=0.12)
             canvas.draw()
             return
     
@@ -6263,11 +6283,76 @@ class FitnessTrackerApp(QMainWindow):
             performed.append(v)
             goals.append(g)
     
+        # suma pro týden/měsíc/rok podle aktuálního rozsahu
+        try:
+            _set_total(sum(performed))
+        except Exception:
+            _set_total(0.0)
+    
+        # 4.4.7a: barvy sloupců přesně jako kalendář (červená gradient <100%, žlutá ==100%, zelená gradient >100%)
+        def _hex_to_rgb(_hx: str):
+            _hx = (_hx or "").lstrip("#")
+            if len(_hx) != 6:
+                return (0, 0, 0)
+            return (int(_hx[0:2], 16), int(_hx[2:4], 16), int(_hx[4:6], 16))
+    
+        def _rgb_to_hex(_rgb):
+            return "#{:02x}{:02x}{:02x}".format(int(_rgb[0]), int(_rgb[1]), int(_rgb[2]))
+    
+        def _lerp(a: float, b: float, t: float) -> float:
+            return a + (b - a) * t
+    
+        _RED_DARK = _hex_to_rgb("#8B0000")   # velký skluz
+        _RED_LIGHT = _hex_to_rgb("#FF6B6B")  # mírný skluz
+        _YEL = "#FFD700"                     # akorát (přesně 100%)
+        _GRN_LIGHT = _hex_to_rgb("#90EE90")  # mírný náskok
+        _GRN_DARK = _hex_to_rgb("#006400")   # velký náskok
+        _GREY = "#555555"                    # necvičil / bez cíle
+    
+        bar_colors: list[str] = []
+        for v, g in zip(performed, goals):
+            try:
+                gv = float(g or 0)
+                vv = float(v or 0)
+            except Exception:
+                gv = 0.0
+                vv = 0.0
+    
+            if gv <= 0:
+                bar_colors.append(_GREY)
+                continue
+    
+            ratio = vv / gv if gv > 0 else 0.0
+    
+            # přesně 100% (tolerance)
+            if abs(ratio - 1.0) < 1e-6:
+                bar_colors.append(_YEL)
+                continue
+    
+            if ratio < 1.0:
+                # gradient červené: 0% -> tmavě červená, 99% -> světle červená
+                t = max(0.0, min(1.0, ratio))
+                col = (
+                    _lerp(_RED_DARK[0], _RED_LIGHT[0], t),
+                    _lerp(_RED_DARK[1], _RED_LIGHT[1], t),
+                    _lerp(_RED_DARK[2], _RED_LIGHT[2], t),
+                )
+                bar_colors.append(_rgb_to_hex(col))
+            else:
+                # gradient zelené: 101% -> světle zelená, 200%+ -> tmavě zelená
+                t = max(0.0, min(1.0, ratio - 1.0))
+                col = (
+                    _lerp(_GRN_LIGHT[0], _GRN_DARK[0], t),
+                    _lerp(_GRN_LIGHT[1], _GRN_DARK[1], t),
+                    _lerp(_GRN_LIGHT[2], _GRN_DARK[2], t),
+                )
+                bar_colors.append(_rgb_to_hex(col))
+    
         bar_w = 0.8 if mode == "weekly" else 0.6
-        ax.bar(dates, performed, width=bar_w, label="Výkon", color="#0d7377", alpha=0.8)
+        ax.bar(dates, performed, width=bar_w, label="Výkon", color=bar_colors, alpha=0.85)
         ax.plot(dates, goals, label="Cíl", color="#FFD700", linewidth=2, marker="o", markersize=3)
     
-        # Svislá čára začátku cvičení
+        # Svislá čára začátku cvičení + text uvnitř grafu
         if start_date >= dates[0] and start_date <= dates[-1]:
             ax.axvline(
                 x=start_date,
@@ -6277,19 +6362,23 @@ class FitnessTrackerApp(QMainWindow):
                 alpha=0.7,
                 label="Začátek cvičení",
             )
-            y_max = max(max(performed) if performed else 0.0, max(goals) if goals else 0.0)
-            if y_max > 0:
+            try:
+                y0, y1 = ax.get_ylim()
+                y_text = y1 - (y1 - y0) * 0.03
                 ax.text(
                     start_date,
-                    y_max * 1.05,
+                    y_text,
                     f"Start {start_date.strftime('%d.%m.')}",
                     rotation=90,
-                    va="bottom",
+                    va="top",
                     ha="right",
                     fontsize=9,
                     color="#32c766",
                     weight="bold",
+                    clip_on=True,
                 )
+            except Exception:
+                pass
     
         # X osa
         if mode == "yearly":
@@ -6317,16 +6406,13 @@ class FitnessTrackerApp(QMainWindow):
         else:
             ax.set_title(f"Rok {selected_year}", fontsize=14)
     
-        # Legenda vpravo
-        fig.subplots_adjust(right=0.78)
+        # Legenda do pravého horního rohu
         handles, labels = ax.get_legend_handles_labels()
         if handles:
             leg = ax.legend(
                 handles,
                 labels,
-                loc="upper left",
-                bbox_to_anchor=(1.02, 1.0),
-                borderaxespad=0.0,
+                loc="upper right",
                 fontsize=9,
                 facecolor="#2d2d2d",
                 edgecolor="#3d3d3d",
@@ -6334,6 +6420,8 @@ class FitnessTrackerApp(QMainWindow):
             for t in leg.get_texts():
                 t.set_color("#e0e0e0")
     
+        # 4.4.7a: symetrické okraje vlevo/vpravo
+        fig.subplots_adjust(left=0.03, right=0.97, top=0.962, bottom=(0.165 if mode == "monthly" else 0.115))
         canvas.draw()
 
     def create_exercise_tab(self, exercise_type, icon):
@@ -6550,6 +6638,28 @@ class FitnessTrackerApp(QMainWindow):
         # Refresh záložky a kalendáře
         self.update_exercise_tab(exercise_type)
         self.refresh_exercise_calendar(exercise_type)
+
+        # (4.4.6c) Po startu aplikace ještě není layout hotový -> canvas bývá menší.
+        # Vynutíme překreslení po dokončení layoutu (a pro jistotu ještě krátce potom).
+        try:
+            from PySide6.QtCore import QTimer
+
+            def _force_exercise_chart_redraw():
+                try:
+                    _mode = "daily"
+                    try:
+                        if hasattr(self, "chart_modes") and isinstance(self.chart_modes, dict):
+                            _mode = self.chart_modes.get(exercise_type, "daily") or "daily"
+                    except Exception:
+                        _mode = "daily"
+                    self.update_performance_chart(exercise_type, _mode)
+                except Exception:
+                    pass
+
+            QTimer.singleShot(0, _force_exercise_chart_redraw)
+            QTimer.singleShot(200, _force_exercise_chart_redraw)
+        except Exception:
+            pass
 
         return widget
     
