@@ -31,7 +31,7 @@ from matplotlib.collections import LineCollection
 import matplotlib.pyplot as plt
 
 TITLE = "Fitness Tracker"
-VERSION = "4.3.1"
+VERSION = "4.4.0"
 APP_VERSION = VERSION
 VERSION_DATE = "13.12.2025"
 
@@ -3415,6 +3415,14 @@ class FitnessTrackerApp(QMainWindow):
         date_row.addStretch()
         layout.addLayout(date_row)
 
+        # ==================== HORNÍ SEKCE (3 sloupce) ====================
+        top_sections = QHBoxLayout()
+
+        # ---------- LEVÝ SLOUPEC: Cíle + Zadání výkonu ----------
+        left_col_widget = QWidget()
+        left_col_layout = QVBoxLayout(left_col_widget)
+        left_col_layout.setContentsMargins(0, 0, 0, 0)
+
         # Přehled cílů pro zvolené datum
         goals_group = QGroupBox("🎯 Cíle pro zvolené datum")
         goals_layout = QVBoxLayout()
@@ -3457,7 +3465,7 @@ class FitnessTrackerApp(QMainWindow):
             goals_layout.addWidget(goal_label)
 
         goals_group.setLayout(goals_layout)
-        layout.addWidget(goals_group)
+        left_col_layout.addWidget(goals_group)
 
         # Přidávání výkonů - dynamické řádky
         add_group = QGroupBox("➕ Zadat výkon")
@@ -3472,11 +3480,11 @@ class FitnessTrackerApp(QMainWindow):
             config = self.get_exercise_config(exercise_id)
 
             exercise_row = QHBoxLayout()
-            exercise_row.setSpacing(8) # Menší mezery mezi prvky v řádku
+            exercise_row.setSpacing(8)  # Menší mezery mezi prvky v řádku
 
             # Label (bez fixní šířky, aby se vešel text)
             label = QLabel(f"{config['icon']} {config['name']}:")
-            label.setMinimumWidth(80) # Místo fixed width
+            label.setMinimumWidth(80)  # Místo fixed width
             exercise_row.addWidget(label)
 
             # SpinBox
@@ -3502,7 +3510,7 @@ class FitnessTrackerApp(QMainWindow):
             quick_buttons = config.get("quick_buttons", [10, 20, 30])
             for quick_val in quick_buttons:
                 quick_btn = QPushButton(str(quick_val))
-                quick_btn.setFixedWidth(40) # Trochu užší
+                quick_btn.setFixedWidth(40)  # Trochu užší
                 quick_btn.clicked.connect(
                     lambda checked, ex_id=exercise_id, val=quick_val: self.add_single_workout(
                         ex_id,
@@ -3515,25 +3523,27 @@ class FitnessTrackerApp(QMainWindow):
             add_layout.addLayout(exercise_row)
 
         add_group.setLayout(add_layout)
-        layout.addWidget(add_group)
+        left_col_layout.addWidget(add_group)
 
         # Tlačítko pro přidání všeho najednou
         add_all_btn = QPushButton("➕ Přidat všechny výkony najednou")
         add_all_btn.clicked.connect(self.add_all_workouts)
-        layout.addWidget(add_all_btn)
+        left_col_layout.addWidget(add_all_btn)
 
-        # Plán k dosažení cílového BMI
+        top_sections.addWidget(left_col_widget)
+
+        # ---------- STŘEDNÍ SLOUPEC: Plán k dosažení BMI ----------
         plan_group = QGroupBox("🎯 Plán k dosažení cílového BMI")
         plan_layout = QVBoxLayout()
 
         params_row = QHBoxLayout()
-        
+
         # Začátek plánu – MUSÍ být před „Cílové BMI“
         params_row.addWidget(QLabel("Začátek plánu:"))
         self.bmi_plan_start_date_edit = QDateEdit()
         self.bmi_plan_start_date_edit.setCalendarPopup(True)
         self.bmi_plan_start_date_edit.setDate(QDate.currentDate())
-        
+
         # Načti uložené datum z app_state (pokud existuje)
         try:
             ds = (self.data.get('app_state', {}) or {}).get('plan_start_date')
@@ -3543,16 +3553,16 @@ class FitnessTrackerApp(QMainWindow):
                     self.bmi_plan_start_date_edit.setDate(qd)
         except Exception:
             pass
-        
+
         # Signály: auto přepočet + uložení do JSON
         try:
             self.bmi_plan_start_date_edit.dateChanged.connect(self.recompute_bmi_plan)
             self.bmi_plan_start_date_edit.dateChanged.connect(self._persist_plan_start_date)
         except Exception:
             pass
-        
+
         params_row.addWidget(self.bmi_plan_start_date_edit)
-        
+
         params_row.addWidget(QLabel("Cílové BMI:"))
         self.bmi_plan_target_spin = QDoubleSpinBox()
         self.bmi_plan_target_spin.setRange(18.5, 25.0)
@@ -3574,11 +3584,11 @@ class FitnessTrackerApp(QMainWindow):
         self.bmi_plan_mode_combo.addItems(["Opatrný", "Střední", "Agresivnější"])
         self.bmi_plan_mode_combo.setCurrentText("Střední")
         params_row.addWidget(self.bmi_plan_mode_combo)
-        
+
         # === OBNOVENÍ uložených hodnot plánu ===
         try:
             plan_state = (self.data.get('app_state', {}) or {}).get('bmi_plan', {})
-        
+
             # Cílové BMI
             tb = plan_state.get('target_bmi')
             if isinstance(tb, (int, float)):
@@ -3586,14 +3596,14 @@ class FitnessTrackerApp(QMainWindow):
                 tb = max(self.bmi_plan_target_spin.minimum(),
                          min(self.bmi_plan_target_spin.maximum(), tb))
                 self.bmi_plan_target_spin.setValue(tb)
-        
+
             # Horizont (podle textu položky)
             hz = plan_state.get('horizon')
             if isinstance(hz, str):
                 idx = self.bmi_plan_horizon_combo.findText(hz)
                 if idx >= 0:
                     self.bmi_plan_horizon_combo.setCurrentIndex(idx)
-        
+
             # Režim (podle textu položky)
             md = plan_state.get('mode')
             if isinstance(md, str):
@@ -3602,7 +3612,7 @@ class FitnessTrackerApp(QMainWindow):
                     self.bmi_plan_mode_combo.setCurrentIndex(idx)
         except Exception:
             pass
-        
+
         # === PERZISTENCE při změně hodnot ===
         try:
             self.bmi_plan_target_spin.valueChanged.connect(self._persist_bmi_plan_settings)
@@ -3623,7 +3633,7 @@ class FitnessTrackerApp(QMainWindow):
         self.bmi_plan_summary_label.setStyleSheet("font-size: 12px; color: #dddddd;")
         plan_layout.addWidget(self.bmi_plan_summary_label)
 
-        # Hlavní tabulka plánu (po cvicích) – co nejnižší, jen na pár řádků
+        # Hlavní tabulka plánu (po cvicích)
         self.bmi_plan_tree = QTreeWidget()
         self.bmi_plan_tree.setColumnCount(4)
         self.bmi_plan_tree.setHeaderLabels(["Cvik", "Doporučeno týdně", "Celkem v období", "Poznámka"])
@@ -3638,7 +3648,10 @@ class FitnessTrackerApp(QMainWindow):
         header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
         plan_layout.addWidget(self.bmi_plan_tree)
 
-        # Týdenní rozpis a plnění plánu – dominantní část
+        plan_group.setLayout(plan_layout)
+        top_sections.addWidget(plan_group)
+
+        # ---------- PRAVÝ SLOUPEC: Týdenní rozpis ----------
         weekly_group = QGroupBox("📅 Týdenní rozpis a plnění plánu")
         weekly_layout = QVBoxLayout()
 
@@ -3649,7 +3662,7 @@ class FitnessTrackerApp(QMainWindow):
         )
         self.bmi_plan_weeks_tree.setRootIsDecorated(True)
         self.bmi_plan_weeks_tree.setAlternatingRowColors(True)
-        self.bmi_plan_weeks_tree.setMinimumHeight(150) # Zmenšeno, aby graf dominoval
+        self.bmi_plan_weeks_tree.setMinimumHeight(150)
         w_header = self.bmi_plan_weeks_tree.header()
         w_header.setStretchLastSection(False)
         w_header.setSectionResizeMode(0, QHeaderView.Stretch)
@@ -3659,31 +3672,24 @@ class FitnessTrackerApp(QMainWindow):
         w_header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
         weekly_layout.addWidget(self.bmi_plan_weeks_tree)
 
-        # Graf plnění plánu po týdnech - ZVĚTŠENÝ
-        self.bmi_plan_fig = Figure(figsize=(10, 4), facecolor="#121212") # Větší figsize
+        weekly_group.setLayout(weekly_layout)
+        top_sections.addWidget(weekly_group)
+
+        # Rozdělení šířky 3 sloupců (minimální zásah)
+        top_sections.setStretch(0, 2)
+        top_sections.setStretch(1, 2)
+        top_sections.setStretch(2, 3)
+
+        # Přidat horní sekce do layoutu
+        layout.addLayout(top_sections)
+
+        # ==================== GRAF (dole přes celou šířku) ====================
+        self.bmi_plan_fig = Figure(figsize=(10, 4), facecolor="#121212")
         self.bmi_plan_canvas = FigureCanvas(self.bmi_plan_fig)
         self.bmi_plan_canvas.setStyleSheet("background-color: #121212;")
-        self.bmi_plan_canvas.setMinimumHeight(350) # Větší minimální výška
+        self.bmi_plan_canvas.setMinimumHeight(350)
         self.bmi_plan_canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        weekly_layout.addWidget(self.bmi_plan_canvas)
-
-        # Poměr výšek uvnitř týdenní sekce:
-        #   - Týdenní rozpis ~ 1
-        #   - Graf ~ 4 (graf dominuje)
-        weekly_layout.setStretch(weekly_layout.indexOf(self.bmi_plan_weeks_tree), 1)
-        weekly_layout.setStretch(weekly_layout.indexOf(self.bmi_plan_canvas), 4)
-
-        weekly_group.setLayout(weekly_layout)
-        plan_layout.addWidget(weekly_group)
-
-        # Poměr výšek v rámci plánovací sekce:
-        #   - Cvik tabulka ~ 1
-        #   - Týdenní rozpis + graf ~ 8
-        plan_layout.setStretch(plan_layout.indexOf(self.bmi_plan_tree), 1)
-        plan_layout.setStretch(plan_layout.indexOf(weekly_group), 8)
-
-        plan_group.setLayout(plan_layout)
-        layout.addWidget(plan_group)
+        layout.addWidget(self.bmi_plan_canvas, 1)
 
         # Signály pro plán
         self.bmi_plan_recompute_button.clicked.connect(self.recompute_bmi_plan)
@@ -5534,6 +5540,26 @@ class FitnessTrackerApp(QMainWindow):
             self.chart_modes = {}
         self.chart_modes[exercise_type] = mode
 
+        # Pomocná funkce pro update sumy nad grafem
+        total_label = None
+        try:
+            if hasattr(self, "chart_total_labels") and exercise_type in self.chart_total_labels:
+                total_label = self.chart_total_labels[exercise_type]
+        except Exception:
+            total_label = None
+
+        def _set_total(val: float) -> None:
+            if not total_label:
+                return
+            try:
+                if abs(val - round(val)) < 1e-9:
+                    txt_val = str(int(round(val)))
+                else:
+                    txt_val = f"{val:.2f}"
+                total_label.setText(f"Σ Nacvičeno za období: {txt_val}")
+            except Exception:
+                pass
+
         # Přepnout stav tlačítek (pokud existují)
         if hasattr(self, "chart_mode_buttons") and exercise_type in self.chart_mode_buttons:
             for btn_mode, btn in self.chart_mode_buttons[exercise_type].items():
@@ -5606,7 +5632,6 @@ class FitnessTrackerApp(QMainWindow):
         if mode == "daily":
             from PySide6.QtWidgets import QTreeWidget
             from PySide6.QtCore import Qt
-            import numpy as np
 
             # 1) Zkusit vybraný den ze stromu / kalendáře
             day_date = None
@@ -5674,6 +5699,12 @@ class FitnessTrackerApp(QMainWindow):
                 elif isinstance(raw, dict):
                     recs = [raw]
 
+            # (FIX) suma pro den
+            try:
+                _set_total(sum(float(r.get("value", 0) or 0) for r in recs))
+            except Exception:
+                _set_total(0.0)
+
             def _ts_to_dt(ts: str) -> datetime:
                 try:
                     if len(ts) >= 19:
@@ -5696,11 +5727,12 @@ class FitnessTrackerApp(QMainWindow):
                 times.append(dt)
                 cumul.append(running)
 
-            # === kotva na začátek dne (00:00 -> 0) a plochý úsek do prvního záznamu ===
+            # === NOVÉ: kotva na začátek dne (00:00 -> 0) a plochý úsek do prvního záznamu ===
             if times:
                 start_of_day = datetime(day_date.year, day_date.month, day_date.day, 0, 0, 0)
                 first_t = times[0]
                 if first_t > start_of_day:
+                    # vlož 00:00 s 0 a ještě bod těsně před první měřením, aby úsek byl vodorovný
                     t_before = max(start_of_day, first_t - timedelta(seconds=1))
                     times = [start_of_day, t_before] + times
                     cumul = [0.0, 0.0] + cumul
@@ -5824,7 +5856,6 @@ class FitnessTrackerApp(QMainWindow):
                         label="Denní cíl",
                     )
 
-                # === ÚPRAVA OSY X PRO DETAILNÍ ZOBRAZENÍ CELÉHO DNE ===
                 ax.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
                 ax.xaxis.set_major_locator(mdates.HourLocator(interval=2))
                 ax.xaxis.set_minor_locator(mdates.HourLocator(interval=1))
@@ -5833,28 +5864,10 @@ class FitnessTrackerApp(QMainWindow):
                 end_view = datetime(day_date.year, day_date.month, day_date.day, 23, 59, 59)
                 ax.set_xlim(start_view, end_view)
 
-                # (2) více šířky: minimalizace okrajů v ose X
-                ax.margins(x=0.01)
-
             dw = _CZ_WEEKDAY[day_date.weekday()]
             ax.set_title(f"Denní vývoj - {exercise_type.capitalize()} ({dw} {day_date.strftime('%Y-%m-%d')})")
             ax.set_xlabel("Čas")
             ax.set_ylabel("Hodnota")
-
-            # (2) legenda uvnitř grafu + využití šířky
-            fig.subplots_adjust(left=0.06, right=0.98, bottom=0.18, top=0.90)
-            handles, labels = ax.get_legend_handles_labels()
-            if handles:
-                leg = ax.legend(
-                    handles,
-                    labels,
-                    loc="upper right",
-                    fontsize=9,
-                    facecolor="#2d2d2d",
-                    edgecolor="#3d3d3d",
-                )
-                for t in leg.get_texts():
-                    t.set_color("#e0e0e0")
 
             canvas.draw()
             return
@@ -5864,6 +5877,7 @@ class FitnessTrackerApp(QMainWindow):
         # =================================================================
         workouts = self.data.get("workouts", {})
         if not workouts:
+            _set_total(0.0)
             ax.text(
                 0.5,
                 0.5,
@@ -5874,7 +5888,6 @@ class FitnessTrackerApp(QMainWindow):
                 fontsize=14,
                 color="#a0a0a0",
             )
-            fig.subplots_adjust(left=0.06, right=0.98, bottom=0.18, top=0.90)
             canvas.draw()
             return
 
@@ -5902,6 +5915,7 @@ class FitnessTrackerApp(QMainWindow):
             daily_values[dt] = daily_values.get(dt, 0.0) + total
 
         if not daily_values:
+            _set_total(0.0)
             ax.text(
                 0.5,
                 0.5,
@@ -5912,13 +5926,10 @@ class FitnessTrackerApp(QMainWindow):
                 fontsize=14,
                 color="#a0a0a0",
             )
-            fig.subplots_adjust(left=0.06, right=0.98, bottom=0.18, top=0.90)
             canvas.draw()
             return
 
         dates_sorted = sorted(daily_values.keys())
-        min_date = dates_sorted[0]
-        max_date = dates_sorted[-1]
 
         # Rozsah podle režimu
         if mode == "weekly":
@@ -5949,6 +5960,7 @@ class FitnessTrackerApp(QMainWindow):
             xlabel_format = "%d.%m."
 
         if range_end < range_start:
+            _set_total(0.0)
             ax.text(
                 0.5,
                 0.5,
@@ -5959,7 +5971,6 @@ class FitnessTrackerApp(QMainWindow):
                 fontsize=14,
                 color="#a0a0a0",
             )
-            fig.subplots_adjust(left=0.06, right=0.98, bottom=0.18, top=0.90)
             canvas.draw()
             return
 
@@ -5981,12 +5992,12 @@ class FitnessTrackerApp(QMainWindow):
             performed.append(v)
             goals.append(g)
 
+        # (FIX) suma pro týden/měsíc/rok podle aktuálního rozsahu
+        _set_total(sum(performed))
+
         bar_w = 0.8 if mode == "weekly" else 0.6
         ax.bar(dates, performed, width=bar_w, label="Výkon", color="#0d7377", alpha=0.8)
         ax.plot(dates, goals, label="Cíl", color="#FFD700", linewidth=2, marker="o", markersize=3)
-
-        # (2) více šířky: minimalizace okrajů v ose X
-        ax.margins(x=0.01)
 
         # Svislá čára začátku cvičení
         if start_date >= dates[0] and start_date <= dates[-1]:
@@ -5997,27 +6008,6 @@ class FitnessTrackerApp(QMainWindow):
                 linewidth=2,
                 alpha=0.7,
                 label="Začátek cvičení",
-            )
-
-            # (1) Start text uvnitř grafu + y-limit, aby nic nelezlo mimo sekci
-            y_max_data = max(
-                max(performed) if performed else 0.0,
-                max(goals) if goals else 0.0
-            )
-            y_top = (y_max_data * 1.15) if y_max_data > 0 else 1.0
-            ax.set_ylim(0, y_top)
-
-            ax.text(
-                start_date,
-                y_top * 0.95,
-                f"Start {start_date.strftime('%d.%m.')}",
-                rotation=90,
-                va="top",
-                ha="right",
-                fontsize=9,
-                color="#32c766",
-                weight="bold",
-                clip_on=True,
             )
 
         # X osa
@@ -6045,21 +6035,6 @@ class FitnessTrackerApp(QMainWindow):
             ax.set_title(f"{month_name} {range_start.year}", fontsize=14)
         else:
             ax.set_title(f"Rok {selected_year}", fontsize=14)
-
-        # (2) legenda uvnitř grafu + využití šířky
-        fig.subplots_adjust(left=0.06, right=0.98, bottom=0.20, top=0.90)
-        handles, labels = ax.get_legend_handles_labels()
-        if handles:
-            leg = ax.legend(
-                handles,
-                labels,
-                loc="upper right",
-                fontsize=9,
-                facecolor="#2d2d2d",
-                edgecolor="#3d3d3d",
-            )
-            for t in leg.get_texts():
-                t.set_color("#e0e0e0")
 
         canvas.draw()
 
