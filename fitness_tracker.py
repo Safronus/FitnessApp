@@ -31,8 +31,9 @@ from matplotlib.collections import LineCollection
 import matplotlib.pyplot as plt
 
 TITLE = "Fitness Tracker"
-VERSION = "4.1.19"
-VERSION_DATE = "02.12.2025"
+VERSION = "4.1.20"
+APP_VERSION = VERSION
+VERSION_DATE = "13.12.2025"
 
 # Dark Theme Stylesheet
 DARK_THEME = """
@@ -7362,6 +7363,31 @@ class FitnessTrackerApp(QMainWindow):
             import traceback
             traceback.print_exc()
 
+    def _calendar_text_color_for_bg_hex(self, bg_hex: str) -> str:
+        """
+        Vrátí vhodnou barvu textu podle světlosti barvy pozadí (hex).
+        - Světlé pozadí  -> tmavý text
+        - Tmavé pozadí   -> světlý text
+        """
+        try:
+            if not isinstance(bg_hex, str) or not bg_hex.startswith("#") or len(bg_hex) < 7:
+                # Bezpečný fallback – světlý text pro dark theme
+                return "#f0f0f0"
+
+            c = bg_hex.lstrip("#")
+            r, g, b = int(c[0:2], 16), int(c[2:4], 16), int(c[4:6], 16)
+
+            def _lin(v: float) -> float:
+                v = v / 255.0
+                return v/12.92 if v <= 0.04045 else ((v+0.055)/1.055)**2.4
+
+            # Relativní luminance (sRGB)
+            lum = 0.2126 * _lin(r) + 0.7152 * _lin(g) + 0.0722 * _lin(b)
+            return "#111111" if lum >= 0.60 else "#f0f0f0"
+        except Exception:
+            # V nouzi ponech světlý text (dark theme)
+            return "#f0f0f0"
+
     def create_month_calendar_for_exercise(self, year, month, month_name, exercise_type):
         """Vytvoří kalendář měsíce s GRADIENTNÍMI BARVAMI - VĚTŠÍ"""
         group = QGroupBox(f"{month_name}")
@@ -7404,7 +7430,8 @@ class FitnessTrackerApp(QMainWindow):
             
             color, tooltip_text = self.get_day_color_gradient(date_str, date.date(), today, start_date, exercise_type)
             border_style = "border: 2px solid #87CEEB;" if date.date() == today else "border: 1px solid #3d3d3d;"
-            day_label.setStyleSheet(f"background-color: {color}; font-weight: bold; {border_style} font-size: 16px;")
+            text_color = self._calendar_text_color_for_bg_hex(color)
+            day_label.setStyleSheet(f"background-color: {color}; color: {text_color}; font-weight: bold; {border_style} font-size: 16px;")
             day_label.setToolTip(self._calendar_tooltip_with_contrast(tooltip_text, color))
     
             # <<< JEDINÉ DOPLNĚNÍ: klik na den -> přepni graf na 'Den' pro tento den
