@@ -31,7 +31,7 @@ from matplotlib.collections import LineCollection
 import matplotlib.pyplot as plt
 
 TITLE = "Fitness Tracker"
-VERSION = "7.5.0"
+VERSION = "4.5.0"
 APP_VERSION = VERSION
 VERSION_DATE = "14.12.2025"
 
