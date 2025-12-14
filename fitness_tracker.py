@@ -31,7 +31,7 @@ from matplotlib.collections import LineCollection
 import matplotlib.pyplot as plt
 
 TITLE = "Fitness Tracker"
-VERSION = "4.4.7d"
+VERSION = "7.5.0"
 APP_VERSION = VERSION
 VERSION_DATE = "14.12.2025"
 
@@ -2194,14 +2194,15 @@ class FitnessTrackerApp(QMainWindow):
     def restore_app_state(self):
         try:
             self.ensure_app_state()
-            
+
             if self.data['app_state'].get('window_geometry'):
                 geom = self.data['app_state']['window_geometry']
                 self.setGeometry(geom['x'], geom['y'], geom['width'], geom['height'])
-            
-            if 'last_tab' in self.data['app_state'] and hasattr(self, 'tabs'):
-                self.tabs.setCurrentIndex(self.data['app_state']['last_tab'])
-            
+
+            # Vždy otevřít první záložku "Přidat výkon" (index 0), ignorovat uložený stav
+            if hasattr(self, 'tabs'):
+                self.tabs.setCurrentIndex(0)
+
             if 'exercise_years' in self.data['app_state']:
                 for exercise, year in self.data['app_state']['exercise_years'].items():
                     if exercise in self.exercise_year_selectors:
@@ -2211,6 +2212,7 @@ class FitnessTrackerApp(QMainWindow):
                             selector.setCurrentIndex(index)
         except Exception as e:
             print(f"Chyba při obnovování stavu: {e}")
+
     
     def setup_ui(self):
         """Vytvoří UI - dynamické záložky s fixním scrollováním pro cvičení."""
