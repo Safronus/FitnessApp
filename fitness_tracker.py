@@ -3309,24 +3309,25 @@ class FitnessTrackerApp(QMainWindow):
         if value <= 0:
             self.show_message("Chyba", f"Zadej nenulovou hodnotu pro {exercise_type}!", QMessageBox.Warning)
             return
-
+    
         selected_date_str = self.add_date_edit.date().toString("yyyy-MM-dd")
-
+    
         if selected_date_str not in self.data["workouts"]:
             self.data["workouts"][selected_date_str] = {}
-
+    
         if exercise_type not in self.data["workouts"][selected_date_str]:
             self.data["workouts"][selected_date_str][exercise_type] = []
-
+    
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.data["workouts"][selected_date_str][exercise_type].append({
             "value": value,
             "timestamp": timestamp,
+            "id": str(uuid.uuid4()),
             "note": ""
         })
-
+    
         self.save_data()
-
+    
         # Aktualizuj všechny záložky
         active_exercises = self.get_active_exercises()
         for exercise in active_exercises:
@@ -3335,14 +3336,14 @@ class FitnessTrackerApp(QMainWindow):
             # >>> DOPLNĚNO: hned přegeneruj i graf (zachová aktuální mód)
             mode = self.chart_modes.get(exercise, "weekly") if hasattr(self, "chart_modes") else "weekly"
             self.update_performance_chart(exercise, mode)
-
+    
         self.refresh_add_tab_goals()
         self.apply_add_tab_goals_gradient()
         self.apply_weekly_plan_gradient()
-
+    
         config = self.get_exercise_config(exercise_type)
         self.show_message("Přidáno", f"Výkon byl zaznamenán:\n{value}× {config['name']}")
-
+    
         # Reset správného SpinBoxu
         if exercise_type in self.exercise_spinboxes:
             self.exercise_spinboxes[exercise_type].setValue(0)
@@ -4281,20 +4282,8 @@ class FitnessTrackerApp(QMainWindow):
                             actual_week += float(records.get("value", 0.0))
                     day += timedelta(days=1)
                 
-                # Výpočet denní potřeby (pro všechny týdny)
-                daily_needed = 0
-                if is_current:
-                    rem_plan = plan_week - actual_week
-                    rem_days = (week_end - today).days + 1
-                    if rem_plan > 0 and rem_days > 0:
-                        daily_needed = math.ceil(rem_plan / rem_days)
-                    elif rem_plan > 0 and rem_days <= 0:
-                        daily_needed = math.ceil(rem_plan) 
-                    elif rem_plan <= 0:
-                        daily_needed = 0
-                else:
-                    if plan_week > 0:
-                        daily_needed = math.ceil(plan_week / 7)
+                # Výpočet denní potřeby: vždy jako plán týdne / 7 dní (minimální změna)
+                daily_needed = math.ceil(plan_week / 7) if plan_week > 0 else 0
                 
                 # ZMĚNA: Výpočet denního plnění
                 if is_current:
@@ -4499,9 +4488,6 @@ class FitnessTrackerApp(QMainWindow):
                 # Pokud je dnů hodně, zmenšíme font nebo proředíme popisky,
                 # ale grid/tiky necháme pro každý den
                 if len(xs_days) > 30:
-                     # Ponecháme major locator na každý den pro grid, ale formatter jen občas?
-                     # Matplotlib to dělá těžko odděleně.
-                     # Uděláme kompromis: Locator každý den, ale popisky rotované a menší font.
                      pass
 
                 # Jemná mřížka pro každý den
@@ -4525,7 +4511,6 @@ class FitnessTrackerApp(QMainWindow):
                     cz_days = ["Po", "Út", "St", "Čt", "Pá", "So", "Ne"]
                     day_name = cz_days[date_val.weekday()]
 
-                    # (4.4.7d) Detail: den v plánovacím týdnu + číslo týdne v plánu + rozmezí týdne
                     try:
                         d_only = date_val.date()
                     except Exception:
@@ -4579,7 +4564,6 @@ class FitnessTrackerApp(QMainWindow):
         ax.axhline(y=100.0, color="#32CD32", linestyle="--", linewidth=1, alpha=0.5, label="Cíl 100 %")
         ax.set_title("Denní průběh plnění plánu (v rámci týdnů)")
         ax.set_ylabel("Plnění [%]")
-        # Rozšíření limitů osy X, aby graf vyplnil celý prostor
         if xs_days:
             ax.set_xlim(left=mdates.date2num(start_d), right=mdates.date2num(end_d))
 
@@ -4588,12 +4572,10 @@ class FitnessTrackerApp(QMainWindow):
         # (4.4.7c) Šedé přerušované čáry po 1/7 + popisky vpravo "1.–7. den v týdnu"
         try:
             _step = 100.0 / 7.0
-            # 1/7 .. 6/7 jako šedé přerušované čáry (100 % už má vlastní zelenou čáru)
             for _i in range(1, 7):
                 _y = _step * _i
                 ax.axhline(y=_y, color="#888888", linestyle="--", linewidth=0.9, alpha=0.55, zorder=0)
 
-            # popisky vpravo, lehce nad odpovídající hranicí
             for _i in range(1, 8):
                 _y = _step * _i
                 ax.text(
@@ -4613,8 +4595,7 @@ class FitnessTrackerApp(QMainWindow):
 
         fig.tight_layout()
         self.bmi_plan_canvas.draw()
-
-
+        
     def refresh_add_tab_goals(self):
         """Aktualizuje přehled cílů (labels) v záložce Přidat výkon podle vybraného data a přepočítá BMI plán."""
         if not hasattr(self, "add_goals_labels") or not hasattr(self, "add_date_edit"):
@@ -6796,6 +6777,9 @@ class FitnessTrackerApp(QMainWindow):
                                 del self.data["workouts"][date_str]
                                 
                             self.save_data()
+                            self.refresh_add_tab_goals()
+                            self.apply_add_tab_goals_gradient()
+                            self.apply_weekly_plan_gradient()
                             self.update_exercise_tab(exercise_type)
                             self.refresh_exercise_calendar(exercise_type)
                             if exercise_type in self.chart_modes:
