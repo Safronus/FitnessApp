@@ -31,9 +31,9 @@ from matplotlib.collections import LineCollection
 import matplotlib.pyplot as plt
 
 TITLE = "Fitness Tracker"
-VERSION = "4.4.7c"
+VERSION = "4.4.7d"
 APP_VERSION = VERSION
-VERSION_DATE = "13.12.2025"
+VERSION_DATE = "14.12.2025"
 
 # Dark Theme Stylesheet
 DARK_THEME = """
@@ -4492,10 +4492,44 @@ class FitnessTrackerApp(QMainWindow):
                     date_num = pos[0]
                     val = pos[1]
                     date_val = mdates.num2date(date_num)
+    
                     cz_days = ["Po", "Út", "St", "Čt", "Pá", "So", "Ne"]
                     day_name = cz_days[date_val.weekday()]
-                    text = f"{day_name} {date_val.strftime('%d.%m.%Y')}\nPlnění: {val:.1f} %"
-                    annot.set_text(text)
+    
+                    # (4.4.7d) Detail: den v plánovacím týdnu + číslo týdne v plánu + rozmezí týdne
+                    try:
+                        d_only = date_val.date()
+                    except Exception:
+                        d_only = None
+    
+                    plan_week_num = None
+                    day_in_week = None
+                    plan_day_index = None
+                    ws = None
+                    we = None
+                    try:
+                        if d_only is not None:
+                            delta = (d_only - monday0).days
+                            if delta >= 0:
+                                plan_day_index = delta + 1
+                                plan_week_num = (delta // 7) + 1
+                                day_in_week = (delta % 7) + 1
+                                ws = monday0 + timedelta(days=7 * (plan_week_num - 1))
+                                we = ws + timedelta(days=6)
+                    except Exception:
+                        pass
+    
+                    lines = []
+                    lines.append(f"{day_name} {date_val.strftime('%d.%m.%Y')}")
+                    if plan_week_num is not None and day_in_week is not None:
+                        lines.append(f"Týden plánu: {plan_week_num}/{int(horizon_weeks) if horizon_weeks else 0}  |  Den v týdnu: {day_in_week}/7")
+                    if ws is not None and we is not None:
+                        lines.append(f"Rozsah týdne: {ws.strftime('%d.%m.%Y')} – {we.strftime('%d.%m.%Y')}")
+                    if plan_day_index is not None:
+                        lines.append(f"Den od startu plánu: {plan_day_index}")
+                    lines.append(f"Plnění: {val:.1f} %")
+    
+                    annot.set_text("\n".join(lines))
                     annot.get_bbox_patch().set_alpha(0.9)
     
                 def hover(event):
