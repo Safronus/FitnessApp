@@ -32,7 +32,7 @@ from matplotlib.collections import LineCollection
 import matplotlib.pyplot as plt
 
 TITLE = "Fitness Tracker"
-VERSION = "4.5.2"
+VERSION = "4.5.4"
 APP_VERSION = VERSION
 VERSION_DATE = "14.12.2025"
 
@@ -3309,15 +3309,15 @@ class FitnessTrackerApp(QMainWindow):
         if value <= 0:
             self.show_message("Chyba", f"Zadej nenulovou hodnotu pro {exercise_type}!", QMessageBox.Warning)
             return
-    
+
         selected_date_str = self.add_date_edit.date().toString("yyyy-MM-dd")
-    
+
         if selected_date_str not in self.data["workouts"]:
             self.data["workouts"][selected_date_str] = {}
-    
+
         if exercise_type not in self.data["workouts"][selected_date_str]:
             self.data["workouts"][selected_date_str][exercise_type] = []
-    
+
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.data["workouts"][selected_date_str][exercise_type].append({
             "value": value,
@@ -3325,9 +3325,9 @@ class FitnessTrackerApp(QMainWindow):
             "id": str(uuid.uuid4()),
             "note": ""
         })
-    
+
         self.save_data()
-    
+
         # Aktualizuj všechny záložky
         active_exercises = self.get_active_exercises()
         for exercise in active_exercises:
@@ -3336,14 +3336,20 @@ class FitnessTrackerApp(QMainWindow):
             # >>> DOPLNĚNO: hned přegeneruj i graf (zachová aktuální mód)
             mode = self.chart_modes.get(exercise, "weekly") if hasattr(self, "chart_modes") else "weekly"
             self.update_performance_chart(exercise, mode)
-    
+
+        # (8.0.4) BMI plán se má přepočítat pouze při změně dat (ne při změně data v add tabu)
+        self.recompute_bmi_plan()
+
+        # (8.0.4) BMI plán se má přepočítat pouze při změně dat (ne při změně data v add tabu)
+        self.recompute_bmi_plan()
+
         self.refresh_add_tab_goals()
         self.apply_add_tab_goals_gradient()
         self.apply_weekly_plan_gradient()
-    
+
         config = self.get_exercise_config(exercise_type)
         self.show_message("Přidáno", f"Výkon byl zaznamenán:\n{value}× {config['name']}")
-    
+
         # Reset správného SpinBoxu
         if exercise_type in self.exercise_spinboxes:
             self.exercise_spinboxes[exercise_type].setValue(0)
@@ -3379,6 +3385,7 @@ class FitnessTrackerApp(QMainWindow):
             self.data["workouts"][selected_date_str][exercise_id].append({
                 "value": val,
                 "timestamp": timestamp,
+                "id": str(uuid.uuid4()),
                 "note": ""
             })
 
@@ -3580,8 +3587,17 @@ class FitnessTrackerApp(QMainWindow):
         self.add_date_edit = QDateEdit()
         self.add_date_edit.setDate(QDate.currentDate())
         self.add_date_edit.setCalendarPopup(True)
-        self.add_date_edit.dateChanged.connect(self.refresh_add_tab_goals)
-        self.add_date_edit.dateChanged.connect(self.apply_add_tab_goals_gradient)
+        # (8.0.4) Nedovol vybrat datum před začátkem cvičení (nejstarší start napříč cvičeními)
+        try:
+            _year = int(self.add_date_edit.date().year())
+            _min_qd = self._get_add_tab_min_date_for_year(_year)
+            if _min_qd is not None:
+                self.add_date_edit.setMinimumDate(_min_qd)
+                if self.add_date_edit.date() < _min_qd:
+                    self.add_date_edit.setDate(_min_qd)
+        except Exception:
+            pass
+        self.add_date_edit.dateChanged.connect(self.on_add_workout_date_changed)
         date_row.addWidget(self.add_date_edit)
         date_row.addStretch()
         layout.addLayout(date_row)
@@ -4282,8 +4298,20 @@ class FitnessTrackerApp(QMainWindow):
                             actual_week += float(records.get("value", 0.0))
                     day += timedelta(days=1)
                 
-                # Výpočet denní potřeby: vždy jako plán týdne / 7 dní (minimální změna)
-                daily_needed = math.ceil(plan_week / 7) if plan_week > 0 else 0
+                # Výpočet denní potřeby (pro všechny týdny)
+                daily_needed = 0
+                if is_current:
+                    rem_plan = plan_week - actual_week
+                    rem_days = (week_end - today).days + 1
+                    if rem_plan > 0 and rem_days > 0:
+                        daily_needed = math.ceil(rem_plan / rem_days)
+                    elif rem_plan > 0 and rem_days <= 0:
+                        daily_needed = math.ceil(rem_plan) 
+                    elif rem_plan <= 0:
+                        daily_needed = 0
+                else:
+                    if plan_week > 0:
+                        daily_needed = math.ceil(plan_week / 7)
                 
                 # ZMĚNA: Výpočet denního plnění
                 if is_current:
@@ -4488,6 +4516,9 @@ class FitnessTrackerApp(QMainWindow):
                 # Pokud je dnů hodně, zmenšíme font nebo proředíme popisky,
                 # ale grid/tiky necháme pro každý den
                 if len(xs_days) > 30:
+                     # Ponecháme major locator na každý den pro grid, ale formatter jen občas?
+                     # Matplotlib to dělá těžko odděleně.
+                     # Uděláme kompromis: Locator každý den, ale popisky rotované a menší font.
                      pass
 
                 # Jemná mřížka pro každý den
@@ -4511,6 +4542,7 @@ class FitnessTrackerApp(QMainWindow):
                     cz_days = ["Po", "Út", "St", "Čt", "Pá", "So", "Ne"]
                     day_name = cz_days[date_val.weekday()]
 
+                    # (4.4.7d) Detail: den v plánovacím týdnu + číslo týdne v plánu + rozmezí týdne
                     try:
                         d_only = date_val.date()
                     except Exception:
@@ -4564,6 +4596,7 @@ class FitnessTrackerApp(QMainWindow):
         ax.axhline(y=100.0, color="#32CD32", linestyle="--", linewidth=1, alpha=0.5, label="Cíl 100 %")
         ax.set_title("Denní průběh plnění plánu (v rámci týdnů)")
         ax.set_ylabel("Plnění [%]")
+        # Rozšíření limitů osy X, aby graf vyplnil celý prostor
         if xs_days:
             ax.set_xlim(left=mdates.date2num(start_d), right=mdates.date2num(end_d))
 
@@ -4572,10 +4605,12 @@ class FitnessTrackerApp(QMainWindow):
         # (4.4.7c) Šedé přerušované čáry po 1/7 + popisky vpravo "1.–7. den v týdnu"
         try:
             _step = 100.0 / 7.0
+            # 1/7 .. 6/7 jako šedé přerušované čáry (100 % už má vlastní zelenou čáru)
             for _i in range(1, 7):
                 _y = _step * _i
                 ax.axhline(y=_y, color="#888888", linestyle="--", linewidth=0.9, alpha=0.55, zorder=0)
 
+            # popisky vpravo, lehce nad odpovídající hranicí
             for _i in range(1, 8):
                 _y = _step * _i
                 ax.text(
@@ -4595,9 +4630,10 @@ class FitnessTrackerApp(QMainWindow):
 
         fig.tight_layout()
         self.bmi_plan_canvas.draw()
-        
+
+
     def refresh_add_tab_goals(self):
-        """Aktualizuje přehled cílů (labels) v záložce Přidat výkon podle vybraného data a přepočítá BMI plán."""
+        """Aktualizuje přehled cílů (labels) v záložce Přidat výkon podle vybraného data."""
         if not hasattr(self, "add_goals_labels") or not hasattr(self, "add_date_edit"):
             return
 
@@ -4637,9 +4673,72 @@ class FitnessTrackerApp(QMainWindow):
             lbl.setText(f"{config['icon']} {config['name']}: {status}")
             lbl.setStyleSheet(f"font-size: 13px; padding: 5px; color: {color}; font-weight: bold;")
 
-        # 2. Automatický refresh BMI plánu a grafu
-        self.recompute_bmi_plan()
-        
+    def _get_add_tab_min_date_for_year(self, year: int):
+        """Vrátí nejstarší povolené datum pro QDateEdit v záložce 'Přidat výkon'.
+
+        Použije nejstarší (nejmenší) start napříč aktivními cvičeními v daném roce.
+        """
+        try:
+            from PySide6.QtCore import QDate
+            from datetime import date as _date
+
+            active_exercises = self.get_active_exercises()
+            starts = []
+            for ex in active_exercises:
+                try:
+                    dt = self.get_exercise_start_date(ex, year)
+                    if dt:
+                        starts.append(dt)
+                except Exception:
+                    pass
+
+            if starts:
+                oldest = min(starts)
+            else:
+                oldest = _date(year, 1, 1)
+
+            return QDate(oldest.year, oldest.month, oldest.day)
+        except Exception:
+            return None
+
+    def on_add_workout_date_changed(self, qdate):
+        """Změna data v záložce 'Přidat výkon'.
+
+        (8.0.4) Neprovádí přepočet týdenního rozpisu (BMI plán) – pouze aktualizuje
+        'Cíle pro zvolené datum' a jeho gradient. Zároveň zabrání výběru data před
+        začátkem cvičení (nejstarší start napříč cvičeními).
+        """
+        if getattr(self, "_add_tab_date_change_guard", False):
+            return
+
+        self._add_tab_date_change_guard = True
+        try:
+            if not hasattr(self, "add_date_edit"):
+                return
+
+            try:
+                year = int(qdate.year())
+            except Exception:
+                year = int(self.add_date_edit.date().year())
+
+            min_qd = self._get_add_tab_min_date_for_year(year)
+            if min_qd is not None:
+                try:
+                    self.add_date_edit.setMinimumDate(min_qd)
+                except Exception:
+                    pass
+
+                try:
+                    if self.add_date_edit.date() < min_qd:
+                        self.add_date_edit.setDate(min_qd)
+                except Exception:
+                    pass
+
+            self.refresh_add_tab_goals()
+            self.apply_add_tab_goals_gradient()
+        finally:
+            self._add_tab_date_change_guard = False
+
     def expand_today_in_exercise_tree(self, exercise_type):
         """Rozbalí v seznamu záznamů dnešní den (pokud v tree existuje) pro dané cvičení."""
         try:
@@ -6769,7 +6868,43 @@ class FitnessTrackerApp(QMainWindow):
                     if date_str in self.data["workouts"] and exercise_type in self.data["workouts"][date_str]:
                         recs = self.data["workouts"][date_str][exercise_type]
                         if isinstance(recs, list):
-                            self.data["workouts"][date_str][exercise_type] = [r for r in recs if r["id"] != rec_id]
+                            # Bezpečně: některé starší záznamy mohou postrádat klíč "id"
+                            if rec_id:
+                                self.data["workouts"][date_str][exercise_type] = [
+                                    r for r in recs
+                                    if not (isinstance(r, dict) and r.get("id") == rec_id)
+                                ]
+                            else:
+                                # Fallback pro velmi staré záznamy bez id: zkus podle času+hodnoty
+                                try:
+                                    target_val = float(item.text(1))
+                                except Exception:
+                                    target_val = None
+                                time_only = (item.text(2) or "").strip()
+                                removed = False
+                                for _i, _r in enumerate(recs):
+                                    if not isinstance(_r, dict):
+                                        continue
+                                    if _r.get("id"):
+                                        continue
+                                    if target_val is not None:
+                                        try:
+                                            if float(_r.get("value", None)) != target_val:
+                                                continue
+                                        except Exception:
+                                            continue
+                                    if time_only:
+                                        ts = str(_r.get("timestamp", ""))
+                                        if time_only not in ts:
+                                            continue
+                                    del recs[_i]
+                                    removed = True
+                                    break
+                                if removed:
+                                    self.data["workouts"][date_str][exercise_type] = recs
+                                else:
+                                    # Nic nenalezeno -> bez změny
+                                    self.data["workouts"][date_str][exercise_type] = recs
                             # Clean up
                             if not self.data["workouts"][date_str][exercise_type]:
                                 del self.data["workouts"][date_str][exercise_type]
@@ -6777,13 +6912,14 @@ class FitnessTrackerApp(QMainWindow):
                                 del self.data["workouts"][date_str]
                                 
                             self.save_data()
-                            self.refresh_add_tab_goals()
-                            self.apply_add_tab_goals_gradient()
-                            self.apply_weekly_plan_gradient()
                             self.update_exercise_tab(exercise_type)
                             self.refresh_exercise_calendar(exercise_type)
                             if exercise_type in self.chart_modes:
                                 self.update_performance_chart(exercise_type, self.chart_modes[exercise_type])
+                            self.refresh_add_tab_goals()
+                            self.apply_add_tab_goals_gradient()
+                            self.recompute_bmi_plan()
+                            self.apply_weekly_plan_gradient()
                             self.show_message("Smazáno", "Záznam byl odstraněn.")
         
         elif item_type == "day":
@@ -6810,13 +6946,13 @@ class FitnessTrackerApp(QMainWindow):
                             del self.data["workouts"][date_str]
                             
                         self.save_data()
-                        self.refresh_add_tab_goals()
-                        self.apply_add_tab_goals_gradient()
-                        self.apply_weekly_plan_gradient()
                         self.update_exercise_tab(exercise_type)
                         self.refresh_exercise_calendar(exercise_type)
                         if exercise_type in self.chart_modes:
                             self.update_performance_chart(exercise_type, self.chart_modes[exercise_type])
+                        self.refresh_add_tab_goals()
+                        self.apply_add_tab_goals_gradient()
+                        self.apply_weekly_plan_gradient()
                         self.show_message("Smazáno", "Záznamy dne byly odstraněny.")
                         
         else:
@@ -6947,6 +7083,9 @@ class FitnessTrackerApp(QMainWindow):
                 self.update_exercise_tab(exercise_type)
                 self.refresh_exercise_calendar(exercise_type)
                 self.refresh_add_tab_goals()
+                self.apply_add_tab_goals_gradient()
+                self.recompute_bmi_plan()
+                self.apply_weekly_plan_gradient()
                 
                 self.show_message("Smazáno", f"Všechny záznamy pro {date_str} byly smazány")
 
