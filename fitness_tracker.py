@@ -32,7 +32,7 @@ from matplotlib.collections import LineCollection
 import matplotlib.pyplot as plt
 
 TITLE = "Fitness Tracker"
-VERSION = "4.5.4"
+VERSION = "4.5.5"
 APP_VERSION = VERSION
 VERSION_DATE = "14.12.2025"
 
@@ -3810,9 +3810,6 @@ class FitnessTrackerApp(QMainWindow):
 
         params_row.addStretch()
 
-        self.bmi_plan_recompute_button = QPushButton("Přepočítat plán")
-        params_row.addWidget(self.bmi_plan_recompute_button)
-
         plan_layout.addLayout(params_row)
 
         self.bmi_plan_summary_label = QLabel("")
@@ -3884,7 +3881,6 @@ class FitnessTrackerApp(QMainWindow):
         layout.addWidget(self.bmi_plan_canvas, 1)
 
         # Signály pro plán
-        self.bmi_plan_recompute_button.clicked.connect(self.recompute_bmi_plan)
         self.bmi_plan_target_spin.valueChanged.connect(self.recompute_bmi_plan)
         self.bmi_plan_horizon_combo.currentIndexChanged.connect(self.recompute_bmi_plan)
         self.bmi_plan_mode_combo.currentIndexChanged.connect(self.recompute_bmi_plan)
@@ -4298,20 +4294,8 @@ class FitnessTrackerApp(QMainWindow):
                             actual_week += float(records.get("value", 0.0))
                     day += timedelta(days=1)
                 
-                # Výpočet denní potřeby (pro všechny týdny)
-                daily_needed = 0
-                if is_current:
-                    rem_plan = plan_week - actual_week
-                    rem_days = (week_end - today).days + 1
-                    if rem_plan > 0 and rem_days > 0:
-                        daily_needed = math.ceil(rem_plan / rem_days)
-                    elif rem_plan > 0 and rem_days <= 0:
-                        daily_needed = math.ceil(rem_plan) 
-                    elif rem_plan <= 0:
-                        daily_needed = 0
-                else:
-                    if plan_week > 0:
-                        daily_needed = math.ceil(plan_week / 7)
+                # Výpočet denní potřeby: vždy jako plán týdne / 7 dní (minimální změna)
+                daily_needed = math.ceil(plan_week / 7) if plan_week > 0 else 0
                 
                 # ZMĚNA: Výpočet denního plnění
                 if is_current:
@@ -4516,9 +4500,6 @@ class FitnessTrackerApp(QMainWindow):
                 # Pokud je dnů hodně, zmenšíme font nebo proředíme popisky,
                 # ale grid/tiky necháme pro každý den
                 if len(xs_days) > 30:
-                     # Ponecháme major locator na každý den pro grid, ale formatter jen občas?
-                     # Matplotlib to dělá těžko odděleně.
-                     # Uděláme kompromis: Locator každý den, ale popisky rotované a menší font.
                      pass
 
                 # Jemná mřížka pro každý den
@@ -4542,7 +4523,6 @@ class FitnessTrackerApp(QMainWindow):
                     cz_days = ["Po", "Út", "St", "Čt", "Pá", "So", "Ne"]
                     day_name = cz_days[date_val.weekday()]
 
-                    # (4.4.7d) Detail: den v plánovacím týdnu + číslo týdne v plánu + rozmezí týdne
                     try:
                         d_only = date_val.date()
                     except Exception:
@@ -4596,7 +4576,6 @@ class FitnessTrackerApp(QMainWindow):
         ax.axhline(y=100.0, color="#32CD32", linestyle="--", linewidth=1, alpha=0.5, label="Cíl 100 %")
         ax.set_title("Denní průběh plnění plánu (v rámci týdnů)")
         ax.set_ylabel("Plnění [%]")
-        # Rozšíření limitů osy X, aby graf vyplnil celý prostor
         if xs_days:
             ax.set_xlim(left=mdates.date2num(start_d), right=mdates.date2num(end_d))
 
@@ -4605,12 +4584,10 @@ class FitnessTrackerApp(QMainWindow):
         # (4.4.7c) Šedé přerušované čáry po 1/7 + popisky vpravo "1.–7. den v týdnu"
         try:
             _step = 100.0 / 7.0
-            # 1/7 .. 6/7 jako šedé přerušované čáry (100 % už má vlastní zelenou čáru)
             for _i in range(1, 7):
                 _y = _step * _i
                 ax.axhline(y=_y, color="#888888", linestyle="--", linewidth=0.9, alpha=0.55, zorder=0)
 
-            # popisky vpravo, lehce nad odpovídající hranicí
             for _i in range(1, 8):
                 _y = _step * _i
                 ax.text(
@@ -4630,8 +4607,6 @@ class FitnessTrackerApp(QMainWindow):
 
         fig.tight_layout()
         self.bmi_plan_canvas.draw()
-
-
     def refresh_add_tab_goals(self):
         """Aktualizuje přehled cílů (labels) v záložce Přidat výkon podle vybraného data."""
         if not hasattr(self, "add_goals_labels") or not hasattr(self, "add_date_edit"):
@@ -8406,6 +8381,9 @@ class FitnessTrackerApp(QMainWindow):
             days_not_exercised = 0
             irrelevant_days = 0
 
+            # NOVĚ: kolik dní jsem fakt odcvičil (bez ohledu na relevanci cíle)
+            days_exercised = 0
+
             relevant_days = 0
             sum_goal_to_date = 0
             sum_done_to_date = 0
@@ -8418,6 +8396,21 @@ class FitnessTrackerApp(QMainWindow):
                     continue
 
                 ds = d.strftime("%Y-%m-%d")
+
+                # Počet odcvičených dní (bez ohledu na relevanci cíle)
+                done_any = 0
+                if ds in self.data.get("workouts", {}) and exercise_type in self.data["workouts"][ds]:
+                    recs_any = self.data["workouts"][ds][exercise_type]
+                    try:
+                        if isinstance(recs_any, list):
+                            done_any = sum(float(r.get("value", 0) or 0.0) for r in recs_any if isinstance(r, dict))
+                        elif isinstance(recs_any, dict):
+                            done_any = float(recs_any.get("value", 0) or 0.0)
+                    except Exception:
+                        done_any = 0
+                if done_any > 0 and d >= ex_start:
+                    days_exercised += 1
+
                 goal = self.calculate_goal(exercise_type, ds)
                 if not isinstance(goal, int):
                     goal = int(goal) if goal else 0
@@ -8457,39 +8450,37 @@ class FitnessTrackerApp(QMainWindow):
             avg_done_per_day = (sum_done_to_date / relevant_days) if relevant_days > 0 else 0
             avg_pct_to_date = (sum_done_to_date / sum_goal_to_date * 100) if sum_goal_to_date > 0 else 0
 
+            # NOVĚ: kolik dní uběhlo od startu cvičení
+            days_since_start = (end_calc_date - ex_start).days + 1 if end_calc_date >= ex_start else 0
+
             # --- Plán do konce roku (od startu cvičení v daném roce) ---
             planned_total_to_year_end = 0
             d = max(year_start, ex_start)
             while d <= year_end:
                 ds = d.strftime("%Y-%m-%d")
-                g = self.calculate_goal(exercise_type, ds)
-                if not isinstance(g, int):
-                    g = int(g) if g else 0
-                if g > 0:
-                    planned_total_to_year_end += g
+                goal = self.calculate_goal(exercise_type, ds)
+                if not isinstance(goal, int):
+                    goal = int(goal) if goal else 0
+                if goal > 0:
+                    planned_total_to_year_end += goal
                 d += timedelta(days=1)
 
-            remaining_total_to_year_end = planned_total_to_year_end - sum_done_to_date
-            if remaining_total_to_year_end < 0:
-                remaining_total_to_year_end = 0
-
-            # --- ZBYTEK ROKU: stejně jako v DEN/TÝDEN/MĚSÍC/ZBYTEK ---
+            # --- Kolik zbývá do konce roku (jen aktuální rok) ---
             remaining_from_today = 0
             remaining_days = 0
             avg_needed_future = 0.0
-
             if selected_year == today.year:
                 today_str = today.strftime("%Y-%m-%d")
                 day_performed = 0
                 if today_str in self.data.get("workouts", {}) and exercise_type in self.data["workouts"][today_str]:
-                    recs = self.data["workouts"][today_str][exercise_type]
+                    recs_today = self.data["workouts"][today_str][exercise_type]
                     try:
-                        day_performed = sum(r["value"] for r in (recs if isinstance(recs, list) else [recs]))
+                        if isinstance(recs_today, list):
+                            day_performed = sum(float(r.get("value", 0) or 0.0) for r in recs_today if isinstance(r, dict))
+                        elif isinstance(recs_today, dict):
+                            day_performed = float(recs_today.get("value", 0) or 0.0)
                     except Exception:
-                        try:
-                            day_performed = recs.get("value", 0) if isinstance(recs, dict) else 0
-                        except Exception:
-                            day_performed = 0
+                        day_performed = 0
 
                 cur = max(today, ex_start)
                 while cur <= year_end:
@@ -8502,7 +8493,7 @@ class FitnessTrackerApp(QMainWindow):
                         remaining_days += 1
                     cur += timedelta(days=1)
 
-                # odečíst dnešní výkon (stejná logika jako rest_goal += day_performed v update_detailed_overview)
+                # odečíst dnešní výkon
                 if today >= ex_start:
                     g_today = self.calculate_goal(exercise_type, today_str)
                     if not isinstance(g_today, int):
@@ -8522,10 +8513,10 @@ class FitnessTrackerApp(QMainWindow):
                 f"⚠️ Částečně nesplněno: {days_partial_missed} | "
                 f"❌ Necvičil: {days_not_exercised} | "
                 f"💤 Irelevantní: {irrelevant_days}"
+                f"\t📅 Od startu: {days_since_start} dní | 🏋️ Odcvičeno: {days_exercised} dní"
                 f"\n"
                 f"📈 Průměrný výkon: {avg_done_per_day:.1f}/den ({avg_pct_to_date:.1f}% plánu dosud)"
-                f"\n"
-                f"📌 Od startu nacvičeno: {sum_done_to_date:.0f}"
+                f"\t📌 Od startu nacvičeno: {sum_done_to_date:.0f}"
             )
 
             if selected_year == today.year:
