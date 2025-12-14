@@ -6810,6 +6810,9 @@ class FitnessTrackerApp(QMainWindow):
                             del self.data["workouts"][date_str]
                             
                         self.save_data()
+                        self.refresh_add_tab_goals()
+                        self.apply_add_tab_goals_gradient()
+                        self.apply_weekly_plan_gradient()
                         self.update_exercise_tab(exercise_type)
                         self.refresh_exercise_calendar(exercise_type)
                         if exercise_type in self.chart_modes:
