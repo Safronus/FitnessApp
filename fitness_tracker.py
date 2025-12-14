@@ -5,6 +5,7 @@
 import sys
 import json
 import uuid
+import math
 from datetime import datetime, timedelta
 from pathlib import Path
 from PySide6.QtWidgets import (
@@ -31,7 +32,7 @@ from matplotlib.collections import LineCollection
 import matplotlib.pyplot as plt
 
 TITLE = "Fitness Tracker"
-VERSION = "4.5.0"
+VERSION = "4.5.2"
 APP_VERSION = VERSION
 VERSION_DATE = "14.12.2025"
 
@@ -3440,8 +3441,8 @@ class FitnessTrackerApp(QMainWindow):
         except Exception:
             return "#ffffff"
 
-    def apply_weekly_plan_gradient(self) -> None:
-        """Dobarví týdenní rozpis + řádky cviků stejným gradientem jako kalendář (celé řádky)."""
+    def apply_weekly_plan_gradient(self):
+        """Dobarví týdenní rozpis (řádky cviků) stejným gradientem jako kalendář celé délky."""
         if not hasattr(self, "bmi_plan_weeks_tree"):
             return
 
@@ -3454,7 +3455,7 @@ class FitnessTrackerApp(QMainWindow):
         today = datetime.now().date()
         col_count = tree.columnCount()
 
-        def _apply_row_colors(item, bg_hex: str, fg_hex: str) -> None:
+        def apply_row_colors(item, bg_hex: str, fg_hex: str):
             try:
                 bg = QColor(bg_hex)
                 fg = QColor(fg_hex)
@@ -3464,25 +3465,24 @@ class FitnessTrackerApp(QMainWindow):
             except Exception:
                 pass
 
-        def _parse_percent(txt: str) -> float:
+        def parse_percent(txt: str) -> float:
             if not isinstance(txt, str):
                 return 0.0
-            t = txt.replace("%", "").replace("％", "").strip()
+            t = txt.replace("%", "").replace(" ", "").strip()
             try:
                 return float(t)
             except Exception:
-                m = re.search(r"(-?\d+(?:[\.,]\d+)?)", t)
+                m = re.search(r"(-?\d+(\.\d+)?)", t)
                 if not m:
                     return 0.0
                 try:
                     return float(m.group(1).replace(",", "."))
                 except Exception:
                     return 0.0
-
-        def _week_start_from_label(lbl: str):
-            # "Týden X: dd.mm.yyyy – dd.mm.yyyy"
+        
+        def week_start_from_label(lbl: str):
             try:
-                m = re.search(r":\s*(\d{2}\.\d{2}\.\d{4})\s*[–-]", lbl)
+                m = re.search(r":\s*(\d{2}\.\d{2}\.\d{4})\s*–", lbl)
                 if not m:
                     return None
                 return datetime.strptime(m.group(1), "%d.%m.%Y").date()
@@ -3493,36 +3493,39 @@ class FitnessTrackerApp(QMainWindow):
             week_item = tree.topLevelItem(i)
             if not week_item:
                 continue
-
-            week_start = _week_start_from_label(week_item.text(0))
-            colorize = (week_start is None) or (week_start <= today)
+            
+            week_start = week_start_from_label(week_item.text(0))
+            colorize = (week_start is None or week_start <= today)
 
             percents = []
             for j in range(week_item.childCount()):
                 child = week_item.child(j)
                 if not child:
                     continue
-                p = _parse_percent(child.text(4))
+                
+                # ZMĚNA: Procento je ve sloupci 6 (index 6)
+                p = parse_percent(child.text(6))
                 percents.append(p)
 
                 if colorize:
                     bg_hex = self._calendar_percent_bg_hex(p)
                     fg_hex = self._contrast_text_hex_for_bg(bg_hex)
-                    _apply_row_colors(child, bg_hex, fg_hex)
-
-            avg = (sum(percents) / len(percents)) if percents else 0.0
-
+                    apply_row_colors(child, bg_hex, fg_hex)
+            
+            avg = sum(percents) / len(percents) if percents else 0.0
+            
             try:
-                week_item.setText(4, f"{avg:.0f} %")
-                week_item.setTextAlignment(4, Qt.AlignCenter)
+                # ZMĚNA: Zápis průměru do sloupce 6
+                week_item.setText(6, f"{avg:.0f} %")
+                week_item.setTextAlignment(6, Qt.AlignCenter)
             except Exception:
                 pass
 
             if colorize:
                 bg_hex = self._calendar_percent_bg_hex(avg)
                 fg_hex = self._contrast_text_hex_for_bg(bg_hex)
-                _apply_row_colors(week_item, bg_hex, fg_hex)
-
+                apply_row_colors(week_item, bg_hex, fg_hex)
+                
     def apply_add_tab_goals_gradient(self) -> None:
         """Gradientní obarvení textu plnění v sekci 'Cíle pro zvolené datum' (stejně jako kalendář)."""
         if not hasattr(self, "add_goals_labels") or not hasattr(self, "add_date_edit"):
@@ -3823,13 +3826,15 @@ class FitnessTrackerApp(QMainWindow):
         weekly_layout = QVBoxLayout()
 
         self.bmi_plan_weeks_tree = QTreeWidget()
-        self.bmi_plan_weeks_tree.setColumnCount(5)
+        # ZMĚNA: 7 sloupců
+        self.bmi_plan_weeks_tree.setColumnCount(7)
         self.bmi_plan_weeks_tree.setHeaderLabels(
-            ["Týden", "Cvik", "Plán (k týdnu)", "Skutečnost (k týdnu)", "Plnění"]
+            ["Týden", "Cvik", "Plán týdne", "Skutečnost", "Denní potřeba", "Denní plnění", "Plnění"]
         )
         self.bmi_plan_weeks_tree.setRootIsDecorated(True)
         self.bmi_plan_weeks_tree.setAlternatingRowColors(True)
         self.bmi_plan_weeks_tree.setMinimumHeight(150)
+        
         w_header = self.bmi_plan_weeks_tree.header()
         w_header.setStretchLastSection(False)
         w_header.setSectionResizeMode(0, QHeaderView.Stretch)
@@ -3837,6 +3842,9 @@ class FitnessTrackerApp(QMainWindow):
         w_header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
         w_header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
         w_header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        w_header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        w_header.setSectionResizeMode(6, QHeaderView.ResizeToContents)
+        
         weekly_layout.addWidget(self.bmi_plan_weeks_tree)
 
         weekly_group.setLayout(weekly_layout)
@@ -4215,126 +4223,145 @@ class FitnessTrackerApp(QMainWindow):
         """Vytvoří týdenní rozpis plánu a graf plnění (kumulativně do jednotlivých týdnů)."""
         if not hasattr(self, "bmi_plan_weeks_tree"):
             return
-    
+
         from datetime import datetime, timedelta
         import matplotlib.dates as mdates
         import matplotlib.pyplot as plt
-        from PySide6.QtGui import QColor
-    
+        from PySide6.QtGui import QColor, QBrush
+        from PySide6.QtCore import Qt
+        import math
+
         self.bmi_plan_weeks_tree.clear()
-    
+
         workouts = self.data.get("workouts", {})
-    
+
         today = datetime.now().date()
-        # pondělí aktuálního týdne (nebo start plánu)
         try:
             ds = self.bmi_plan_start_date_edit.date().toString("yyyy-MM-dd")
             week0 = datetime.strptime(ds, "%Y-%m-%d").date()
         except Exception:
             week0 = datetime.now().date()
-        monday0 = week0  # Start plánu (nemusí být pondělí, ale pro účely plánu je to "den 0")
-    
-        # Pro tabulku chceme "týdenní" pohled (reset každý týden), aby seděl s grafem.
-        # Odstraněna kumulace přes celou historii.
-        
+        monday0 = week0
+
         weekly_compliance: list[tuple[datetime.date, float]] = []
-    
+
         for week_idx in range(horizon_weeks):
             week_start = monday0 + timedelta(days=7 * week_idx)
             week_end = week_start + timedelta(days=6)
-    
-            # Číslo týdne v plánu
+
             plan_week_num = week_idx + 1
             week_label = f"Týden {plan_week_num}: {week_start.strftime('%d.%m.%Y')} – {week_end.strftime('%d.%m.%Y')}"
-            
-            week_item = QTreeWidgetItem([week_label, "", "", "", ""])
+
+            week_item = QTreeWidgetItem([week_label, "", "", "", "", "", ""])
             self.bmi_plan_weeks_tree.addTopLevelItem(week_item)
-    
-            # Rozbalit, pokud je to aktuální týden
+
             is_current = (week_start <= today <= week_end)
             week_item.setExpanded(is_current)
-    
+
             week_percent_sum = 0.0
             week_percent_count = 0
-    
+
             for exercise_id in active_exercises:
                 plan_week = planned_weekly.get(exercise_id, 0.0)
-    
-                # Skutečná hodnota v tomto týdnu
+
                 actual_week = 0.0
                 day = week_start
                 while day <= week_end:
                     key = day.strftime("%Y-%m-%d")
                     day_data = workouts.get(key)
                     if day_data and exercise_id in day_data:
-                        # Ošetření proti vnořeným dictům
                         raw_rec = day_data[exercise_id]
                         records = raw_rec
                         if isinstance(raw_rec, dict) and exercise_id in raw_rec:
                              records = raw_rec[exercise_id]
-    
+
                         if isinstance(records, list):
                             actual_week += sum(float(r.get("value", 0.0)) for r in records)
                         elif isinstance(records, dict):
                             actual_week += float(records.get("value", 0.0))
                     day += timedelta(days=1)
-    
-                # Výpočet procenta pro tento týden (nikoliv kumulativně z historie)
+                
+                # Výpočet denní potřeby (pro všechny týdny)
+                daily_needed = 0
+                if is_current:
+                    rem_plan = plan_week - actual_week
+                    rem_days = (week_end - today).days + 1
+                    if rem_plan > 0 and rem_days > 0:
+                        daily_needed = math.ceil(rem_plan / rem_days)
+                    elif rem_plan > 0 and rem_days <= 0:
+                        daily_needed = math.ceil(rem_plan) 
+                    elif rem_plan <= 0:
+                        daily_needed = 0
+                else:
+                    if plan_week > 0:
+                        daily_needed = math.ceil(plan_week / 7)
+                
+                # ZMĚNA: Výpočet denního plnění
+                if is_current:
+                    # Počet dní od začátku týdne do dneška (včetně)
+                    days_passed = (today - week_start).days + 1
+                    # Ošetření záporných čísel (kdyby today < week_start, což by nemělo nastat díky is_current)
+                    # a maxima 7
+                    days_passed = max(1, min(7, days_passed))
+                    daily_done = math.ceil(actual_week / days_passed)
+                else:
+                    # Pro minulé i budoucí týdny dělíme 7
+                    # (u budoucích bude actual_week 0, takže výsledek 0)
+                    daily_done = math.ceil(actual_week / 7)
+
                 if plan_week > 0:
                     percent = (actual_week / plan_week) * 100.0
                     week_percent_sum += percent
                     week_percent_count += 1
                 else:
                     percent = 0.0
-    
+
                 config = self.get_exercise_config(exercise_id)
-    
+
                 child = QTreeWidgetItem([
                     "",
                     f"{config['icon']} {config['name']}",
-                    f"{plan_week:.1f}",     # Zobrazení plánu pro tento týden
-                    f"{actual_week:.1f}",   # Zobrazení skutečnosti pro tento týden
+                    f"{math.ceil(plan_week)}",
+                    f"{math.ceil(actual_week)}",
+                    f"{daily_needed}",
+                    f"{daily_done}",
                     f"{percent:.0f} %",
                 ])
                 child.setTextAlignment(2, Qt.AlignCenter)
                 child.setTextAlignment(3, Qt.AlignCenter)
                 child.setTextAlignment(4, Qt.AlignCenter)
+                child.setTextAlignment(5, Qt.AlignCenter)
+                child.setTextAlignment(6, Qt.AlignCenter)
                 week_item.addChild(child)
-    
+
             if week_percent_count > 0:
                 avg_percent = week_percent_sum / week_percent_count
             else:
                 avg_percent = 0.0
-    
+            
+            week_item.setText(6, f"{avg_percent:.0f} %")
+            week_item.setTextAlignment(6, Qt.AlignCenter)
+
             weekly_compliance.append((week_start, avg_percent))
-    
-            # Barevné podbarvení týdne (Gradient: Červená -> Zelená)
-            # Pokud je týden v budoucnu (celý), nepodbarvujeme, nebo jen šedě.
-            # Pokud už začal (week_start <= today), barvíme.
+
             if week_start <= today:
                 p = min(100.0, max(0.0, avg_percent)) / 100.0
                 
                 if p < 0.5:
-                    # Červená (tmavá) -> Žlutá (tmavá)
                     ratio = p / 0.5
-                    r = 77
-                    g = int(77 * ratio)
-                    b = 0
+                    r, g, b = 77, int(77 * ratio), 0
                 else:
-                    # Žlutá (tmavá) -> Zelená (tmavá)
                     ratio = (p - 0.5) / 0.5
-                    r = int(77 * (1 - ratio))
-                    g = int(77 - (27 * ratio)) # 77 -> 50 (tmavě zelená)
-                    b = 0
+                    r, g, b = int(77 * (1 - ratio)), int(77 - (27 * ratio)), 0
                 
                 bg_color = QColor(r, g, b)
-                for c in range(5):
+                for c in range(7):
                     week_item.setBackground(c, bg_color)
-    
+
         # Graf plnění plánu
         if not hasattr(self, "bmi_plan_fig") or not hasattr(self, "bmi_plan_canvas"):
             return
-    
+
         fig = self.bmi_plan_fig
         fig.clear()
         ax = fig.add_subplot(111)
@@ -4345,23 +4372,23 @@ class FitnessTrackerApp(QMainWindow):
         ax.title.set_color("#e0e0e0")
         for spine in ax.spines.values():
             spine.set_color("#e0e0e0")
-    
+
         # (4.4.6) Podkladové pásy po 1/7 v rámci 0–100 % (rychlá vizuální orientace k cíli)
         def _hex_to_rgb(_hx: str):
             _hx = (_hx or "").lstrip("#")
             if len(_hx) != 6:
                 return (0, 0, 0)
             return (int(_hx[0:2], 16), int(_hx[2:4], 16), int(_hx[4:6], 16))
-    
+
         def _rgb_to_hex(_rgb):
             return "#{:02x}{:02x}{:02x}".format(int(_rgb[0]), int(_rgb[1]), int(_rgb[2]))
-    
+
         def _lerp(a: float, b: float, t: float) -> float:
             return a + (b - a) * t
-    
+
         red = _hex_to_rgb("#8B0000")
         yellow = _hex_to_rgb("#FFD700")
-    
+
         for i in range(7):
             y0 = 100.0 * (i / 7.0)
             y1 = 100.0 * ((i + 1) / 7.0)
@@ -4378,13 +4405,13 @@ class FitnessTrackerApp(QMainWindow):
                 alpha=0.10,
                 zorder=0,
             )
-    
+
         if True:
             # === Denní průběh plnění ===
             from collections import defaultdict
             import numpy as _np
             from scipy.interpolate import PchipInterpolator
-        
+
             # 1) Data preparation (same as before)
             daily_totals_by_ex: dict[str, dict[str, float]] = {}
             for exercise_id in active_exercises:
@@ -4403,25 +4430,25 @@ class FitnessTrackerApp(QMainWindow):
                         except Exception:
                             pass
                 daily_totals_by_ex[exercise_id] = m
-        
+
             horizon_days = max(1, int(horizon_weeks) * 7)
             xs_days: list[datetime.date] = []
             ys_days: list[float] = []
-        
+
             start_d = monday0
             end_d = monday0 + timedelta(days=horizon_days - 1)
-        
+
             current_week_start = start_d
             while current_week_start <= end_d:
                 current_week_end = min(current_week_start + timedelta(days=6), end_d)
                 running_by_ex = {ex: 0.0 for ex in active_exercises}
-        
+
                 d = current_week_start
                 while d <= current_week_end:
                     ds = d.strftime("%Y-%m-%d")
                     for ex in active_exercises:
                         running_by_ex[ex] += daily_totals_by_ex.get(ex, {}).get(ds, 0.0)
-        
+
                     day_percent_sum = 0.0
                     day_percent_count = 0
                     for ex in active_exercises:
@@ -4433,19 +4460,19 @@ class FitnessTrackerApp(QMainWindow):
                         percent = max(0.0, min(200.0, percent))
                         day_percent_sum += percent
                         day_percent_count += 1
-        
+
                     avg_percent = (day_percent_sum / day_percent_count) if day_percent_count else 0.0
                     xs_days.append(d)
                     ys_days.append(avg_percent)
-        
+
                     d += timedelta(days=1)
                 current_week_start = current_week_start + timedelta(days=7)
-        
+
             # 2) Plotting
             if xs_days and len(xs_days) > 1:
                 xs_nums = mdates.date2num(xs_days)
                 ys_nums = _np.array(ys_days)
-    
+
                 x_smooth = _np.linspace(xs_nums.min(), xs_nums.max(), len(xs_nums) * 5)
                 try:
                     interpolator = PchipInterpolator(xs_nums, ys_nums)
@@ -4453,57 +4480,57 @@ class FitnessTrackerApp(QMainWindow):
                     line, = ax.plot(x_smooth, y_smooth, color="#14919b", linewidth=2, alpha=0.8, label="Průběh plnění")
                 except Exception:
                      line, = ax.plot(xs_nums, ys_nums, color="#14919b", linewidth=2, alpha=0.8, label="Průběh plnění")
-    
+
                 sc = ax.scatter(xs_nums, ys_nums, color="#00e5ff", s=15, zorder=3)
-    
+
                 # === ZVÝRAZNĚNÍ ZAČÁTKŮ TÝDNŮ DLE ROZPISU ===
                 # Vykreslíme vertikální čáru pro každý začátek týdne (monday0, monday0+7, ...)
                 # Bez ohledu na to, jestli je to kalendářní pondělí.
                 week_starts = [monday0 + timedelta(days=7*i) for i in range(horizon_weeks + 1)]
-                
+
                 for ws in week_starts:
                     if ws > end_d: break
                     ax.axvline(x=mdates.date2num(ws), color='#555555', linestyle='-', linewidth=1.5, alpha=0.8)
-                
+
                 # === ZOBRAZIT KAŽDÝ DEN NA OSE X ===
                 ax.xaxis.set_major_locator(mdates.DayLocator(interval=1))
                 ax.xaxis.set_major_formatter(mdates.DateFormatter('%d.%m.'))
-    
-                # Pokud je dnů hodně, zmenšíme font nebo proředíme popisky, 
+
+                # Pokud je dnů hodně, zmenšíme font nebo proředíme popisky,
                 # ale grid/tiky necháme pro každý den
                 if len(xs_days) > 30:
                      # Ponecháme major locator na každý den pro grid, ale formatter jen občas?
-                     # Matplotlib to dělá těžko odděleně. 
+                     # Matplotlib to dělá těžko odděleně.
                      # Uděláme kompromis: Locator každý den, ale popisky rotované a menší font.
                      pass
-    
+
                 # Jemná mřížka pro každý den
                 ax.grid(True, which='major', axis='x', color='#2d2d2d', linestyle=':', alpha=0.3)
-                
+
                 plt.setp(ax.get_xticklabels(), rotation=90, ha='center', fontsize=8)
-                
+
                 # Anotace pro hover
                 annot = ax.annotate("", xy=(0,0), xytext=(10,10),textcoords="offset points",
                                     bbox=dict(boxstyle="round", fc="#1e1e1e", ec="#14919b", alpha=0.9),
                                     color="#ffffff", fontsize=9)
                 annot.set_visible(False)
-    
+
                 def update_annot(ind):
                     pos = sc.get_offsets()[ind["ind"][0]]
                     annot.xy = pos
                     date_num = pos[0]
                     val = pos[1]
                     date_val = mdates.num2date(date_num)
-    
+
                     cz_days = ["Po", "Út", "St", "Čt", "Pá", "So", "Ne"]
                     day_name = cz_days[date_val.weekday()]
-    
+
                     # (4.4.7d) Detail: den v plánovacím týdnu + číslo týdne v plánu + rozmezí týdne
                     try:
                         d_only = date_val.date()
                     except Exception:
                         d_only = None
-    
+
                     plan_week_num = None
                     day_in_week = None
                     plan_day_index = None
@@ -4520,7 +4547,7 @@ class FitnessTrackerApp(QMainWindow):
                                 we = ws + timedelta(days=6)
                     except Exception:
                         pass
-    
+
                     lines = []
                     lines.append(f"{day_name} {date_val.strftime('%d.%m.%Y')}")
                     if plan_week_num is not None and day_in_week is not None:
@@ -4530,10 +4557,10 @@ class FitnessTrackerApp(QMainWindow):
                     if plan_day_index is not None:
                         lines.append(f"Den od startu plánu: {plan_day_index}")
                     lines.append(f"Plnění: {val:.1f} %")
-    
+
                     annot.set_text("\n".join(lines))
                     annot.get_bbox_patch().set_alpha(0.9)
-    
+
                 def hover(event):
                     vis = annot.get_visible()
                     if event.inaxes == ax:
@@ -4546,18 +4573,18 @@ class FitnessTrackerApp(QMainWindow):
                             if vis:
                                 annot.set_visible(False)
                                 fig.canvas.draw_idle()
-                
+
                 fig.canvas.mpl_connect("motion_notify_event", hover)
-    
+
         ax.axhline(y=100.0, color="#32CD32", linestyle="--", linewidth=1, alpha=0.5, label="Cíl 100 %")
         ax.set_title("Denní průběh plnění plánu (v rámci týdnů)")
         ax.set_ylabel("Plnění [%]")
         # Rozšíření limitů osy X, aby graf vyplnil celý prostor
         if xs_days:
             ax.set_xlim(left=mdates.date2num(start_d), right=mdates.date2num(end_d))
-            
+
         ax.set_ylim(bottom=0, top=max(110, max(ys_days) + 10) if 'ys_days' in locals() and ys_days else 120)
-    
+
         # (4.4.7c) Šedé přerušované čáry po 1/7 + popisky vpravo "1.–7. den v týdnu"
         try:
             _step = 100.0 / 7.0
@@ -4565,7 +4592,7 @@ class FitnessTrackerApp(QMainWindow):
             for _i in range(1, 7):
                 _y = _step * _i
                 ax.axhline(y=_y, color="#888888", linestyle="--", linewidth=0.9, alpha=0.55, zorder=0)
-    
+
             # popisky vpravo, lehce nad odpovídající hranicí
             for _i in range(1, 8):
                 _y = _step * _i
@@ -4581,11 +4608,12 @@ class FitnessTrackerApp(QMainWindow):
                 )
         except Exception:
             pass
-    
+
         ax.legend(loc="upper left", fontsize=8, facecolor="#1e1e1e", edgecolor="#3d3d3d", labelcolor="#e0e0e0")
-        
+
         fig.tight_layout()
         self.bmi_plan_canvas.draw()
+
 
     def refresh_add_tab_goals(self):
         """Aktualizuje přehled cílů (labels) v záložce Přidat výkon podle vybraného data a přepočítá BMI plán."""
