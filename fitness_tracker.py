@@ -32,7 +32,7 @@ from matplotlib.collections import LineCollection
 import matplotlib.pyplot as plt
 
 TITLE = "Fitness Tracker"
-VERSION = "4.5.6"
+VERSION = "4.5.7a"
 APP_VERSION = VERSION
 VERSION_DATE = "21.12.2025"
 
@@ -3663,6 +3663,8 @@ class FitnessTrackerApp(QMainWindow):
         # Dynamicky vytvořit řádek pro každé cvičení
         self.exercise_spinboxes = {}
     
+        exercise_row_labels = []
+    
         for exercise_id in active_exercises:
             config = self.get_exercise_config(exercise_id)
     
@@ -3673,6 +3675,7 @@ class FitnessTrackerApp(QMainWindow):
             label = QLabel(f"{config['icon']} {config['name']}:")
             label.setMinimumWidth(80)  # Místo fixed width
             exercise_row.addWidget(label)
+            exercise_row_labels.append(label)
     
             # SpinBox
             spinbox = QSpinBox()
@@ -3708,6 +3711,16 @@ class FitnessTrackerApp(QMainWindow):
     
             exercise_row.addStretch()
             add_layout.addLayout(exercise_row)
+    
+        # Zarovnání sloupců: sjednotit šířku labelů -> SpinBoxy a tlačítka budou pod sebou
+        try:
+            if exercise_row_labels:
+                max_w = max(lbl.sizeHint().width() for lbl in exercise_row_labels)
+                max_w = max(max_w, 80)
+                for lbl in exercise_row_labels:
+                    lbl.setFixedWidth(max_w)
+        except Exception:
+            pass
     
         add_group.setLayout(add_layout)
         left_col_layout.addWidget(add_group)
