@@ -32,9 +32,9 @@ from matplotlib.collections import LineCollection
 import matplotlib.pyplot as plt
 
 TITLE = "Fitness Tracker"
-VERSION = "4.5.5"
+VERSION = "4.5.6"
 APP_VERSION = VERSION
-VERSION_DATE = "14.12.2025"
+VERSION_DATE = "21.12.2025"
 
 # Dark Theme Stylesheet
 DARK_THEME = """
@@ -3340,9 +3340,6 @@ class FitnessTrackerApp(QMainWindow):
         # (8.0.4) BMI plán se má přepočítat pouze při změně dat (ne při změně data v add tabu)
         self.recompute_bmi_plan()
 
-        # (8.0.4) BMI plán se má přepočítat pouze při změně dat (ne při změně data v add tabu)
-        self.recompute_bmi_plan()
-
         self.refresh_add_tab_goals()
         self.apply_add_tab_goals_gradient()
         self.apply_weekly_plan_gradient()
@@ -3375,13 +3372,12 @@ class FitnessTrackerApp(QMainWindow):
         if selected_date_str not in self.data["workouts"]:
             self.data["workouts"][selected_date_str] = {}
 
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
         added = []
         for exercise_id, val in values.items():
             if exercise_id not in self.data["workouts"][selected_date_str]:
                 self.data["workouts"][selected_date_str][exercise_id] = []
 
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             self.data["workouts"][selected_date_str][exercise_id].append({
                 "value": val,
                 "timestamp": timestamp,
@@ -3398,8 +3394,12 @@ class FitnessTrackerApp(QMainWindow):
         for exercise in active_exercises:
             self.update_exercise_tab(exercise)
             self.refresh_exercise_calendar(exercise)
+            self.expand_today_in_exercise_tree(exercise)
             mode = self.chart_modes.get(exercise, "weekly") if hasattr(self, "chart_modes") else "weekly"
             self.update_performance_chart(exercise, mode)
+
+        # (8.0.4) BMI plán se má přepočítat pouze při změně dat (ne při změně data v add tabu)
+        self.recompute_bmi_plan()
 
         self.refresh_add_tab_goals()
         self.apply_add_tab_goals_gradient()
@@ -4729,20 +4729,42 @@ class FitnessTrackerApp(QMainWindow):
                     continue
 
                 for j in range(month_item.childCount()):
-                    day_item = month_item.child(j)
-                    if not day_item:
+                    child_item = month_item.child(j)
+                    if not child_item:
                         continue
 
-                    payload = day_item.data(3, Qt.UserRole)
+                    # Varianta A: měsíc -> den
+                    payload = child_item.data(3, Qt.UserRole)
                     if isinstance(payload, dict) and payload.get("type") == "day" and payload.get("date") == today_str:
                         month_item.setExpanded(True)
-                        day_item.setExpanded(True)
+                        child_item.setExpanded(True)
                         try:
-                            tree.setCurrentItem(day_item)
-                            tree.scrollToItem(day_item)
+                            tree.setCurrentItem(child_item)
+                            tree.scrollToItem(child_item)
                         except Exception:
                             pass
                         return
+
+                    # Varianta B: měsíc -> týden -> den
+                    for k in range(child_item.childCount()):
+                        day_item = child_item.child(k)
+                        if not day_item:
+                            continue
+
+                        payload = day_item.data(3, Qt.UserRole)
+                        if isinstance(payload, dict) and payload.get("type") == "day" and payload.get("date") == today_str:
+                            month_item.setExpanded(True)
+                            try:
+                                child_item.setExpanded(True)
+                            except Exception:
+                                pass
+                            day_item.setExpanded(True)
+                            try:
+                                tree.setCurrentItem(day_item)
+                                tree.scrollToItem(day_item)
+                            except Exception:
+                                pass
+                            return
         except Exception as e:
             print(f"Chyba při rozbalení dne v seznamu záznamů: {e}")
 
