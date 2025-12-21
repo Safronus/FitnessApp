@@ -32,7 +32,7 @@ from matplotlib.collections import LineCollection
 import matplotlib.pyplot as plt
 
 TITLE = "Fitness Tracker"
-VERSION = "4.6.0"
+VERSION = "4.7.0"
 APP_VERSION = VERSION
 VERSION_DATE = "21.12.2025"
 
@@ -2283,19 +2283,25 @@ class FitnessTrackerApp(QMainWindow):
     
         self.inject_about_updates()
 
-
     def create_bmi_tab(self):
         """Záložka pro sledování váhy a výpočet BMI."""
         tab = QWidget()
         main_layout = QHBoxLayout(tab)
-
+    
         # Levý panel – osobní údaje, nové měření, historie
         left_layout = QVBoxLayout()
-
+        left_panel_widget = QWidget()
+        left_panel_widget.setLayout(left_layout)
+        try:
+            left_panel_widget.setContentsMargins(0, 0, 0, 0)
+        except Exception:
+            pass
+        self._bmi_left_panel_widget = left_panel_widget
+    
         # 📏 Osobní údaje
         personal_group = QGroupBox("📏 Osobní údaje")
         personal_form = QFormLayout()
-
+    
         self.bmi_height_spin = QSpinBox()
         self.bmi_height_spin.setRange(120, 230)
         body = self.data.get("body_metrics", {})
@@ -2306,48 +2312,47 @@ class FitnessTrackerApp(QMainWindow):
         personal_form.addRow("Výška (cm):", self.bmi_height_spin)
         personal_group.setLayout(personal_form)
         left_layout.addWidget(personal_group)
-
+    
         # ⚖️ Nové měření
         measurement_group = QGroupBox("⚖️ Nové měření")
         measurement_layout = QGridLayout()
-
-        # Datum a čas měření
+    
+        # Datum + Čas + Váha (vše pod sebou)
         measurement_layout.addWidget(QLabel("Datum:"), 0, 0)
         self.bmi_date_edit = QDateEdit()
         self.bmi_date_edit.setDate(QDate.currentDate())
         self.bmi_date_edit.setCalendarPopup(True)
         measurement_layout.addWidget(self.bmi_date_edit, 0, 1)
-
-        measurement_layout.addWidget(QLabel("Čas:"), 0, 2)
+    
+        measurement_layout.addWidget(QLabel("Čas:"), 1, 0)
         self.bmi_time_edit = QTimeEdit()
         self.bmi_time_edit.setTime(QTime.currentTime())
-        measurement_layout.addWidget(self.bmi_time_edit, 0, 3)
-
-        # Váha
-        measurement_layout.addWidget(QLabel("Váha (kg):"), 1, 0)
+        measurement_layout.addWidget(self.bmi_time_edit, 1, 1)
+    
+        measurement_layout.addWidget(QLabel("Váha (kg):"), 2, 0)
         self.bmi_weight_spin = QDoubleSpinBox()
         self.bmi_weight_spin.setRange(40.0, 200.0)
         self.bmi_weight_spin.setSingleStep(0.1)
         self.bmi_weight_spin.setDecimals(1)
         self.bmi_weight_spin.setValue(80.0)
-        measurement_layout.addWidget(self.bmi_weight_spin, 1, 1)
-
+        measurement_layout.addWidget(self.bmi_weight_spin, 2, 1)
+    
         # Aktuální BMI náhled
         self.bmi_current_label = QLabel("BMI: -")
         self.bmi_current_label.setStyleSheet("font-weight: bold;")
-        measurement_layout.addWidget(self.bmi_current_label, 1, 2, 1, 2)
-
+        measurement_layout.addWidget(self.bmi_current_label, 3, 0, 1, 2)
+    
         # Uložit měření
         self.bmi_save_button = QPushButton("💾 Uložit měření")
-        measurement_layout.addWidget(self.bmi_save_button, 2, 0, 1, 4)
-
+        measurement_layout.addWidget(self.bmi_save_button, 4, 0, 1, 2)
+    
         measurement_group.setLayout(measurement_layout)
         left_layout.addWidget(measurement_group)
-
+    
         # 📜 Historie měření
         history_group = QGroupBox("📜 Historie měření")
         history_layout = QVBoxLayout()
-
+    
         self.bmi_history_tree = QTreeWidget()
         self.bmi_history_tree.setColumnCount(5)
         self.bmi_history_tree.setHeaderLabels(["Datum", "Čas", "Váha [kg]", "BMI", "Kategorie"])
@@ -2358,126 +2363,123 @@ class FitnessTrackerApp(QMainWindow):
         header = self.bmi_history_tree.header()
         header.setStretchLastSection(True)
         header.setSectionResizeMode(QHeaderView.ResizeToContents)
-
+    
         # Kontextové menu pro editaci / smazání
         self.bmi_history_tree.setContextMenuPolicy(Qt.CustomContextMenu)
         self.bmi_history_tree.customContextMenuRequested.connect(self.on_bmi_history_context_menu)
-
+    
         history_layout.addWidget(self.bmi_history_tree)
         history_group.setLayout(history_layout)
         left_layout.addWidget(history_group, 1)
-
-        main_layout.addLayout(left_layout, 1)
-
+    
+        # Levý panel přidáme jako widget, aby šel fixnout na spočtenou šířku
+        main_layout.addWidget(left_panel_widget, 0)
+    
         # Pravý panel – grafy
         right_layout = QVBoxLayout()
-
+    
         # 📈 Časový graf
         time_group = QGroupBox("📈 Vývoj váhy a BMI")
         time_layout = QVBoxLayout()
-
+    
         mode_row = QHBoxLayout()
         mode_row.addWidget(QLabel("Režim:"))
-
+    
         self.bmi_chart_mode_combo = QComboBox()
         self.bmi_chart_mode_combo.addItems(["Váha", "BMI", "Obojí"])
         self.bmi_chart_mode_combo.setSizeAdjustPolicy(QComboBox.AdjustToContents)
         self.bmi_chart_mode_combo.setMinimumContentsLength(10)
         self.bmi_chart_mode_combo.setMinimumWidth(150)
-        # výchozí režim: BMI (požadavek)
         self.bmi_chart_mode_combo.setCurrentText("Obojí")
         mode_row.addWidget(self.bmi_chart_mode_combo)
-
+    
         mode_row.addSpacing(16)
         mode_row.addWidget(QLabel("Období:"))
-
+    
         # Přepínání období – Týden / Měsíc / Rok
         self.bmi_period_buttons = {}
-
+    
         week_btn = QPushButton("📅 Týden")
         week_btn.setCheckable(True)
         week_btn.setFixedWidth(100)
         week_btn.clicked.connect(lambda: self.set_bmi_period_mode("week"))
         mode_row.addWidget(week_btn)
         self.bmi_period_buttons["week"] = week_btn
-
+    
         month_btn = QPushButton("📆 Měsíc")
         month_btn.setCheckable(True)
         month_btn.setFixedWidth(100)
         month_btn.clicked.connect(lambda: self.set_bmi_period_mode("month"))
         mode_row.addWidget(month_btn)
         self.bmi_period_buttons["month"] = month_btn
-
+    
         year_btn = QPushButton("📊 Rok")
         year_btn.setCheckable(True)
         year_btn.setFixedWidth(100)
         year_btn.clicked.connect(lambda: self.set_bmi_period_mode("year"))
         mode_row.addWidget(year_btn)
         self.bmi_period_buttons["year"] = year_btn
-
+    
         mode_row.addStretch()
         time_layout.addLayout(mode_row)
-
+    
         # Vlastní rozsah Od–Do
         custom_row = QHBoxLayout()
         custom_row.addWidget(QLabel("Vlastní rozsah:"))
-        
-        # Defaultně posledních 30 dní
+    
         today = QDate.currentDate()
         last_30 = today.addDays(-30)
-
+    
         self.bmi_custom_from_edit = QDateEdit()
         self.bmi_custom_from_edit.setCalendarPopup(True)
         self.bmi_custom_from_edit.setDate(last_30)
         custom_row.addWidget(self.bmi_custom_from_edit)
-
+    
         custom_row.addWidget(QLabel("–"))
-
+    
         self.bmi_custom_to_edit = QDateEdit()
         self.bmi_custom_to_edit.setCalendarPopup(True)
         self.bmi_custom_to_edit.setDate(today)
         custom_row.addWidget(self.bmi_custom_to_edit)
-
+    
         self.bmi_custom_apply_button = QPushButton("Použít")
         self.bmi_custom_apply_button.clicked.connect(self.apply_bmi_custom_range)
         custom_row.addWidget(self.bmi_custom_apply_button)
-
+    
         custom_row.addStretch()
         time_layout.addLayout(custom_row)
-
+    
         # Výchozí mód období: Custom (30 dní)
         self.bmi_period_mode = "custom"
-        # Uložíme si proměnné pro custom range, aby update_bmi_time_chart měl co číst
         self.bmi_custom_from_date = last_30
         self.bmi_custom_to_date = today
-        
-        # Buttons jsou unchecked, protože je to custom
+    
         week_btn.setChecked(False)
         month_btn.setChecked(False)
         year_btn.setChecked(False)
-
+    
         self.bmi_time_fig = Figure(figsize=(8, 3), facecolor="#121212")
         self.bmi_time_canvas = FigureCanvas(self.bmi_time_fig)
         self.bmi_time_canvas.setStyleSheet("background-color: #121212;")
         time_layout.addWidget(self.bmi_time_canvas)
-
+    
         time_group.setLayout(time_layout)
         right_layout.addWidget(time_group, 2)
-
+    
         # 🧪 BMI zóny
         zones_group = QGroupBox("🧪 BMI zóny – přehled")
         zones_layout = QVBoxLayout()\
-
+    
         self.bmi_zones_fig = Figure(figsize=(8, 2), facecolor="#121212")
         self.bmi_zones_canvas = FigureCanvas(self.bmi_zones_fig)
         self.bmi_zones_canvas.setStyleSheet("background-color: #121212;")
         zones_layout.addWidget(self.bmi_zones_canvas)
-
+    
         zones_group.setLayout(zones_layout)
         right_layout.addWidget(zones_group, 1)
-
+    
         main_layout.addLayout(right_layout, 1)
-
+    
         # Signály
         self.bmi_height_spin.valueChanged.connect(self.on_bmi_height_changed)
         self.bmi_weight_spin.valueChanged.connect(self.update_bmi_current_display)
@@ -2485,15 +2487,99 @@ class FitnessTrackerApp(QMainWindow):
         self.bmi_time_edit.timeChanged.connect(self.update_bmi_current_display)
         self.bmi_save_button.clicked.connect(self.add_weight_measurement)
         self.bmi_chart_mode_combo.currentIndexChanged.connect(self.update_bmi_charts)
-
+    
         # Inicializace
         self.refresh_bmi_history()
+    
+        # (4.7.0) Nastavit šířku levého panelu "defaultně" podle historie měření,
+        # ale správně započítat i margins groupbox/layoutu (jinak se část obsahu nevejde).
+        try:
+            try:
+                self._bmi_left_panel_widget.setUpdatesEnabled(False)
+            except Exception:
+                pass
+    
+            _prev_stretch = None
+            try:
+                _prev_stretch = bool(header.stretchLastSection())
+                header.setStretchLastSection(False)
+            except Exception:
+                _prev_stretch = None
+    
+            try:
+                for i in range(self.bmi_history_tree.columnCount()):
+                    self.bmi_history_tree.resizeColumnToContents(i)
+            except Exception:
+                pass
+    
+            try:
+                total = 0
+    
+                # reálný součet šířek sekcí headeru
+                try:
+                    total += int(header.length())
+                except Exception:
+                    for i in range(self.bmi_history_tree.columnCount()):
+                        try:
+                            total += int(header.sectionSize(i))
+                        except Exception:
+                            pass
+    
+                # rám kolem tree
+                try:
+                    total += int(self.bmi_history_tree.frameWidth() * 2)
+                except Exception:
+                    pass
+    
+                # scrollbar (pro jistotu vždy přičíst jeho šířku)
+                try:
+                    sb = self.bmi_history_tree.verticalScrollBar()
+                    if sb is not None:
+                        total += int(sb.sizeHint().width())
+                except Exception:
+                    pass
+    
+                # margins groupbox + layout + levý layout (tohle na macOS často chybělo)
+                try:
+                    m = history_group.contentsMargins()
+                    total += int(m.left() + m.right())
+                except Exception:
+                    pass
+                try:
+                    m = history_layout.contentsMargins()
+                    total += int(m.left() + m.right())
+                except Exception:
+                    pass
+                try:
+                    m = left_layout.contentsMargins()
+                    total += int(m.left() + m.right())
+                except Exception:
+                    pass
+    
+                # malá rezerva
+                total += 8
+    
+                if total > 0:
+                    self._bmi_left_panel_widget.setFixedWidth(total)
+            except Exception:
+                pass
+            finally:
+                try:
+                    if _prev_stretch is not None:
+                        header.setStretchLastSection(_prev_stretch)
+                except Exception:
+                    pass
+        finally:
+            try:
+                self._bmi_left_panel_widget.setUpdatesEnabled(True)
+            except Exception:
+                pass
+    
         self.update_bmi_current_display()
         self.update_bmi_charts()
         self.update_bmi_time_chart()
-
+    
         return tab
-
 
     def set_bmi_period_mode(self, mode: str):
         """Nastaví období grafu (week/month/year) a přepne tlačítka."""
@@ -4037,14 +4123,14 @@ class FitnessTrackerApp(QMainWindow):
 
     def get_weekly_exercise_baseline(self, weeks: int = 8) -> dict[str, float]:
         """Spočítá průměrný týdenní objem cvičení podle historie za posledních `weeks` týdnů.
-
+    
         Vrací mapu:
             {exercise_id: průměrná hodnota za týden}
         """
         workouts = self.data.get("workouts", {})
         if not workouts:
             return {}
-
+    
         all_dates: list[datetime.date] = []
         for date_str in workouts.keys():
             try:
@@ -4052,15 +4138,29 @@ class FitnessTrackerApp(QMainWindow):
                 all_dates.append(d)
             except ValueError:
                 continue
-
+    
         if not all_dates:
             return {}
-
+    
+        # (4.6.0) Fix: baseline má reprezentovat "výchozí" historii, ne průběžně růst s přidávanými výkony v plánu.
+        # Proto počítáme baseline pouze z dat před začátkem plánu (den před startem).
+        try:
+            if hasattr(self, "bmi_plan_start_date_edit"):
+                ds = self.bmi_plan_start_date_edit.date().toString("yyyy-MM-dd")
+                plan_start = datetime.strptime(ds, "%Y-%m-%d").date()
+                cutoff = plan_start - timedelta(days=1)
+                all_dates = [d for d in all_dates if d <= cutoff]
+        except Exception:
+            pass
+    
+        if not all_dates:
+            return {}
+    
         max_date = max(all_dates)
         min_date = max_date - timedelta(days=weeks * 7 - 1)
-
+    
         totals: dict[str, float] = {}
-
+    
         current = min_date
         while current <= max_date:
             date_key = current.strftime("%Y-%m-%d")
@@ -4075,13 +4175,13 @@ class FitnessTrackerApp(QMainWindow):
                     if value:
                         totals[exercise_id] = totals.get(exercise_id, 0.0) + value
             current += timedelta(days=1)
-
+    
         period_days = (max_date - min_date).days + 1
         if period_days <= 0:
             return {}
-
+    
         weeks_effective = max(1.0, period_days / 7.0)
-
+    
         baseline: dict[str, float] = {
             exercise_id: total / weeks_effective for exercise_id, total in totals.items()
         }
@@ -4239,7 +4339,7 @@ class FitnessTrackerApp(QMainWindow):
     
         # Vygenerovat týdenní rozpis a graf plnění plánu
         self.recompute_bmi_weekly_breakdown(active_exercises, planned_weekly, horizon_weeks)
-
+    
     def recompute_bmi_weekly_breakdown(
         self,
         active_exercises: list[str],
@@ -4249,18 +4349,18 @@ class FitnessTrackerApp(QMainWindow):
         """Vytvoří týdenní rozpis plánu a graf plnění (kumulativně do jednotlivých týdnů)."""
         if not hasattr(self, "bmi_plan_weeks_tree"):
             return
-
+    
         from datetime import datetime, timedelta
         import matplotlib.dates as mdates
         import matplotlib.pyplot as plt
         from PySide6.QtGui import QColor, QBrush
         from PySide6.QtCore import Qt
         import math
-
+    
         self.bmi_plan_weeks_tree.clear()
-
+    
         workouts = self.data.get("workouts", {})
-
+    
         today = datetime.now().date()
         try:
             ds = self.bmi_plan_start_date_edit.date().toString("yyyy-MM-dd")
@@ -4268,28 +4368,28 @@ class FitnessTrackerApp(QMainWindow):
         except Exception:
             week0 = datetime.now().date()
         monday0 = week0
-
+    
         weekly_compliance: list[tuple[datetime.date, float]] = []
-
+    
         for week_idx in range(horizon_weeks):
             week_start = monday0 + timedelta(days=7 * week_idx)
             week_end = week_start + timedelta(days=6)
-
+    
             plan_week_num = week_idx + 1
             week_label = f"Týden {plan_week_num}: {week_start.strftime('%d.%m.%Y')} – {week_end.strftime('%d.%m.%Y')}"
-
+    
             week_item = QTreeWidgetItem([week_label, "", "", "", "", "", ""])
             self.bmi_plan_weeks_tree.addTopLevelItem(week_item)
-
+    
             is_current = (week_start <= today <= week_end)
             week_item.setExpanded(is_current)
-
+    
             week_percent_sum = 0.0
             week_percent_count = 0
-
+    
             for exercise_id in active_exercises:
                 plan_week = planned_weekly.get(exercise_id, 0.0)
-
+    
                 actual_week = 0.0
                 day = week_start
                 while day <= week_end:
@@ -4299,34 +4399,32 @@ class FitnessTrackerApp(QMainWindow):
                         raw_rec = day_data[exercise_id]
                         records = raw_rec
                         if isinstance(raw_rec, dict) and exercise_id in raw_rec:
-                             records = raw_rec[exercise_id]
-
+                            records = raw_rec[exercise_id]
+    
                         if isinstance(records, list):
                             actual_week += sum(float(r.get("value", 0.0)) for r in records)
                         elif isinstance(records, dict):
                             actual_week += float(records.get("value", 0.0))
                     day += timedelta(days=1)
-
-                # Výpočet denní potřeby: vždy jako plán týdne / 7 dní (minimální změna)
+    
                 daily_needed = math.ceil(plan_week / 7) if plan_week > 0 else 0
-
-                # Výpočet denního plnění
+    
                 if is_current:
                     days_passed = (today - week_start).days + 1
                     days_passed = max(1, min(7, days_passed))
                     daily_done = math.ceil(actual_week / days_passed)
                 else:
                     daily_done = math.ceil(actual_week / 7)
-
+    
                 if plan_week > 0:
                     percent = (actual_week / plan_week) * 100.0
                     week_percent_sum += percent
                     week_percent_count += 1
                 else:
                     percent = 0.0
-
+    
                 config = self.get_exercise_config(exercise_id)
-
+    
                 child = QTreeWidgetItem([
                     "",
                     f"{config['icon']} {config['name']}",
@@ -4342,35 +4440,34 @@ class FitnessTrackerApp(QMainWindow):
                 child.setTextAlignment(5, Qt.AlignCenter)
                 child.setTextAlignment(6, Qt.AlignCenter)
                 week_item.addChild(child)
-
+    
             if week_percent_count > 0:
                 avg_percent = week_percent_sum / week_percent_count
             else:
                 avg_percent = 0.0
-
+    
             week_item.setText(6, f"{avg_percent:.0f} %")
             week_item.setTextAlignment(6, Qt.AlignCenter)
-
+    
             weekly_compliance.append((week_start, avg_percent))
-
+    
             if week_start <= today:
                 p = min(100.0, max(0.0, avg_percent)) / 100.0
-
+    
                 if p < 0.5:
                     ratio = p / 0.5
                     r, g, b = 77, int(77 * ratio), 0
                 else:
                     ratio = (p - 0.5) / 0.5
                     r, g, b = int(77 * (1 - ratio)), int(77 - (27 * ratio)), 0
-
+    
                 bg_color = QColor(r, g, b)
                 for c in range(7):
                     week_item.setBackground(c, bg_color)
-
-        # Graf plnění plánu
+    
         if not hasattr(self, "bmi_plan_fig") or not hasattr(self, "bmi_plan_canvas"):
             return
-
+    
         fig = self.bmi_plan_fig
         fig.clear()
         ax = fig.add_subplot(111)
@@ -4381,23 +4478,22 @@ class FitnessTrackerApp(QMainWindow):
         ax.title.set_color("#e0e0e0")
         for spine in ax.spines.values():
             spine.set_color("#e0e0e0")
-
-        # (4.4.6) Podkladové pásy po 1/7 v rámci 0–100 % (rychlá vizuální orientace k cíli)
+    
         def _hex_to_rgb(_hx: str):
             _hx = (_hx or "").lstrip("#")
             if len(_hx) != 6:
                 return (0, 0, 0)
             return (int(_hx[0:2], 16), int(_hx[2:4], 16), int(_hx[4:6], 16))
-
+    
         def _rgb_to_hex(_rgb):
             return "#{:02x}{:02x}{:02x}".format(int(_rgb[0]), int(_rgb[1]), int(_rgb[2]))
-
+    
         def _lerp(a: float, b: float, t: float) -> float:
             return a + (b - a) * t
-
+    
         red = _hex_to_rgb("#8B0000")
         yellow = _hex_to_rgb("#FFD700")
-
+    
         for i in range(7):
             y0 = 100.0 * (i / 7.0)
             y1 = 100.0 * ((i + 1) / 7.0)
@@ -4414,14 +4510,12 @@ class FitnessTrackerApp(QMainWindow):
                 alpha=0.10,
                 zorder=0,
             )
-
+    
         if True:
-            # === Denní průběh plnění ===
             from collections import defaultdict
             import numpy as _np
             from scipy.interpolate import PchipInterpolator
-
-            # 1) Data preparation (same as before)
+    
             daily_totals_by_ex: dict[str, dict[str, float]] = {}
             for exercise_id in active_exercises:
                 m: dict[str, float] = defaultdict(float)
@@ -4439,25 +4533,25 @@ class FitnessTrackerApp(QMainWindow):
                         except Exception:
                             pass
                 daily_totals_by_ex[exercise_id] = m
-
+    
             horizon_days = max(1, int(horizon_weeks) * 7)
             xs_days: list[datetime.date] = []
             ys_days: list[float] = []
-
+    
             start_d = monday0
             end_d = monday0 + timedelta(days=horizon_days - 1)
-
+    
             current_week_start = start_d
             while current_week_start <= end_d:
                 current_week_end = min(current_week_start + timedelta(days=6), end_d)
                 running_by_ex = {ex: 0.0 for ex in active_exercises}
-
+    
                 d = current_week_start
                 while d <= current_week_end:
                     ds = d.strftime("%Y-%m-%d")
                     for ex in active_exercises:
                         running_by_ex[ex] += daily_totals_by_ex.get(ex, {}).get(ds, 0.0)
-
+    
                     day_percent_sum = 0.0
                     day_percent_count = 0
                     for ex in active_exercises:
@@ -4469,192 +4563,237 @@ class FitnessTrackerApp(QMainWindow):
                         percent = max(0.0, min(200.0, percent))
                         day_percent_sum += percent
                         day_percent_count += 1
-
+    
                     avg_percent = (day_percent_sum / day_percent_count) if day_percent_count else 0.0
                     xs_days.append(d)
                     ys_days.append(avg_percent)
-
+    
                     d += timedelta(days=1)
                 current_week_start = current_week_start + timedelta(days=7)
-
-            # 2) Plotting
+    
             if xs_days and len(xs_days) > 1:
                 xs_nums = mdates.date2num(xs_days)
                 ys_nums = _np.array(ys_days)
-
+    
                 x_smooth = _np.linspace(xs_nums.min(), xs_nums.max(), len(xs_nums) * 5)
                 try:
                     interpolator = PchipInterpolator(xs_nums, ys_nums)
                     y_smooth = interpolator(x_smooth)
-                    line, = ax.plot(x_smooth, y_smooth, color="#14919b", linewidth=2, alpha=0.8, label="Průběh plnění")
+                    ax.plot(x_smooth, y_smooth, color="#14919b", linewidth=2, alpha=0.8, label="Průběh plnění")
                 except Exception:
-                    line, = ax.plot(xs_nums, ys_nums, color="#14919b", linewidth=2, alpha=0.8, label="Průběh plnění")
-
+                    ax.plot(xs_nums, ys_nums, color="#14919b", linewidth=2, alpha=0.8, label="Průběh plnění")
+    
                 sc = ax.scatter(xs_nums, ys_nums, color="#00e5ff", s=15, zorder=3)
-
-                # === ZVÝRAZNĚNÍ ZAČÁTKŮ TÝDNŮ DLE ROZPISU ===
+    
+                try:
+                    sc.set_pickradius(10)
+                except Exception:
+                    pass
+    
                 week_starts = [monday0 + timedelta(days=7*i) for i in range(horizon_weeks + 1)]
-
                 for ws in week_starts:
                     if ws > end_d:
                         break
-                    ax.axvline(x=mdates.date2num(ws), color='#555555', linestyle='-', linewidth=1.5, alpha=0.8)
-
-                # === ZOBRAZIT KAŽDÝ DEN NA OSE X ===
+                    ax.axvline(x=mdates.date2num(ws), color="#555555", linestyle="-", linewidth=1.5, alpha=0.8)
+    
                 ax.xaxis.set_major_locator(mdates.DayLocator(interval=1))
-                ax.xaxis.set_major_formatter(mdates.DateFormatter('%d.%m.'))
-
-                if len(xs_days) > 30:
-                    pass
-
-                ax.grid(True, which='major', axis='x', color='#2d2d2d', linestyle=':', alpha=0.3)
-
-                plt.setp(ax.get_xticklabels(), rotation=90, ha='center', fontsize=8)
-
-                # Anotace pro hover
-                annot = ax.annotate(
-                    "",
-                    xy=(0, 0),
-                    xytext=(10, 10),
-                    textcoords="offset points",
-                    bbox=dict(boxstyle="round", fc="#1e1e1e", ec="#14919b", alpha=0.9),
-                    color="#ffffff",
-                    fontsize=9,
-                )
-                annot.set_visible(False)
-
-                try:
-                    annot.set_fontfamily(["Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "DejaVu Sans"])
-                except Exception:
-                    pass
-
-                def update_annot(ind):
-                    pos = sc.get_offsets()[ind["ind"][0]]
-                    annot.xy = pos
-                    date_num = pos[0]
-                    val = pos[1]
-                    date_val = mdates.num2date(date_num)
-
-                    cz_days = ["Po", "Út", "St", "Čt", "Pá", "So", "Ne"]
-                    day_name = cz_days[date_val.weekday()]
-
+                ax.xaxis.set_major_formatter(mdates.DateFormatter("%d.%m."))
+                ax.grid(True, which="major", axis="x", color="#2d2d2d", linestyle=":", alpha=0.3)
+                plt.setp(ax.get_xticklabels(), rotation=90, ha="center", fontsize=8)
+    
+                _hover_state = {"miss": 0}
+    
+                def _ensure_hover_label():
+                    if hasattr(self, "_bmi_hover_label") and self._bmi_hover_label is not None:
+                        return self._bmi_hover_label
                     try:
-                        d_only = date_val.date()
+                        from PySide6.QtWidgets import QLabel
+                        from PySide6.QtCore import Qt
                     except Exception:
-                        d_only = None
-
+                        return None
+    
+                    lbl = QLabel(None)
+                    lbl.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+                    lbl.setTextFormat(Qt.PlainText)
+                    lbl.setWordWrap(True)
+                    lbl.setStyleSheet(
+                        "QLabel {"
+                        " background-color: #1e1e1e;"
+                        " color: #ffffff;"
+                        " border: 1px solid #14919b;"
+                        " border-radius: 6px;"
+                        " padding: 6px;"
+                        "}"
+                    )
+                    try:
+                        lbl.setAttribute(Qt.WA_ShowWithoutActivating, True)
+                    except Exception:
+                        pass
+                    try:
+                        lbl.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+                    except Exception:
+                        pass
+                    try:
+                        lbl.setFocusPolicy(Qt.NoFocus)
+                    except Exception:
+                        pass
+    
+                    self._bmi_hover_label = lbl
+                    return lbl
+    
+                def _build_tooltip(date_obj, percent_val):
+                    cz_days = ["Po", "Út", "St", "Čt", "Pá", "So", "Ne"]
+                    try:
+                        day_name = cz_days[date_obj.weekday()]
+                    except Exception:
+                        day_name = ""
+                    lines = []
+                    lines.append(f"{day_name} {date_obj.strftime('%d.%m.%Y')}")
+                    lines.append(f"Plnění: {float(percent_val):.1f} %")
+    
                     plan_week_num = None
                     day_in_week = None
-                    plan_day_index = None
                     ws = None
                     we = None
                     try:
-                        if d_only is not None:
-                            delta = (d_only - monday0).days
-                            if delta >= 0:
-                                plan_day_index = delta + 1
-                                plan_week_num = (delta // 7) + 1
-                                day_in_week = (delta % 7) + 1
-                                ws = monday0 + timedelta(days=7 * (plan_week_num - 1))
-                                we = ws + timedelta(days=6)
+                        delta = (date_obj - monday0).days
+                        if delta >= 0:
+                            plan_week_num = (delta // 7) + 1
+                            day_in_week = (delta % 7) + 1
+                            ws = monday0 + timedelta(days=7 * (plan_week_num - 1))
+                            we = ws + timedelta(days=6)
                     except Exception:
                         pass
-
-                    lines = []
-                    lines.append(f"{day_name} {date_val.strftime('%d.%m.%Y')}")
+    
                     if plan_week_num is not None and day_in_week is not None:
                         lines.append(f"Týden plánu: {plan_week_num}/{int(horizon_weeks) if horizon_weeks else 0}  |  Den v týdnu: {day_in_week}/7")
                     if ws is not None and we is not None:
                         lines.append(f"Rozsah týdne: {ws.strftime('%d.%m.%Y')} – {we.strftime('%d.%m.%Y')}")
-                    if plan_day_index is not None:
-                        lines.append(f"Den od startu plánu: {plan_day_index}")
-                    lines.append(f"Plnění: {val:.1f} %")
-
-                    # === EXTRA: dnešní zbývající hodnoty (jen pro aktuální den) ===
-                    try:
-                        if d_only == datetime.now().date():
-                            today_str = d_only.strftime("%Y-%m-%d")
+    
+                    if date_obj == today:
+                        today_str = date_obj.strftime("%Y-%m-%d")
+    
+                        lines.append("")
+                        lines.append("Dnes zbývá do denní potřeby:")
+                        for ex_id in active_exercises:
+                            plan_week = float(planned_weekly.get(ex_id, 0.0) or 0.0)
+                            daily_need = math.ceil(plan_week / 7) if plan_week > 0 else 0
+                            done_today = float(daily_totals_by_ex.get(ex_id, {}).get(today_str, 0.0) or 0.0)
+                            remaining_today = daily_need - done_today
+                            if remaining_today < 0:
+                                remaining_today = 0
+                            cfg = self.get_exercise_config(ex_id)
+                            try:
+                                rem_disp = int(math.ceil(remaining_today))
+                            except Exception:
+                                rem_disp = remaining_today
+                            lines.append(f"{cfg.get('icon','')} {cfg.get('name','')}: {rem_disp}")
+    
+                        if ws is not None:
                             lines.append("")
-                            lines.append("Dnes zbývá do denní potřeby:")
+                            lines.append("Tento týden zbývá do týdenního plánu:")
                             for ex_id in active_exercises:
                                 plan_week = float(planned_weekly.get(ex_id, 0.0) or 0.0)
-                                daily_need = math.ceil(plan_week / 7) if plan_week > 0 else 0
-                                done_today = float(daily_totals_by_ex.get(ex_id, {}).get(today_str, 0.0) or 0.0)
-                                remaining_today = daily_need - done_today
-                                if remaining_today < 0:
-                                    remaining_today = 0
-                                cfg = self.get_exercise_config(ex_id)
-                                icon = str(cfg.get("icon", "") or "")
-                                icon = icon.replace("\ufe0f", "").replace("\u200d", "")
-                                name = str(cfg.get("name", "") or "")
+                                done_week = 0.0
                                 try:
-                                    rem_disp = int(math.ceil(remaining_today))
+                                    d_it = ws
+                                    while d_it <= date_obj:
+                                        ds_it = d_it.strftime("%Y-%m-%d")
+                                        done_week += float(daily_totals_by_ex.get(ex_id, {}).get(ds_it, 0.0) or 0.0)
+                                        d_it += timedelta(days=1)
                                 except Exception:
-                                    rem_disp = remaining_today
-                                lines.append(f"{icon} {name}: {rem_disp}")
-
-                            if ws is not None and we is not None:
-                                lines.append("")
-                                lines.append("Tento týden zbývá do týdenního plánu:")
-                                for ex_id in active_exercises:
-                                    plan_week = float(planned_weekly.get(ex_id, 0.0) or 0.0)
                                     done_week = 0.0
-                                    try:
-                                        d_it = ws
-                                        while d_it <= d_only:
-                                            ds_it = d_it.strftime("%Y-%m-%d")
-                                            done_week += float(daily_totals_by_ex.get(ex_id, {}).get(ds_it, 0.0) or 0.0)
-                                            d_it += timedelta(days=1)
-                                    except Exception:
-                                        done_week = 0.0
-                                    remaining_week = plan_week - done_week
-                                    if remaining_week < 0:
-                                        remaining_week = 0
-                                    cfg = self.get_exercise_config(ex_id)
-                                    icon = str(cfg.get("icon", "") or "")
-                                    icon = icon.replace("\ufe0f", "").replace("\u200d", "")
-                                    name = str(cfg.get("name", "") or "")
-                                    try:
-                                        remw_disp = int(math.ceil(remaining_week))
-                                    except Exception:
-                                        remw_disp = remaining_week
-                                    lines.append(f"{icon} {name}: {remw_disp}")
-                    except Exception:
-                        pass
-
-                    annot.set_text("\n".join(lines))
-                    annot.get_bbox_patch().set_alpha(0.9)
-
+                                remaining_week = plan_week - done_week
+                                if remaining_week < 0:
+                                    remaining_week = 0
+                                cfg = self.get_exercise_config(ex_id)
+                                try:
+                                    remw_disp = int(math.ceil(remaining_week))
+                                except Exception:
+                                    remw_disp = remaining_week
+                                lines.append(f"{cfg.get('icon','')} {cfg.get('name','')}: {remw_disp}")
+    
+                    return "\n".join(lines)
+    
                 def hover(event):
-                    vis = annot.get_visible()
+                    lbl = _ensure_hover_label()
+    
                     if event.inaxes == ax:
                         cont, ind = sc.contains(event)
-                        if cont:
-                            update_annot(ind)
-                            annot.set_visible(True)
+                        if cont and lbl is not None:
+                            _hover_state["miss"] = 0
+                            i0 = ind["ind"][0]
+                            pos = sc.get_offsets()[i0]
+                            date_num = pos[0]
+                            val = pos[1]
+    
+                            d_only = None
+                            try:
+                                d_only = mdates.num2date(date_num).date()
+                            except Exception:
+                                d_only = None
+    
+                            if d_only is not None:
+                                tt = _build_tooltip(d_only, val)
+                                try:
+                                    lbl.setText(tt)
+                                    lbl.adjustSize()
+                                    from PySide6.QtGui import QCursor
+                                    from PySide6.QtCore import QPoint
+                                    p = QCursor.pos() + QPoint(16, 16)
+                                    lbl.move(p)
+                                    lbl.show()
+                                    lbl.raise_()
+                                except Exception:
+                                    pass
                             fig.canvas.draw_idle()
                         else:
-                            if vis:
-                                annot.set_visible(False)
-                                fig.canvas.draw_idle()
-
-                fig.canvas.mpl_connect("motion_notify_event", hover)
-
+                            _hover_state["miss"] += 1
+                            if _hover_state["miss"] >= 8:
+                                try:
+                                    if lbl is not None:
+                                        lbl.hide()
+                                except Exception:
+                                    pass
+                    else:
+                        _hover_state["miss"] += 1
+                        if _hover_state["miss"] >= 8:
+                            try:
+                                if lbl is not None:
+                                    lbl.hide()
+                            except Exception:
+                                pass
+    
+                # ✅ FIX flickeru: odpoj starý handler a teprve pak připoj nový
+                try:
+                    if hasattr(self, "_bmi_hover_cid") and self._bmi_hover_cid is not None:
+                        try:
+                            fig.canvas.mpl_disconnect(self._bmi_hover_cid)
+                        except Exception:
+                            pass
+                        self._bmi_hover_cid = None
+                except Exception:
+                    pass
+    
+                try:
+                    self._bmi_hover_cid = fig.canvas.mpl_connect("motion_notify_event", hover)
+                except Exception:
+                    self._bmi_hover_cid = None
+    
         ax.axhline(y=100.0, color="#32CD32", linestyle="--", linewidth=1, alpha=0.5, label="Cíl 100 %")
         ax.set_title("Denní průběh plnění plánu (v rámci týdnů)")
         ax.set_ylabel("Plnění [%]")
         if xs_days:
             ax.set_xlim(left=mdates.date2num(start_d), right=mdates.date2num(end_d))
-
-        ax.set_ylim(bottom=0, top=max(110, max(ys_days) + 10) if 'ys_days' in locals() and ys_days else 120)
-
-        # (4.4.7c) Šedé přerušované čáry po 1/7 + popisky vpravo "1.–7. den v týdnu"
+    
+        ax.set_ylim(bottom=0, top=max(110, max(ys_days) + 10) if "ys_days" in locals() and ys_days else 120)
+    
         try:
             _step = 100.0 / 7.0
             for _i in range(1, 7):
                 _y = _step * _i
                 ax.axhline(y=_y, color="#888888", linestyle="--", linewidth=0.9, alpha=0.55, zorder=0)
-
+    
             for _i in range(1, 8):
                 _y = _step * _i
                 ax.text(
@@ -4669,9 +4808,9 @@ class FitnessTrackerApp(QMainWindow):
                 )
         except Exception:
             pass
-
+    
         ax.legend(loc="upper left", fontsize=8, facecolor="#1e1e1e", edgecolor="#3d3d3d", labelcolor="#e0e0e0")
-
+    
         fig.tight_layout()
         self.bmi_plan_canvas.draw()
         
