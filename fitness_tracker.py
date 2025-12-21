@@ -32,7 +32,7 @@ from matplotlib.collections import LineCollection
 import matplotlib.pyplot as plt
 
 TITLE = "Fitness Tracker"
-VERSION = "4.5.7a"
+VERSION = "4.6.0"
 APP_VERSION = VERSION
 VERSION_DATE = "21.12.2025"
 
@@ -4306,21 +4306,16 @@ class FitnessTrackerApp(QMainWindow):
                         elif isinstance(records, dict):
                             actual_week += float(records.get("value", 0.0))
                     day += timedelta(days=1)
-                
+
                 # Výpočet denní potřeby: vždy jako plán týdne / 7 dní (minimální změna)
                 daily_needed = math.ceil(plan_week / 7) if plan_week > 0 else 0
-                
-                # ZMĚNA: Výpočet denního plnění
+
+                # Výpočet denního plnění
                 if is_current:
-                    # Počet dní od začátku týdne do dneška (včetně)
                     days_passed = (today - week_start).days + 1
-                    # Ošetření záporných čísel (kdyby today < week_start, což by nemělo nastat díky is_current)
-                    # a maxima 7
                     days_passed = max(1, min(7, days_passed))
                     daily_done = math.ceil(actual_week / days_passed)
                 else:
-                    # Pro minulé i budoucí týdny dělíme 7
-                    # (u budoucích bude actual_week 0, takže výsledek 0)
                     daily_done = math.ceil(actual_week / 7)
 
                 if plan_week > 0:
@@ -4352,7 +4347,7 @@ class FitnessTrackerApp(QMainWindow):
                 avg_percent = week_percent_sum / week_percent_count
             else:
                 avg_percent = 0.0
-            
+
             week_item.setText(6, f"{avg_percent:.0f} %")
             week_item.setTextAlignment(6, Qt.AlignCenter)
 
@@ -4360,14 +4355,14 @@ class FitnessTrackerApp(QMainWindow):
 
             if week_start <= today:
                 p = min(100.0, max(0.0, avg_percent)) / 100.0
-                
+
                 if p < 0.5:
                     ratio = p / 0.5
                     r, g, b = 77, int(77 * ratio), 0
                 else:
                     ratio = (p - 0.5) / 0.5
                     r, g, b = int(77 * (1 - ratio)), int(77 - (27 * ratio)), 0
-                
+
                 bg_color = QColor(r, g, b)
                 for c in range(7):
                     week_item.setBackground(c, bg_color)
@@ -4493,38 +4488,45 @@ class FitnessTrackerApp(QMainWindow):
                     y_smooth = interpolator(x_smooth)
                     line, = ax.plot(x_smooth, y_smooth, color="#14919b", linewidth=2, alpha=0.8, label="Průběh plnění")
                 except Exception:
-                     line, = ax.plot(xs_nums, ys_nums, color="#14919b", linewidth=2, alpha=0.8, label="Průběh plnění")
+                    line, = ax.plot(xs_nums, ys_nums, color="#14919b", linewidth=2, alpha=0.8, label="Průběh plnění")
 
                 sc = ax.scatter(xs_nums, ys_nums, color="#00e5ff", s=15, zorder=3)
 
                 # === ZVÝRAZNĚNÍ ZAČÁTKŮ TÝDNŮ DLE ROZPISU ===
-                # Vykreslíme vertikální čáru pro každý začátek týdne (monday0, monday0+7, ...)
-                # Bez ohledu na to, jestli je to kalendářní pondělí.
                 week_starts = [monday0 + timedelta(days=7*i) for i in range(horizon_weeks + 1)]
 
                 for ws in week_starts:
-                    if ws > end_d: break
+                    if ws > end_d:
+                        break
                     ax.axvline(x=mdates.date2num(ws), color='#555555', linestyle='-', linewidth=1.5, alpha=0.8)
 
                 # === ZOBRAZIT KAŽDÝ DEN NA OSE X ===
                 ax.xaxis.set_major_locator(mdates.DayLocator(interval=1))
                 ax.xaxis.set_major_formatter(mdates.DateFormatter('%d.%m.'))
 
-                # Pokud je dnů hodně, zmenšíme font nebo proředíme popisky,
-                # ale grid/tiky necháme pro každý den
                 if len(xs_days) > 30:
-                     pass
+                    pass
 
-                # Jemná mřížka pro každý den
                 ax.grid(True, which='major', axis='x', color='#2d2d2d', linestyle=':', alpha=0.3)
 
                 plt.setp(ax.get_xticklabels(), rotation=90, ha='center', fontsize=8)
 
                 # Anotace pro hover
-                annot = ax.annotate("", xy=(0,0), xytext=(10,10),textcoords="offset points",
-                                    bbox=dict(boxstyle="round", fc="#1e1e1e", ec="#14919b", alpha=0.9),
-                                    color="#ffffff", fontsize=9)
+                annot = ax.annotate(
+                    "",
+                    xy=(0, 0),
+                    xytext=(10, 10),
+                    textcoords="offset points",
+                    bbox=dict(boxstyle="round", fc="#1e1e1e", ec="#14919b", alpha=0.9),
+                    color="#ffffff",
+                    fontsize=9,
+                )
                 annot.set_visible(False)
+
+                try:
+                    annot.set_fontfamily(["Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "DejaVu Sans"])
+                except Exception:
+                    pass
 
                 def update_annot(ind):
                     pos = sc.get_offsets()[ind["ind"][0]]
@@ -4568,6 +4570,58 @@ class FitnessTrackerApp(QMainWindow):
                         lines.append(f"Den od startu plánu: {plan_day_index}")
                     lines.append(f"Plnění: {val:.1f} %")
 
+                    # === EXTRA: dnešní zbývající hodnoty (jen pro aktuální den) ===
+                    try:
+                        if d_only == datetime.now().date():
+                            today_str = d_only.strftime("%Y-%m-%d")
+                            lines.append("")
+                            lines.append("Dnes zbývá do denní potřeby:")
+                            for ex_id in active_exercises:
+                                plan_week = float(planned_weekly.get(ex_id, 0.0) or 0.0)
+                                daily_need = math.ceil(plan_week / 7) if plan_week > 0 else 0
+                                done_today = float(daily_totals_by_ex.get(ex_id, {}).get(today_str, 0.0) or 0.0)
+                                remaining_today = daily_need - done_today
+                                if remaining_today < 0:
+                                    remaining_today = 0
+                                cfg = self.get_exercise_config(ex_id)
+                                icon = str(cfg.get("icon", "") or "")
+                                icon = icon.replace("\ufe0f", "").replace("\u200d", "")
+                                name = str(cfg.get("name", "") or "")
+                                try:
+                                    rem_disp = int(math.ceil(remaining_today))
+                                except Exception:
+                                    rem_disp = remaining_today
+                                lines.append(f"{icon} {name}: {rem_disp}")
+
+                            if ws is not None and we is not None:
+                                lines.append("")
+                                lines.append("Tento týden zbývá do týdenního plánu:")
+                                for ex_id in active_exercises:
+                                    plan_week = float(planned_weekly.get(ex_id, 0.0) or 0.0)
+                                    done_week = 0.0
+                                    try:
+                                        d_it = ws
+                                        while d_it <= d_only:
+                                            ds_it = d_it.strftime("%Y-%m-%d")
+                                            done_week += float(daily_totals_by_ex.get(ex_id, {}).get(ds_it, 0.0) or 0.0)
+                                            d_it += timedelta(days=1)
+                                    except Exception:
+                                        done_week = 0.0
+                                    remaining_week = plan_week - done_week
+                                    if remaining_week < 0:
+                                        remaining_week = 0
+                                    cfg = self.get_exercise_config(ex_id)
+                                    icon = str(cfg.get("icon", "") or "")
+                                    icon = icon.replace("\ufe0f", "").replace("\u200d", "")
+                                    name = str(cfg.get("name", "") or "")
+                                    try:
+                                        remw_disp = int(math.ceil(remaining_week))
+                                    except Exception:
+                                        remw_disp = remaining_week
+                                    lines.append(f"{icon} {name}: {remw_disp}")
+                    except Exception:
+                        pass
+
                     annot.set_text("\n".join(lines))
                     annot.get_bbox_patch().set_alpha(0.9)
 
@@ -4606,8 +4660,8 @@ class FitnessTrackerApp(QMainWindow):
                 ax.text(
                     0.995,
                     _y + 0.6,
-                    f"{_i}. den v týdnu",
                     transform=ax.get_yaxis_transform(),
+                    s=f"{_i}. den v týdnu",
                     ha="right",
                     va="bottom",
                     fontsize=8,
@@ -4620,6 +4674,7 @@ class FitnessTrackerApp(QMainWindow):
 
         fig.tight_layout()
         self.bmi_plan_canvas.draw()
+        
     def refresh_add_tab_goals(self):
         """Aktualizuje přehled cílů (labels) v záložce Přidat výkon podle vybraného data."""
         if not hasattr(self, "add_goals_labels") or not hasattr(self, "add_date_edit"):
