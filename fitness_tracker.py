@@ -34,7 +34,7 @@ import matplotlib.pyplot as plt
 TITLE = "Fitness Tracker"
 VERSION = "4.7.1"
 APP_VERSION = VERSION
-VERSION_DATE = "21.12.2025"
+VERSION_DATE = "22.12.2025"
 
 # Dark Theme Stylesheet
 DARK_THEME = """
@@ -4770,10 +4770,44 @@ class FitnessTrackerApp(QMainWindow):
                                 try:
                                     lbl.setText(tt)
                                     lbl.adjustSize()
-                                    from PySide6.QtGui import QCursor
+                                    from PySide6.QtGui import QCursor, QGuiApplication
                                     from PySide6.QtCore import QPoint
-                                    p = QCursor.pos() + QPoint(16, 16)
-                                    lbl.move(p)
+    
+                                    cur = QCursor.pos()
+                                    x = int(cur.x() + 16)
+                                    y = int(cur.y() + 16)
+    
+                                    # ✅ (4.7.1) clamp tooltip do viditelné části obrazovky
+                                    try:
+                                        scr = None
+                                        try:
+                                            scr = QGuiApplication.screenAt(cur)
+                                        except Exception:
+                                            scr = None
+                                        if scr is None:
+                                            try:
+                                                scr = QGuiApplication.primaryScreen()
+                                            except Exception:
+                                                scr = None
+                                        if scr is not None:
+                                            geom = scr.availableGeometry()
+                                            pad = 6
+                                            w = int(lbl.width())
+                                            h = int(lbl.height())
+    
+                                            if x + w > geom.right() - pad:
+                                                x = int(geom.right() - pad - w)
+                                            if x < geom.left() + pad:
+                                                x = int(geom.left() + pad)
+    
+                                            if y + h > geom.bottom() - pad:
+                                                y = int(cur.y() - 16 - h)
+                                            if y < geom.top() + pad:
+                                                y = int(geom.top() + pad)
+                                    except Exception:
+                                        pass
+    
+                                    lbl.move(QPoint(x, y))
                                     lbl.show()
                                     lbl.raise_()
                                 except Exception:
