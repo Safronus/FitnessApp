@@ -32,7 +32,7 @@ from matplotlib.collections import LineCollection
 import matplotlib.pyplot as plt
 
 TITLE = "Fitness Tracker"
-VERSION = "4.7.0"
+VERSION = "4.7.1"
 APP_VERSION = VERSION
 VERSION_DATE = "21.12.2025"
 
@@ -2340,6 +2340,11 @@ class FitnessTrackerApp(QMainWindow):
         # Aktuální BMI náhled
         self.bmi_current_label = QLabel("BMI: -")
         self.bmi_current_label.setStyleSheet("font-weight: bold;")
+        # (4.7.0) BMI náhled na střed sekce
+        try:
+            self.bmi_current_label.setAlignment(Qt.AlignCenter)
+        except Exception:
+            pass
         measurement_layout.addWidget(self.bmi_current_label, 3, 0, 1, 2)
     
         # Uložit měření
@@ -2363,6 +2368,14 @@ class FitnessTrackerApp(QMainWindow):
         header = self.bmi_history_tree.header()
         header.setStretchLastSection(True)
         header.setSectionResizeMode(QHeaderView.ResizeToContents)
+    
+        # (4.7.0) Zarovnání nadpisů sloupců v historii na střed
+        try:
+            hdr_item = self.bmi_history_tree.headerItem()
+            for col in range(self.bmi_history_tree.columnCount()):
+                hdr_item.setTextAlignment(col, Qt.AlignCenter)
+        except Exception:
+            pass
     
         # Kontextové menu pro editaci / smazání
         self.bmi_history_tree.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -2579,6 +2592,25 @@ class FitnessTrackerApp(QMainWindow):
         self.update_bmi_charts()
         self.update_bmi_time_chart()
     
+        # (4.7.0) První otevření: po dokončení layoutu jednorázově překresli graf, aby vyplnil celý prostor
+        try:
+            from PySide6.QtCore import QTimer
+    
+            def _force_bmi_time_chart_redraw():
+                try:
+                    self.update_bmi_time_chart()
+                    try:
+                        self.bmi_time_canvas.draw()
+                    except Exception:
+                        pass
+                except Exception:
+                    pass
+    
+            QTimer.singleShot(0, _force_bmi_time_chart_redraw)
+            QTimer.singleShot(200, _force_bmi_time_chart_redraw)
+        except Exception:
+            pass
+    
         return tab
 
     def set_bmi_period_mode(self, mode: str):
@@ -2746,8 +2778,8 @@ class FitnessTrackerApp(QMainWindow):
             # Ulož ID záznamu do UserRole (pro edit / delete)
             item.setData(0, Qt.UserRole, entry.get("id"))
 
-            # Zarovnání čas / váha / BMI na střed
-            for col in (1, 2, 3):
+            # (4.7.0) Zarovnání všech sloupců na střed
+            for col in range(item.columnCount()):
                 item.setTextAlignment(col, Qt.AlignCenter)
 
             # Barevné označení podle BMI kategorie
@@ -4979,6 +5011,21 @@ class FitnessTrackerApp(QMainWindow):
         """Refresh při přepnutí záložky"""
         try:
             tab_name = self.tabs.tabText(index)
+
+            # (4.7.0) Při přepnutí na BMI záložku překresli grafy až při reálné velikosti widgetu
+            try:
+                if isinstance(tab_name, str) and ("BMI + váha" in tab_name):
+                    self.update_bmi_charts()
+                    try:
+                        self.bmi_time_canvas.draw()
+                    except Exception:
+                        pass
+                    try:
+                        self.bmi_zones_canvas.draw()
+                    except Exception:
+                        pass
+            except Exception:
+                pass
 
             # **OPRAVENO: Dynamicky najít cvičení podle názvu v záložce**
             for exercise_id in self.get_active_exercises():
