@@ -3576,11 +3576,11 @@ class FitnessTrackerApp(QMainWindow):
         """Záložka pro přidávání výkonů - dynamická podle aktivních cvičení + plán k dosažení BMI."""
         widget = QWidget()
         layout = QVBoxLayout(widget)
-
+    
         # Titulek
         title_label = QLabel("📝 Přidání výkonů")
         layout.addWidget(title_label)
-
+    
         # Výběr data
         date_row = QHBoxLayout()
         date_row.addWidget(QLabel("Datum:"))
@@ -3601,28 +3601,28 @@ class FitnessTrackerApp(QMainWindow):
         date_row.addWidget(self.add_date_edit)
         date_row.addStretch()
         layout.addLayout(date_row)
-
+    
         # ==================== HORNÍ SEKCE (3 sloupce) ====================
         top_sections = QHBoxLayout()
-
+    
         # ---------- LEVÝ SLOUPEC: Cíle + Zadání výkonu ----------
         left_col_widget = QWidget()
         left_col_layout = QVBoxLayout(left_col_widget)
         left_col_layout.setContentsMargins(0, 0, 0, 0)
-
+    
         # Přehled cílů pro zvolené datum
         goals_group = QGroupBox("🎯 Cíle pro zvolené datum")
         goals_layout = QVBoxLayout()
         goals_layout.setObjectName("add_goals_layout")
-
+    
         self.add_goals_labels = {}
         selected_date_str = self.add_date_edit.date().toString("yyyy-MM-dd")
-
+    
         active_exercises = self.get_active_exercises()
         for exercise_id in active_exercises:
             config = self.get_exercise_config(exercise_id)
             goal = self.calculate_goal(exercise_id, selected_date_str)
-
+    
             # Spočítej aktuální hodnotu
             current_value = 0
             if (
@@ -3634,7 +3634,7 @@ class FitnessTrackerApp(QMainWindow):
                     current_value = sum(r.get("value", 0) for r in records)
                 elif isinstance(records, dict):
                     current_value = records.get("value", 0)
-
+    
             if current_value >= goal:
                 status = f"✅ Splněno ({current_value}/{goal})"
                 color = "#32c766"
@@ -3644,36 +3644,36 @@ class FitnessTrackerApp(QMainWindow):
             else:
                 status = f"❌ Nesplněno (0/{goal})"
                 color = "#ff6b6b"
-
+    
             goal_label = QLabel(f"{config['icon']} {config['name']}: {status}")
             goal_label.setStyleSheet(f"font-size: 13px; padding: 5px; color: {color}; font-weight: bold;")
             goal_label.setObjectName(f"goal_label_{exercise_id}")
             self.add_goals_labels[exercise_id] = goal_label
             goals_layout.addWidget(goal_label)
-
+    
         goals_group.setLayout(goals_layout)
         left_col_layout.addWidget(goals_group)
-
+    
         # Přidávání výkonů - dynamické řádky
         add_group = QGroupBox("➕ Zadat výkon")
         add_layout = QVBoxLayout()
         add_layout.setSpacing(5)  # Menší mezery mezi řádky
         add_layout.setContentsMargins(10, 10, 10, 10)
-
+    
         # Dynamicky vytvořit řádek pro každé cvičení
         self.exercise_spinboxes = {}
-
+    
         for exercise_id in active_exercises:
             config = self.get_exercise_config(exercise_id)
-
+    
             exercise_row = QHBoxLayout()
             exercise_row.setSpacing(8)  # Menší mezery mezi prvky v řádku
-
+    
             # Label (bez fixní šířky, aby se vešel text)
             label = QLabel(f"{config['icon']} {config['name']}:")
             label.setMinimumWidth(80)  # Místo fixed width
             exercise_row.addWidget(label)
-
+    
             # SpinBox
             spinbox = QSpinBox()
             spinbox.setRange(0, 10000)
@@ -3681,7 +3681,7 @@ class FitnessTrackerApp(QMainWindow):
             spinbox.setFixedWidth(90)
             exercise_row.addWidget(spinbox)
             self.exercise_spinboxes[exercise_id] = spinbox
-
+    
             # Hlavní tlačítko "Přidat"
             main_btn = QPushButton("Přidat")
             main_btn.setFixedWidth(70)
@@ -3692,7 +3692,7 @@ class FitnessTrackerApp(QMainWindow):
                 )
             )
             exercise_row.addWidget(main_btn)
-
+    
             # Rychlá tlačítka
             quick_buttons = config.get("quick_buttons", [10, 20, 30])
             for quick_val in quick_buttons:
@@ -3705,32 +3705,32 @@ class FitnessTrackerApp(QMainWindow):
                     )
                 )
                 exercise_row.addWidget(quick_btn)
-
+    
             exercise_row.addStretch()
             add_layout.addLayout(exercise_row)
-
+    
         add_group.setLayout(add_layout)
         left_col_layout.addWidget(add_group)
-
+    
         # Tlačítko pro přidání všeho najednou
         add_all_btn = QPushButton("➕ Přidat všechny výkony najednou")
         add_all_btn.clicked.connect(self.add_all_workouts)
         left_col_layout.addWidget(add_all_btn)
-
+    
         top_sections.addWidget(left_col_widget)
-
+    
         # ---------- STŘEDNÍ SLOUPEC: Plán k dosažení BMI ----------
         plan_group = QGroupBox("🎯 Plán k dosažení cílového BMI")
         plan_layout = QVBoxLayout()
-
+    
         params_row = QHBoxLayout()
-
+    
         # Začátek plánu – MUSÍ být před „Cílové BMI“
         params_row.addWidget(QLabel("Začátek plánu:"))
         self.bmi_plan_start_date_edit = QDateEdit()
         self.bmi_plan_start_date_edit.setCalendarPopup(True)
         self.bmi_plan_start_date_edit.setDate(QDate.currentDate())
-
+    
         # Načti uložené datum z app_state (pokud existuje)
         try:
             ds = (self.data.get('app_state', {}) or {}).get('plan_start_date')
@@ -3740,16 +3740,16 @@ class FitnessTrackerApp(QMainWindow):
                     self.bmi_plan_start_date_edit.setDate(qd)
         except Exception:
             pass
-
+    
         # Signály: auto přepočet + uložení do JSON
         try:
             self.bmi_plan_start_date_edit.dateChanged.connect(self.recompute_bmi_plan)
             self.bmi_plan_start_date_edit.dateChanged.connect(self._persist_plan_start_date)
         except Exception:
             pass
-
+    
         params_row.addWidget(self.bmi_plan_start_date_edit)
-
+    
         params_row.addWidget(QLabel("Cílové BMI:"))
         self.bmi_plan_target_spin = QDoubleSpinBox()
         self.bmi_plan_target_spin.setRange(18.5, 25.0)
@@ -3757,25 +3757,25 @@ class FitnessTrackerApp(QMainWindow):
         self.bmi_plan_target_spin.setDecimals(1)
         self.bmi_plan_target_spin.setValue(22.0)
         params_row.addWidget(self.bmi_plan_target_spin)
-
+    
         params_row.addSpacing(12)
         params_row.addWidget(QLabel("Horizont:"))
         self.bmi_plan_horizon_combo = QComboBox()
-        self.bmi_plan_horizon_combo.addItems(["3 měsíce", "6 měsíců", "12 měsíců"])
-        self.bmi_plan_horizon_combo.setCurrentIndex(1)
+        self.bmi_plan_horizon_combo.addItems(["3 měsíce", "4 měsíce", "5 měsíců", "6 měsíců"])
+        self.bmi_plan_horizon_combo.setCurrentIndex(3)
         params_row.addWidget(self.bmi_plan_horizon_combo)
-
+    
         params_row.addSpacing(12)
         params_row.addWidget(QLabel("Režim:"))
         self.bmi_plan_mode_combo = QComboBox()
         self.bmi_plan_mode_combo.addItems(["Opatrný", "Střední", "Agresivnější"])
         self.bmi_plan_mode_combo.setCurrentText("Střední")
         params_row.addWidget(self.bmi_plan_mode_combo)
-
+    
         # === OBNOVENÍ uložených hodnot plánu ===
         try:
             plan_state = (self.data.get('app_state', {}) or {}).get('bmi_plan', {})
-
+    
             # Cílové BMI
             tb = plan_state.get('target_bmi')
             if isinstance(tb, (int, float)):
@@ -3783,14 +3783,14 @@ class FitnessTrackerApp(QMainWindow):
                 tb = max(self.bmi_plan_target_spin.minimum(),
                          min(self.bmi_plan_target_spin.maximum(), tb))
                 self.bmi_plan_target_spin.setValue(tb)
-
+    
             # Horizont (podle textu položky)
             hz = plan_state.get('horizon')
             if isinstance(hz, str):
                 idx = self.bmi_plan_horizon_combo.findText(hz)
                 if idx >= 0:
                     self.bmi_plan_horizon_combo.setCurrentIndex(idx)
-
+    
             # Režim (podle textu položky)
             md = plan_state.get('mode')
             if isinstance(md, str):
@@ -3799,7 +3799,7 @@ class FitnessTrackerApp(QMainWindow):
                     self.bmi_plan_mode_combo.setCurrentIndex(idx)
         except Exception:
             pass
-
+    
         # === PERZISTENCE při změně hodnot ===
         try:
             self.bmi_plan_target_spin.valueChanged.connect(self._persist_bmi_plan_settings)
@@ -3807,16 +3807,16 @@ class FitnessTrackerApp(QMainWindow):
             self.bmi_plan_mode_combo.currentIndexChanged.connect(self._persist_bmi_plan_settings)
         except Exception:
             pass
-
+    
         params_row.addStretch()
-
+    
         plan_layout.addLayout(params_row)
-
+    
         self.bmi_plan_summary_label = QLabel("")
         self.bmi_plan_summary_label.setWordWrap(True)
         self.bmi_plan_summary_label.setStyleSheet("font-size: 12px; color: #dddddd;")
         plan_layout.addWidget(self.bmi_plan_summary_label)
-
+    
         # Hlavní tabulka plánu (po cvicích)
         self.bmi_plan_tree = QTreeWidget()
         self.bmi_plan_tree.setColumnCount(4)
@@ -3831,14 +3831,14 @@ class FitnessTrackerApp(QMainWindow):
         header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
         plan_layout.addWidget(self.bmi_plan_tree)
-
+    
         plan_group.setLayout(plan_layout)
         top_sections.addWidget(plan_group)
-
+    
         # ---------- PRAVÝ SLOUPEC: Týdenní rozpis ----------
         weekly_group = QGroupBox("📅 Týdenní rozpis a plnění plánu")
         weekly_layout = QVBoxLayout()
-
+    
         self.bmi_plan_weeks_tree = QTreeWidget()
         # ZMĚNA: 7 sloupců
         self.bmi_plan_weeks_tree.setColumnCount(7)
@@ -3848,7 +3848,7 @@ class FitnessTrackerApp(QMainWindow):
         self.bmi_plan_weeks_tree.setRootIsDecorated(True)
         self.bmi_plan_weeks_tree.setAlternatingRowColors(True)
         self.bmi_plan_weeks_tree.setMinimumHeight(150)
-        
+    
         w_header = self.bmi_plan_weeks_tree.header()
         w_header.setStretchLastSection(False)
         w_header.setSectionResizeMode(0, QHeaderView.Stretch)
@@ -3858,20 +3858,20 @@ class FitnessTrackerApp(QMainWindow):
         w_header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
         w_header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
         w_header.setSectionResizeMode(6, QHeaderView.ResizeToContents)
-        
+    
         weekly_layout.addWidget(self.bmi_plan_weeks_tree)
-
+    
         weekly_group.setLayout(weekly_layout)
         top_sections.addWidget(weekly_group)
-
+    
         # Rozdělení šířky 3 sloupců (minimální zásah)
         top_sections.setStretch(0, 2)
         top_sections.setStretch(1, 2)
         top_sections.setStretch(2, 3)
-
+    
         # Přidat horní sekce do layoutu
         layout.addLayout(top_sections)
-
+    
         # ==================== GRAF (dole přes celou šířku) ====================
         self.bmi_plan_fig = Figure(figsize=(10, 4), facecolor="#121212")
         self.bmi_plan_canvas = FigureCanvas(self.bmi_plan_fig)
@@ -3879,26 +3879,26 @@ class FitnessTrackerApp(QMainWindow):
         self.bmi_plan_canvas.setMinimumHeight(350)
         self.bmi_plan_canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         layout.addWidget(self.bmi_plan_canvas, 1)
-
+    
         # Signály pro plán
         self.bmi_plan_target_spin.valueChanged.connect(self.recompute_bmi_plan)
         self.bmi_plan_horizon_combo.currentIndexChanged.connect(self.recompute_bmi_plan)
         self.bmi_plan_mode_combo.currentIndexChanged.connect(self.recompute_bmi_plan)
-
+    
         self.bmi_plan_target_spin.valueChanged.connect(self.apply_weekly_plan_gradient)
         self.bmi_plan_horizon_combo.currentIndexChanged.connect(self.apply_weekly_plan_gradient)
         self.bmi_plan_mode_combo.currentIndexChanged.connect(self.apply_weekly_plan_gradient)
-
+    
         # Inicializace plánu (při otevření záložky / aplikace)
         self.recompute_bmi_plan()
         self.apply_weekly_plan_gradient()
         self.apply_add_tab_goals_gradient()
-
+    
         # (4.4.6a) Po startu aplikace ještě není layout hotový -> canvas má menší rozměr.
         # Vynutíme překreslení po dokončení layoutu (a pro jistotu ještě krátce potom).
         try:
             from PySide6.QtCore import QTimer
-
+    
             def _force_bmi_plan_redraw():
                 try:
                     self.recompute_bmi_plan()
@@ -3910,12 +3910,12 @@ class FitnessTrackerApp(QMainWindow):
                         pass
                 except Exception:
                     pass
-
+    
             QTimer.singleShot(0, _force_bmi_plan_redraw)
             QTimer.singleShot(200, _force_bmi_plan_redraw)
         except Exception:
             pass
-
+    
         return widget
 
     def _persist_bmi_plan_settings(self, *_) -> None:
@@ -4078,14 +4078,14 @@ class FitnessTrackerApp(QMainWindow):
         """Spočítá a zobrazí plán cvičení k dosažení cílového BMI v záložce „Přidat výkon“."""
         if not hasattr(self, "bmi_plan_tree"):
             return
-
+    
         # Vyčisti předchozí řádky
         self.bmi_plan_tree.clear()
         if hasattr(self, "bmi_plan_weeks_tree"):
             self.bmi_plan_weeks_tree.clear()
         if hasattr(self, "bmi_plan_fig"):
             self.bmi_plan_fig.clear()
-
+    
         weight_now, height_cm, bmi_now = self.get_current_weight_and_bmi()
         if height_cm is None or weight_now is None or bmi_now is None:
             self.bmi_plan_summary_label.setText(
@@ -4095,60 +4095,69 @@ class FitnessTrackerApp(QMainWindow):
             if hasattr(self, "bmi_plan_canvas"):
                 self.bmi_plan_canvas.draw()
             return
-
+    
         target_bmi = float(self.bmi_plan_target_spin.value())
         height_m = height_cm / 100.0
         weight_target = target_bmi * (height_m * height_m)
         delta_weight = max(0.0, weight_now - weight_target)
-
-        # Horizont v týdnech (orientačně)
+    
+        # Horizont v týdnech (orientačně) – pouze 3/4/5/6 měsíců
         horizon_text = self.bmi_plan_horizon_combo.currentText()
-        if "3" in horizon_text:
-            horizon_weeks = 12
-        elif "6" in horizon_text:
-            horizon_weeks = 26
-        else:
-            horizon_weeks = 52
-
+        horizon_weeks = 26
+        try:
+            months = int(str(horizon_text).strip().split()[0])
+            if months == 3:
+                horizon_weeks = 12
+            elif months == 4:
+                horizon_weeks = 17
+            elif months == 5:
+                horizon_weeks = 22
+            elif months == 6:
+                horizon_weeks = 26
+        except Exception:
+            pass
+    
         mode_text = self.bmi_plan_mode_combo.currentText()
-        # Tohle používáme pro odhad času (text) a pro navýšení objemu
+    
+        # Režim = monotónní škálování objemu vůči průměrnému týdennímu cvičení (baseline)
         if mode_text == "Opatrný":
-            weekly_loss = 0.35   # kg/týden
             mode_volume_factor = 0.15
         elif mode_text == "Agresivnější":
-            weekly_loss = 0.75
             mode_volume_factor = 0.35
         else:
-            weekly_loss = 0.5
             mode_volume_factor = 0.25
-
-        # Intenzita: aby se změna horizontu projevila do týdenních plánů (a tím i procent)
-        # - pokud je horizont kratší než vychází zvoleným režimem, navýšíme objem
-        # - pokud je horizont delší, objem snížíme
+        mode_factor = 1.0 + mode_volume_factor
+    
+        # Intenzita = odvozená z cílového BMI a horizontu (potřebné tempo)
+        # Referenční tempo při baseline: 0.5 kg/týden
+        reference_weekly_loss = 0.5
+    
         if delta_weight <= 0:
+            intensity_factor = 1.0
+            effective_weekly_loss = 0.0
             weeks_needed = 0.0
             loss_in_horizon = 0.0
-            intensity_factor = 1.0  # udržovací
         else:
-            # Kolik kg/týden je potřeba, aby se plán stihl v rámci horizontu
-            required_weekly_loss = (delta_weight / float(horizon_weeks)) if horizon_weeks > 0 else weekly_loss
-
-            # Intenzita vůči zvolenému režimu (weekly_loss) – klíčové: závisí na horizontu
-            if weekly_loss > 0:
-                base_intensity = required_weekly_loss / float(weekly_loss)
+            required_weekly_loss = (delta_weight / float(horizon_weeks)) if horizon_weeks > 0 else reference_weekly_loss
+            raw_intensity = (required_weekly_loss / float(reference_weekly_loss)) if reference_weekly_loss > 0 else 1.0
+    
+            # Dynamické limity podle horizontu (aby se intenzita nesekala konstantně na 2×)
+            if horizon_weeks <= 12:
+                max_intensity = 3.0
             else:
-                base_intensity = 1.0
-
-            # Omezit, aby plán nebyl úplně mimo (0.5× až 2×)
-            intensity_factor = max(0.5, min(2.0, base_intensity))
-
-            effective_weekly_loss = weekly_loss * intensity_factor
+                max_intensity = 2.5
+    
+            min_intensity = 0.5
+            intensity_factor = max(min_intensity, min(max_intensity, raw_intensity))
+    
+            # Předpoklad: výsledné tempo je úměrné multiplikátoru objemu vůči průměru
+            effective_weekly_loss = reference_weekly_loss * (intensity_factor * mode_factor)
             weeks_needed = (delta_weight / effective_weekly_loss) if effective_weekly_loss > 0 else float(horizon_weeks)
             loss_in_horizon = min(delta_weight, effective_weekly_loss * float(horizon_weeks))
-
+    
         predicted_weight = weight_now - loss_in_horizon
         predicted_bmi = predicted_weight / (height_m * height_m) if height_m > 0 else bmi_now
-
+    
         # Textový souhrn
         if delta_weight <= 0:
             summary = (
@@ -4160,59 +4169,50 @@ class FitnessTrackerApp(QMainWindow):
             summary = (
                 f"Aktuální BMI: {bmi_now:.1f} (≈ {weight_now:.1f} kg). "
                 f"Cílové BMI: {target_bmi:.1f} (≈ {weight_target:.1f} kg).\n"
-                f"Při režimu „{mode_text}“ by bylo potřeba přibližně {weeks_needed:.1f} týdne/týdnů "
-                f"pro dosažení cíle.\n"
-                f"V zvoleném horizontu {horizon_weeks} týdnů se odhaduje, "
-                f"že bys mohl/a dosáhnout cca {predicted_weight:.1f} kg (BMI ≈ {predicted_bmi:.1f})."
+                f"Zvolený horizont: {horizon_weeks} týdnů, režim „{mode_text}“.\n"
+                f"Odhadovaná doba k dosažení cíle: {weeks_needed:.1f} týdne/týdnů.\n"
+                f"Odhad v rámci horizontu: {predicted_weight:.1f} kg (BMI ≈ {predicted_bmi:.1f}).\n"
+                f"Multiplikátor vůči průměrnému týdennímu cvičení: "
+                f"intenzita ×{intensity_factor:.2f} a režim ×{mode_factor:.2f} (celkem ×{(intensity_factor * mode_factor):.2f})."
             )
-
-            if intensity_factor > 1.05:
-                summary += (
-                    f"\nZvolený horizont je kratší než doporučený – plán navyšuje objem cvičení "
-                    f"zhruba o {(intensity_factor - 1.0) * 100:.0f} % oproti běžnému režimu."
-                )
-            elif intensity_factor < 0.95:
-                summary += (
-                    f"\nZvolený horizont je delší než doporučený – plán volí mírnější tempo "
-                    f"(cca {intensity_factor * 100:.0f} % běžného objemu)."
-                )
-
+    
         self.bmi_plan_summary_label.setText(summary)
-
-        # Základní objem cvičení z historie
+    
+        # Základní objem cvičení z historie (průměrný týden)
         baseline = self.get_weekly_exercise_baseline(weeks=8)
         active_exercises = self.get_active_exercises()
-
+    
         if not baseline and delta_weight > 0:
             self.bmi_plan_summary_label.setText(
                 summary
                 + "\n\n"
                 + "Nebyla nalezena historie výkonů, plán proto používá konzervativní výchozí hodnoty."
             )
-
+    
+        multiplier = (intensity_factor * mode_factor)
+    
         # Plánované týdenní hodnoty pro jednotlivé cviky
-        planned_weekly: dict[str, float] = {}
-
+        planned_weekly = {}
+    
         for exercise_id in active_exercises:
             config = self.get_exercise_config(exercise_id)
             base_weekly = baseline.get(exercise_id, 0.0)
-
+    
             if base_weekly <= 0:
-                # Žádná historie – jemný start, ale škálujeme režimem i intenzitou
+                # Žádná historie – jemný start (není z čeho odvodit průměr)
                 base_value = 1.0 if delta_weight > 0 else 0.5
-                weekly_value = base_value * (1.0 + mode_volume_factor) * intensity_factor
+                weekly_value = base_value * multiplier
                 note = "Žádná historie, navrženo jako jemný start."
             else:
-                # Základ * (1 + režim) * intenzita (horizont, cílové BMI)
-                weekly_value = base_weekly * (1.0 + mode_volume_factor) * intensity_factor
+                weekly_value = base_weekly * multiplier
                 note = (
-                    f"Průměrně {base_weekly:.1f}/týden → režim +{int(mode_volume_factor * 100)} %, "
-                    f"intenzita ×{intensity_factor:.2f}."
+                    f"Průměrně {base_weekly:.1f}/týden → multiplikátor ×{multiplier:.2f} "
+                    f"(intenzita ×{intensity_factor:.2f}, režim ×{mode_factor:.2f})."
                 )
-
+    
             planned_weekly[exercise_id] = weekly_value
             total_value = weekly_value * horizon_weeks
-
+    
             item = QTreeWidgetItem([
                 f"{config['icon']} {config['name']}",
                 f"{weekly_value:.1f}",
@@ -4221,9 +4221,9 @@ class FitnessTrackerApp(QMainWindow):
             ])
             item.setTextAlignment(1, Qt.AlignCenter)
             item.setTextAlignment(2, Qt.AlignCenter)
-
+    
             self.bmi_plan_tree.addTopLevelItem(item)
-
+    
         # Vygenerovat týdenní rozpis a graf plnění plánu
         self.recompute_bmi_weekly_breakdown(active_exercises, planned_weekly, horizon_weeks)
 
